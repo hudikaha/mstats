@@ -33,20 +33,22 @@ make codtr
 `make fetch` runs Codex non-interactively to check only the next unpublished
 population and cause-of-death months; it does not inspect or validate existing
 source CSV contents. `make cod` and `make codtr` do not start Codex: they create
-new timestamped `mstats2026` CSVs only when local source files changed, upload
-the latest cumulative files, and run Logstash once. `make all` performs both
-steps. Progress summaries are printed normally; command logs are kept below
-`tmp/make` and printed only when that command fails.
+new timestamped `mstats2026` CSVs only when local source files changed. The
+cause converter reads the source files once and creates separate monthly and
+weekly outputs in the same run. The latest cumulative files are then uploaded
+and Logstash is run once. `make all` performs both steps. Progress summaries
+are printed normally; command logs are kept below `tmp/make` and printed only
+when that command fails.
 
 Useful separate stages are `make fetch`, `make fetch-pop`, `make fetch-death`,
 `make check`, `make csv`, `make upload`, and `make logstash`. Override
 `POP_ARCHIVE_DIR`, `DATA_DIR`, or `SERVER` on the command line when the local
 layout differs.
 
-`make mort-csv` reads the latest generated population and monthly
-cause-of-death CSV files and creates a timestamped weekly cause-of-death CSV
-for `mort.rb`. It generates the raw-count, `adj`, and `amr` series but does not
-upload or import the result yet.
+`make csv` creates separate monthly and weekly cause-of-death files together.
+The weekly file contains the raw-count, `adj`, and `amr` series used by
+`mort.rb`. `make mort-csv` remains available to rebuild only the weekly file
+from existing monthly and population outputs.
 
 `make stmf-csv STMF_SOURCE=/path/to/stmf.csv` converts the HMD pooled STMF CSV
 to the same canonical weekly format. HMD download credentials and the fetched
@@ -70,11 +72,14 @@ cdeath/out         -> ~/work/mstats/data
 
 ## mstats2026 CSV generation
 
-Cause-of-death CSV:
+Monthly and weekly cause-of-death CSVs in one pass:
 
 ```sh
-ruby cdeath/import/jp-dcause.rb cdeath/src/causejp/*.csv \
-  > cdeath/out/jp-dcause-mstats2026.csv
+ruby cdeath/import/causejp.rb \
+  --population cdeath/out/jp-pop-mstats2026.csv \
+  --monthly-out cdeath/out/jp-dcause-mstats2026.csv \
+  --weekly-out cdeath/out/jp-dcause-weekly-mstats2026.csv \
+  cdeath/src/causejp/*.csv
 ```
 
 Population CSV:

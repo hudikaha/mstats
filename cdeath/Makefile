@@ -6,7 +6,7 @@ SHELL := /bin/zsh
 #   make (default) -> help
 #   check          -> source-month checks -> temporary pop/death conversion -> CSV checks
 #   csv            -> source-month checks -> manifest comparison
-#                     -> changed: timestamped pop/death CSV creation and checks
+#                     -> changed: timestamped pop/monthly-death/weekly-death CSV creation and checks
 #                     -> unchanged: print the next months and e-Stat URLs
 #   fetch          -> fetch-pop -> fetch-death
 #   fetch-pop      -> Codex searches e-Stat -> saves new population source CSVs
@@ -74,6 +74,25 @@ validate_csv() { \
 }
 endef
 
+define VALIDATE_WEEKLY_CSV
+validate_weekly_csv() { \
+  local file=$$1 header summary; \
+  header=$$(head -1 "$$file"); \
+  [[ $$header == id,loc_code,location,yearweek,category,*age_50_64 ]] || { echo "wrong weekly mstats2026 header: $$file"; return 1; }; \
+  summary=$$(awk -F, 'NR == 1 { next } \
+    seen[$$1]++ { duplicate = $$1; exit } \
+    $$5 != "death" { wrong_category = $$5; exit } \
+    { rows += 1; if (!period[$$4]++) { periods += 1; if (first == "" || $$4 < first) first = $$4; if ($$4 > last) last = $$4 } } \
+    END { \
+      if (duplicate != "") { print "duplicate weekly id: " duplicate > "/dev/stderr"; exit 1 } \
+      if (wrong_category != "") { print "wrong weekly category: " wrong_category > "/dev/stderr"; exit 1 } \
+      if (rows == 0) { print "no weekly data rows" > "/dev/stderr"; exit 1 } \
+      printf "weekly death: rows=%d periods=%d (%s..%s)", rows, periods, first, last \
+    }' "$$file") || return 1; \
+  echo "$$summary"; \
+}
+endef
+
 help:
 	@echo 'make check    原CSVの月抜けと変換結果を検証'
 	@echo 'make fetch    Codexで人口・死因の次月公開確認と取得（既存CSVは検証しない）'
@@ -81,12 +100,12 @@ help:
 	@echo 'make fetch-death Codexで死因の新規原CSVを取得'
 	@echo 'make fetch-stmf HMD認証情報を環境変数から読みSTMF pooled CSVを取得'
 	@echo 'make all      Codexで取得後、CSV生成・必要時のみ投入'
-	@echo 'make csv      新規・更新原CSVがある場合だけ日時付き累積CSVを生成'
+	@echo 'make csv      原CSV更新時に月次・週次の日時付き累積CSVを同時生成'
 	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
 	@echo 'make stmf-csv STMF pooled CSVをmstats2026週次CSVへ変換（投入しない）'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
 	@echo 'make codtr    make codと同じデータ更新（codtr.rbは年未完の月も表示）'
-	@echo 'make upload   最新の2つのCSVをサーバへ送って固定名リンクを更新'
+	@echo 'make upload   最新の人口・月次死因・週次死因CSVをサーバへ送る'
 	@echo 'make logstash サーバ上でmstats2026.confを一回実行'
 
 fetch: fetch-pop fetch-death
@@ -164,24 +183,33 @@ csv:
 	 (( $$#pop_sources && $$#death_sources )) || { echo '原CSVが不足しています。先に make check を実行してください。'; exit 1; }; \
 	 mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; rm -f "$(STATE_DIR)/csv-updated"; \
 	 echo '[csv] 原CSVの変更を確認します。'; \
-	 $(VALIDATE_MONTHS); $(VALIDATE_CSV); \
+	 $(VALIDATE_MONTHS); $(VALIDATE_CSV); $(VALIDATE_WEEKLY_CSV); \
 	 validate_months pop "$${pop_sources[@]}" || exit 1; validate_months death "$${death_sources[@]}" || exit 1; \
 	 for file in "$${pop_sources[@]}"; do shasum -a 256 "$$file"; done | LC_ALL=C sort > "$(STATE_DIR)/pop.current"; \
 	 for file in "$${death_sources[@]}"; do shasum -a 256 "$$file"; done | LC_ALL=C sort > "$(STATE_DIR)/death.current"; \
-	 changed=0; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 if ! cmp -s "$(STATE_DIR)/pop.current" "$(STATE_DIR)/pop.sources"; then \
+	 changed=0; pop_changed=0; death_changed=0; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 cmp -s "$(STATE_DIR)/pop.current" "$(STATE_DIR)/pop.sources" || pop_changed=1; \
+	 cmp -s "$(STATE_DIR)/death.current" "$(STATE_DIR)/death.sources" || death_changed=1; \
+	 if (( pop_changed )); then \
 	    echo '[csv] 人口の日時付き累積CSVを生成します。'; \
 	    tmp="$(DATA_DIR)/.jp-pop-mstats2026-$$stamp.csv.tmp"; out="$(DATA_DIR)/jp-pop-mstats2026-$$stamp.csv"; \
 	    if ! ruby "$(ROOT)/import/jp-pop.rb" "$${pop_sources[@]}" > "$$tmp" 2> "$(STATE_DIR)/jp-pop.log"; then cat "$(STATE_DIR)/jp-pop.log"; exit 1; fi; \
 	    validate_csv pop "$$tmp"; mv "$$tmp" "$$out"; \
-	    cp "$(STATE_DIR)/pop.current" "$(STATE_DIR)/pop.sources"; echo "created $$out"; changed=1; \
+	    echo "created $$out"; \
 	  fi; \
-	 if ! cmp -s "$(STATE_DIR)/death.current" "$(STATE_DIR)/death.sources"; then \
-	    echo '[csv] 死因の日時付き累積CSVを生成します。'; \
-	    tmp="$(DATA_DIR)/.jp-dcause-mstats2026-$$stamp.csv.tmp"; out="$(DATA_DIR)/jp-dcause-mstats2026-$$stamp.csv"; \
-	    if ! ruby "$(ROOT)/import/jp-dcause.rb" "$${death_sources[@]}" > "$$tmp" 2> "$(STATE_DIR)/jp-dcause.log"; then cat "$(STATE_DIR)/jp-dcause.log"; exit 1; fi; \
-	    validate_csv death "$$tmp"; mv "$$tmp" "$$out"; \
-	    cp "$(STATE_DIR)/death.current" "$(STATE_DIR)/death.sources"; echo "created $$out"; changed=1; \
+	 if (( pop_changed || death_changed )); then \
+	    pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
+	    test -n "$$pop" || { echo '人口CSVを生成できませんでした。'; exit 1; }; \
+	    monthly="$(DATA_DIR)/jp-dcause-mstats2026-$$stamp.csv"; \
+	    weekly="$(DATA_DIR)/jp-dcause-weekly-mstats2026-$$stamp.csv"; \
+	    echo '[csv] 原死因CSVを一度読み、月次・週次CSVを同時生成します。'; \
+	    if ! ruby "$(ROOT)/import/causejp.rb" --population "$$pop" --monthly-out "$$monthly" --weekly-out "$$weekly" "$${death_sources[@]}" 2> "$(STATE_DIR)/causejp.log"; then cat "$(STATE_DIR)/causejp.log"; rm -f "$$monthly" "$$weekly"; exit 1; fi; \
+	    validate_csv death "$$monthly" || { rm -f "$$monthly" "$$weekly"; exit 1; }; \
+	    validate_weekly_csv "$$weekly" || { rm -f "$$monthly" "$$weekly"; exit 1; }; \
+	    cat "$(STATE_DIR)/causejp.log"; echo "created $$monthly"; echo "created $$weekly"; \
+	    (( pop_changed )) && cp "$(STATE_DIR)/pop.current" "$(STATE_DIR)/pop.sources"; \
+	    (( death_changed )) && cp "$(STATE_DIR)/death.current" "$(STATE_DIR)/death.sources"; \
+	    changed=1; \
 	  fi; \
 	 if (( changed )); then touch "$(STATE_DIR)/csv-updated"; else \
 	    pop_names=(); for file in "$${pop_sources[@]}"; do pop_names+=("$${file:t:r}"); done; pop_names=("$${(@on)pop_names}"); \
@@ -234,10 +262,11 @@ stmf-csv:
 upload:
 	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
 	 death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); death=$$death_files[1]; \
-	 test -n "$$pop" -a -n "$$death"; \
+	 weekly_files=("$(DATA_DIR)"/jp-dcause-weekly-mstats2026-*.csv(Nom)); weekly=$$weekly_files[1]; \
+	 test -n "$$pop" -a -n "$$death" -a -n "$$weekly"; \
 	 mkdir -p "$(STATE_DIR)"; log="$(STATE_DIR)/upload.log"; \
-	 echo '[upload] 最新の人口・死因CSVを$(SERVER)へ送ります。'; \
-	 if ! { scp "$$pop" "$$death" $(SERVER):$(SERVER_MSTATS_DIR)/data/ && ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${death:t} jp-dcause-mstats2026.csv && ln -sfn data/$${pop:t} jp-pop-mstats2026.csv"; } > "$$log" 2>&1; then cat "$$log"; exit 1; fi
+	 echo '[upload] 最新の人口・月次死因・週次死因CSVを$(SERVER)へ送ります。'; \
+	 if ! { scp "$$pop" "$$death" "$$weekly" $(SERVER):$(SERVER_MSTATS_DIR)/data/ && ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${death:t} jp-dcause-mstats2026.csv && ln -sfn data/$${weekly:t} jp-dcause-weekly-mstats2026.csv && ln -sfn data/$${pop:t} jp-pop-mstats2026.csv"; } > "$$log" 2>&1; then cat "$$log"; exit 1; fi
 
 logstash:
 	@mkdir -p "$(STATE_DIR)"; log="$(STATE_DIR)/logstash.log"; \

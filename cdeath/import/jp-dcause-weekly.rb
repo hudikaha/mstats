@@ -6,17 +6,6 @@ require 'date'
 require 'optparse'
 require_relative 'mstats2026'
 
-options = {}
-OptionParser.new do |opts|
-  opts.banner = 'Usage: jp-dcause-weekly.rb --population POP.csv DEATH.csv'
-  opts.on('--population FILE', 'mstats2026 population CSV') do |file|
-    options[:population] = file
-  end
-end.parse!
-
-abort 'population CSV is required: --population FILE' unless options[:population]
-abort 'one monthly death CSV is required' unless ARGV.length == 1
-
 BASE_AGE_GROUPS = {
   age_all: %i[
     age_00_04 age_05_09 age_10_14 age_15_19 age_20_24 age_25_29
@@ -69,6 +58,24 @@ def read_records(path)
     row[:month] = row[:month].to_i if row[:month]
     [row.fetch(:id), row]
   end
+end
+
+# memory上の月次recordを週次計算用の数値recordへ変換する。
+# Normalize in-memory monthly records into numeric records for weekly calculations.
+def normalize_records(records)
+  records.each_value do |row|
+    row.each do |key, value|
+      if key.to_s.start_with?('age_')
+        row[key.to_sym] = number(value)
+      elsif !key.is_a?(Symbol)
+        row[key.to_sym] = value
+        row.delete(key)
+      end
+    end
+    row[:year] = row[:year].to_i
+    row[:month] = row[:month].to_i if row[:month]
+  end
+  records
 end
 
 # 基礎年齢階級から表示用の集約年齢階級を作る。
@@ -263,14 +270,30 @@ def smooth_triplet(older, middle, newer, direction)
   end
 end
 
-deaths = read_records(ARGV.first)
-populations = read_records(options[:population])
-monthly = monthly_series(deaths, populations)
-
-weekly = monthly.values.group_by do |row|
-  [row[:loc_code], row[:rate], row[:death_code], row[:sex]]
-end.each_with_object({}) do |(_key, series), rows|
-  rows.merge!(weekly_series(series.to_h { |row| [row[:id], row] }))
+# 月次死因recordと人口recordから週次raw・adj・amr系列を生成する。
+# Generate weekly raw, adj, and amr series from monthly deaths and populations.
+def build_weekly(deaths, populations)
+  monthly = monthly_series(deaths, populations)
+  monthly.values.group_by do |row|
+    [row[:loc_code], row[:rate], row[:death_code], row[:sex]]
+  end.each_with_object({}) do |(_key, series), rows|
+    rows.merge!(weekly_series(series.to_h { |row| [row[:id], row] }))
+  end
 end
 
-Mstats2026.output_weekly(weekly)
+if $PROGRAM_NAME == __FILE__
+  options = {}
+  OptionParser.new do |opts|
+    opts.banner = 'Usage: jp-dcause-weekly.rb --population POP.csv DEATH.csv'
+    opts.on('--population FILE', 'mstats2026 population CSV') do |file|
+      options[:population] = file
+    end
+  end.parse!
+
+  abort 'population CSV is required: --population FILE' unless options[:population]
+  abort 'one monthly death CSV is required' unless ARGV.length == 1
+
+  deaths = read_records(ARGV.first)
+  populations = read_records(options[:population])
+  Mstats2026.output_weekly(build_weekly(deaths, populations))
+end
