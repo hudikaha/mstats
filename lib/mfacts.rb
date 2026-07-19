@@ -96,7 +96,7 @@ end
 # Web公開領域外の秘密ファイルからElasticsearch認証を設定する。
 # Configure Elasticsearch authentication from a secret file outside the web root.
 def elastic_basic_auth(request)
-    credentials_file = File.expand_path('~magician/.config/mstats/espass.txt')
+    credentials_file = File.expand_path('~/.config/mstats/espass.txt')
     unless File.file?(credentials_file) && File.readable?(credentials_file)
         raise '~/.config/mstats/espass.txt is required'
     end

@@ -4,10 +4,14 @@ kkcor-old
 
 /logs/
 /data-ok/
-/data/
+/data
 /kkcor/
 /vdeath/data/
 /vdeath/var/
 /lib/elasticsearch-password
 /old/
 /cdeath/config/logstash/*.conf
+/cdeath/out
+/cdeath/src/causejp
+/cdeath/src/popjp
+/cdeath/src/stmf

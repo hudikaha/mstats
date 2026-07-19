@@ -52,6 +52,10 @@ password、token、非公開取得元credential、`.env`、machine固有Logstash
 いけません。codeはrepository外のファイルまたは環境変数から秘密を取得します。
 詳細は[セキュリティ](docs/SECURITY_ja.md)を参照してください。
 
+## License
+
+このsoftwareは[MIT License](LICENSE)で公開します。
+
 ## 文書
 
 - [文書索引](docs/README_ja.md)

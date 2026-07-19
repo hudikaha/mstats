@@ -60,6 +60,10 @@ Never commit passwords, tokens, private source credentials, `.env` files, or
 machine-specific Logstash configurations. Code must obtain secrets from an
 external file or environment variable. See [Security](docs/SECURITY.md).
 
+## License
+
+This software is available under the [MIT License](LICENSE).
+
 ## Documentation
 
 - [Documentation index](docs/README.md)
