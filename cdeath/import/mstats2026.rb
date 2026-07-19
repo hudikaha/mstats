@@ -46,7 +46,8 @@ module Mstats2026
   def self.output_fields(rows, fields, io)
     csv = CSV.new(io)
     csv << fields
-    rows.sort.to_h.each_value do |row|
+    rows.keys.sort.each do |id|
+      row = rows.fetch(id)
       csv << fields.map do |field|
         value = row[field.to_sym]
         %w[- ・].include?(value) ? nil : value

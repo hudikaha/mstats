@@ -45,6 +45,8 @@ RATE_AGE_GROUPS = BASE_AGE_GROUPS.merge(
 OUTPUT_AGES = (Mstats2026::AGE_FIELDS + Mstats2026::AGGREGATE_AGE_FIELDS).
                 map(&:to_sym).uniq.freeze
 
+WEEK_SLICES = {}
+
 # CSVの空欄を欠測のまま数値へ変換する。
 # Convert CSV values to numbers while preserving empty fields as missing.
 def number(value)
@@ -143,6 +145,32 @@ def monthly_series(deaths, populations)
   end
 end
 
+# 対象期間のISO週と月別日数を一度だけ計算し、全系列で共有する。
+# Calculate ISO weeks and their days per month once, then share them across series.
+def week_slices(first_date, last_date)
+  WEEK_SLICES[[first_date, last_date]] ||= begin
+    first_year = first_date.cwyear
+    last_year = last_date.cwyear
+    (first_year..last_year).flat_map do |year|
+      (1..53).filter_map do |week|
+        sunday = Date.commercial(year, week, 7)
+        monday = sunday - 6
+        next if sunday < first_date || monday > last_date
+
+        sources = (monday..sunday).
+                    group_by { |date| [date.year, date.month] }.
+                    map do |(calendar_year, month), days|
+          period = format('%<year>04dm%<month>02d', year: calendar_year, month: month)
+          [period, days.length, Date.new(calendar_year, month, -1).day]
+        end
+        [year, week, sunday, monday.month, sunday.month, sources]
+      rescue Date::Error
+        nil
+      end
+    end.freeze
+  end
+end
+
 # 一つの月次系列をISO週へ日数按分する。
 # Prorate one monthly series into ISO weeks according to days in each month.
 def weekly_series(monthly)
@@ -150,50 +178,41 @@ def weekly_series(monthly)
   last = monthly.values.max_by { |row| row[:yearmonth] }
   first_date = Date.new(first[:year], first[:month], 1)
   last_date = Date.new(last[:year], last[:month], -1)
-  first_year = first_date.cwyear
-  last_year = last_date.cwyear
   monthly_by_period = monthly.values.to_h { |row| [row[:yearmonth], row] }
   weeks = {}
 
-  (first_year..last_year).each do |year|
-    (1..53).each do |week|
-      sunday = Date.commercial(year, week, 7)
-      monday = sunday - 6
-      next if sunday < first_date || monday > last_date
-
-      days_by_month = (monday..sunday).group_by { |date| [date.year, date.month] }
-      sources = days_by_month.map do |(calendar_year, month), days|
-        period = format('%<year>04dm%<month>02d', year: calendar_year, month: month)
-        [monthly_by_period[period], days.length]
-      end
-      next unless sources.all?(&:first)
-
-      template = sources.first.first
-      weekly_id = template[:id].sub(/\d{4}m\d{2}/, format('%04dw%02d', year, week))
-      row = template.dup
-      row.delete(:yearmonth)
-      row.delete(:month)
-      row[:id] = weekly_id
-      row[:yearweek] = format('%04dw%02d', year, week)
-      row[:year] = year
-      row[:week] = week
-      row[:date] = sunday.to_s
-
-      OUTPUT_AGES.each do |age|
-        values = sources.map { |source, days| [source[age], source, days] }
-        if values.any? { |value, _source, _days| value.nil? }
-          row[age] = nil
-          next
-        end
-        row[age] = values.sum do |value, source, days|
-          divisor = source[:rate] == 'amr' ? 7 : Date.new(source[:year], source[:month], -1).day
-          value.to_f * days / divisor
-        end.round(2)
-      end
-      weeks[weekly_id] = row
-    rescue Date::Error
-      next
+  week_slices(first_date, last_date).each do |year, week, sunday, month1, month7, slices|
+    sources = slices.map do |period, days, days_in_month|
+      [monthly_by_period[period], days, days_in_month]
     end
+    next unless sources.all? { |source, _days, _days_in_month| source }
+
+    template = sources.first.first
+    weekly_id = template[:id].sub(/\d{4}m\d{2}/, format('%04dw%02d', year, week))
+    row = template.dup
+    row.delete(:yearmonth)
+    row.delete(:month)
+    row[:id] = weekly_id
+    row[:yearweek] = format('%04dw%02d', year, week)
+    row[:year] = year
+    row[:week] = week
+    row[:date] = sunday.to_s
+    row[:_month1] = month1
+    row[:_month7] = month7
+
+    OUTPUT_AGES.each do |age|
+      total = 0.0
+      missing = sources.any? do |source, days, days_in_month|
+        value = source[age]
+        next true if value.nil?
+
+        divisor = source[:rate] == 'amr' ? 7 : days_in_month
+        total += value.to_f * days / divisor
+        false
+      end
+      row[age] = missing ? nil : total.round(2)
+    end
+    weeks[weekly_id] = row
   end
   smooth(weeks)
 end
@@ -203,8 +222,8 @@ end
 def smooth(rows)
   previous = []
   rows.sort.to_h.each_value do |row|
-    month1 = Date.commercial(row[:year], row[:week], 1).month
-    month7 = Date.commercial(row[:year], row[:week], 7).month
+    month1 = row[:_month1]
+    month7 = row[:_month7]
 
     if previous[1] && previous[0] && previous[1][1] != previous[0][1] &&
        previous[0][2] == month7
