@@ -83,6 +83,24 @@ print <<~HTML
           <li>DTH-WKA：死亡記録のある人だけを含むIND-WKA形式のデータ。</li>
           <li>PY：人年法用データ。<a href="vdeath.rb">人年法による解析</a>を参照。</li>
         </ul>
+        <section class="kcor-references">
+          <h2>KCOR methodとこの可視化について</h2>
+          <p>
+            KCOR（Kirsch Cumulative Outcomes Ratio）は、
+            <a href="https://kirschsubstack.com/" target="_blank" rel="noopener noreferrer">Steve Kirsch</a>
+            が考案した、固定コホート間の累積アウトカムを比較するmethodです。
+          </p>
+          <p>
+            このページは、日本の自治体から取得した個票dataを固定コホートに分け、
+            週次累積死亡数とその比を対話的に可視化します。
+            現在のSteve KirschのKCOR methodに含まれるgamma-frailty adjustmentは、
+            このページでは適用していません。
+          </p>
+          <ul>
+            <li><a href="https://kirschsubstack.com/p/czech-data-clearly-shows-covid-vaccines" target="_blank" rel="noopener noreferrer">Steve KirschによるKCOR methodの詳細解説</a></li>
+            <li><a href="https://kirschsubstack.com/p/japan-covid-shot-data-every-single" target="_blank" rel="noopener noreferrer">Steve Kirschによるmedicalfacts.infoの日本KCOR dashboard紹介</a></li>
+          </ul>
+        </section>
       JA
     else
       <<~EN
@@ -93,6 +111,25 @@ print <<~HTML
           <li>DTH-WKA: IND-WKA records limited to people with a recorded death.</li>
           <li>PY: Person-year datasets. See <a href="vdeath.rb">person-year analysis</a>.</li>
         </ul>
+        <section class="kcor-references">
+          <h2>About the KCOR method and this visualization</h2>
+          <p>
+            KCOR (Kirsch Cumulative Outcomes Ratio) is a method developed by
+            <a href="https://kirschsubstack.com/" target="_blank" rel="noopener noreferrer">Steve Kirsch</a>
+            for comparing cumulative outcomes between fixed cohorts.
+          </p>
+          <p>
+            This page divides Japanese municipal record-level data into fixed
+            cohorts and provides an interactive visualization of weekly
+            cumulative deaths and their ratios. It does not apply the
+            gamma-frailty adjustment included in Steve Kirsch's current
+            KCOR method.
+          </p>
+          <ul>
+            <li><a href="https://kirschsubstack.com/p/czech-data-clearly-shows-covid-vaccines" target="_blank" rel="noopener noreferrer">Steve Kirsch's detailed explanation of the KCOR method</a></li>
+            <li><a href="https://kirschsubstack.com/p/japan-covid-shot-data-every-single" target="_blank" rel="noopener noreferrer">Steve Kirsch's introduction to the Japanese KCOR dashboard on medicalfacts.info</a></li>
+          </ul>
+        </section>
       EN
     end}
   <script>window.KCOR_CONFIG = #{JSON.generate(config)};</script>
