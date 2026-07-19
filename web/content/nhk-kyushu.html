@@ -1,0 +1,124 @@
+<div class="legacy-page">
+<div class="legacy-content">
+<div id="vis"></div>
+<script>
+const values = [
+  {"age":"10-19歳","status":"非接種(2021年2-3月)","lbm":-7.8,"ubm":24.06,"mortality":8.13},
+  {"age":"10-19歳","status":"非接種(2021年4月〜)","lbm":4.75,"ubm":16.05,"mortality":10.4},
+  {"age":"10-19歳","status":"接種(2021年4月〜)","lbm":3.0,"ubm":14.3,"mortality":8.65},
+  {"age":"20-29歳","status":"非接種(2021年2-3月)","lbm":-2.47,"ubm":39.99,"mortality":18.76},
+  {"age":"20-29歳","status":"非接種(2021年4月〜)","lbm":25.66,"ubm":51.08,"mortality":38.37},
+  {"age":"20-29歳","status":"接種(2021年4月〜)","lbm":21.23,"ubm":39.64,"mortality":30.44},
+  {"age":"30-39歳","status":"非接種(2021年2-3月)","lbm":3.97,"ubm":60.39,"mortality":32.18},
+  {"age":"30-39歳","status":"非接種(2021年4月〜)","lbm":39.37,"ubm":71.37,"mortality":55.37},
+  {"age":"30-39歳","status":"接種(2021年4月〜)","lbm":32.59,"ubm":51.99,"mortality":42.29},
+  {"age":"40-49歳","status":"非接種(2021年2-3月)","lbm":37.33,"ubm":119.46,"mortality":78.39},
+  {"age":"40-49歳","status":"非接種(2021年4月〜)","lbm":98.76,"ubm":146.32,"mortality":122.54},
+  {"age":"40-49歳","status":"接種(2021年4月〜)","lbm":73.78,"ubm":96.93,"mortality":85.35},
+  {"age":"50-59歳","status":"非接種(2021年2-3月)","lbm":171.51,"ubm":310.92,"mortality":241.21},
+  {"age":"50-59歳","status":"非接種(2021年4月〜)","lbm":293.4,"ubm":374.42,"mortality":333.91},
+  {"age":"50-59歳","status":"接種(2021年4月〜)","lbm":166.57,"ubm":198.13,"mortality":182.35},
+  {"age":"60-69歳","status":"非接種(2021年2-3月)","lbm":344.24,"ubm":552.93,"mortality":448.58},
+  {"age":"60-69歳","status":"非接種(2021年4月〜)","lbm":826.96,"ubm":987.09,"mortality":907.03},
+  {"age":"60-69歳","status":"接種(2021年4月〜)","lbm":447.02,"ubm":501.19,"mortality":474.1},
+  {"age":"70-79歳","status":"非接種(2021年2-3月)","lbm":1117.55,"ubm":1459.68,"mortality":1288.61},
+  {"age":"70-79歳","status":"非接種(2021年4月〜)","lbm":2312.39,"ubm":2601.19,"mortality":2456.79},
+  {"age":"70-79歳","status":"接種(2021年4月〜)","lbm":1284.4,"ubm":1370.29,"mortality":1327.35},
+  {"age":"80-89歳","status":"非接種(2021年2-3月)","lbm":3624.38,"ubm":4348.26,"mortality":3986.32},
+  {"age":"80-89歳","status":"非接種(2021年4月〜)","lbm":6148.94,"ubm":6784.89,"mortality":6466.91},
+  {"age":"80-89歳","status":"接種(2021年4月〜)","lbm":4373.01,"ubm":4564.5,"mortality":4468.75},
+  {"age":"90歳以上","status":"非接種(2021年2-3月)","lbm":13131.08,"ubm":15268.83,"mortality":14199.96},
+  {"age":"90歳以上","status":"非接種(2021年4月〜)","lbm":19402.28,"ubm":21207.54,"mortality":20304.91},
+  {"age":"90歳以上","status":"接種(2021年4月〜)","lbm":15520.3,"ubm":16141.69,"mortality":15830.99}
+];
+
+const ORDER = ["非接種(2021年2-3月)", "非接種(2021年4月〜)", "接種(2021年4月〜)"];
+const AGE_SORT = ["00-09歳","10-19歳","20-29歳","30-39歳","40-49歳","50-59歳","60-69歳","70-79歳","80-89歳","90歳以上"];
+
+const spec = {
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "config": {
+    "title": {"fontSize": 16},
+    "axis": {"titleFontSize": 15, "labelFontSize": 15},
+    "legend": {"titleFontSize": 15, "labelFontSize": 15}
+  },
+  "width": 800,
+  "height": 520,
+  "data": {"values": values},
+  "transform": [
+    /* 対数軸用の安全値 */
+    {"calculate": "datum.mortality > 0 ? datum.mortality : 0.1", "as": "mortality_safe"},
+    {"calculate": "datum.lbm > 0 ? datum.lbm : 0.1", "as": "lbm_safe"},
+    {"calculate": "datum.ubm > 0 ? datum.ubm : 0.1", "as": "ubm_safe"},
+
+    /* tooltip用に年齢ごとに3区分を横持ち化するための一時列 */
+    {"calculate": "datum.status==='非接種(2021年2-3月)' ? datum.mortality : null", "as": "m_非接種2021_tmp"},
+    {"calculate": "datum.status==='非接種(2021年4月〜)' ? datum.mortality : null", "as": "m_非接種_tmp"},
+    {"calculate": "datum.status==='接種(2021年4月〜)' ? datum.mortality : null", "as": "m_接種_tmp"},
+    /* 年齢ごとに最大値（=その区分の実値）を拾って横持ち化 */
+    {
+      "joinaggregate": [
+        {"op":"max","field":"m_非接種2021_tmp","as":"m_非接種2021"},
+        {"op":"max","field":"m_非接種_tmp","as":"m_非接種(2021年4月〜)"},
+        {"op":"max","field":"m_接種_tmp","as":"m_接種(2021年4月〜)"}
+      ],
+      "groupby": ["age"]
+    }
+  ],
+  "layer": [
+    /* 棒（log軸） */
+    {
+      "mark": "bar",
+      "encoding": {
+        "x": {"field": "age","type": "ordinal","axis": {"title": "年齢階級"},"sort": AGE_SORT},
+        "xOffset": {"field": "status", "sort": ORDER},
+        "y": {"field": "mortality_safe","type": "quantitative","stack": null,
+              "scale": {"type": "log", "base": 10},
+              "axis": {"title": "死亡率(10万人年死亡数)"}},
+        "color": {"field": "status","type": "nominal",
+                  "scale": {"domain": ORDER, "scheme": "magma", "reverse": true},
+                  "legend": {"title": "接種区分"}},
+        "tooltip": [
+          {"field":"age","title":"年齢"},
+          {"field":"m_非接種2021","title":"非接種(2021年2-3月)"},
+          {"field":"m_非接種(2021年4月〜)","title":"非接種(2021年4月〜)"},
+          {"field":"m_接種(2021年4月〜)","title":"接種(2021年4月〜)"}
+        ]
+      }
+    },
+    /* 信頼区間：ルール（黒） */
+    {
+      "mark": {"type": "rule","stroke":"black","strokeWidth":2},
+      "encoding": {
+        "x": {"field": "age","type": "ordinal","sort": AGE_SORT},
+        "xOffset": {"field": "status", "sort": ORDER},
+        "y": {"field": "lbm_safe","type": "quantitative"},
+        "y2": {"field": "ubm_safe"},
+        "tooltip": null
+      }
+    },
+    /* 信頼区間の上下端：ティック（黒） */
+    {
+      "mark": {"type":"tick","stroke":"black","strokeWidth":2,"size":12},
+      "encoding": {
+        "x": {"field": "age","type": "ordinal","sort": AGE_SORT},
+        "xOffset": {"field": "status", "sort": ORDER},
+        "y": {"field": "lbm_safe","type": "quantitative"},
+        "tooltip": null
+      }
+    },
+    {
+      "mark": {"type":"tick","stroke":"black","strokeWidth":2,"size":12},
+      "encoding": {
+        "x": {"field": "age","type": "ordinal","sort": AGE_SORT},
+        "xOffset": {"field": "status", "sort": ORDER},
+        "y": {"field": "ubm_safe","type": "quantitative"},
+        "tooltip": null
+      }
+    }
+  ]
+};
+
+vegaEmbed('#vis', spec, {actions:false});
+</script>
+</div></div>

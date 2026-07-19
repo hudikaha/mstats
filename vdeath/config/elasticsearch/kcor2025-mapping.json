@@ -1,0 +1,22 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "30s"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "id":       { "type": "keyword" },
+      "areacode": { "type": "keyword" },
+      "area":     { "type": "keyword" },
+      "areaj":    { "type": "keyword" },
+      "cutoff":   { "type": "date", "format": "strict_date" },
+      "cweek":    { "type": "keyword" },
+      "date":     { "type": "date", "format": "strict_date" },
+      "age":      { "type": "keyword" },
+      "dose":     { "type": "byte" },
+      "deaths":   { "type": "integer" }
+    }
+  }
+}

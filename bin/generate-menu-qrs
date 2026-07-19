@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+# coding: utf-8
+
+require 'fileutils'
+require 'open3'
+require 'yaml'
+
+ROOT = File.expand_path('..', __dir__)
+MENU = File.join(ROOT, 'lib', 'menu.yml')
+OUTPUT_DIR = File.join(ROOT, 'web', 'qr')
+BASE_URL = ENV.fetch('MFACTS_BASE_URL', 'https://medicalfacts.info').sub(%r{/+$}, '')
+
+abort "menu not found: #{MENU}" unless File.file?(MENU)
+abort 'qrencode not found' unless system('command', '-v', 'qrencode', out: File::NULL)
+
+FileUtils.mkdir_p(OUTPUT_DIR)
+YAML.load_file(MENU).each do |item|
+  href = item.fetch('href').split('?', 2).first
+  next if href.match?(%r{\A(?:https?:)?//})
+
+  filename = "#{href.tr('/', '_')}.svg"
+  path = File.join(OUTPUT_DIR, filename)
+  url = "#{BASE_URL}/#{href.sub(%r{\A/+}, '')}"
+  _stdout, stderr, status = Open3.capture3(
+    'qrencode', '-t', 'SVG', '-m', '1', '-s', '4', '-o', path, url
+  )
+  abort "qrencode failed for #{url}: #{stderr}" unless status.success?
+  puts "#{filename}\t#{url}"
+end

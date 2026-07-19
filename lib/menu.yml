@@ -1,0 +1,60 @@
+- href: kcor.rb
+  ja: Kirsch累積アウトカム比（KCOR）
+  en: Kirsch Cumulative Outcomes Ratio (KCOR)
+- href: vdeath.rb
+  ja: 新型コロナワクチン接種回数と死亡数・死亡率(人年法、全死因による解析)
+  en: COVID-19 Vaxx Doses and Deaths/Mortality in Japan
+- href: hpvvhv.rb
+  ja: HPVワクチン接種後の体調不良新規受診者数の推移と健康被害認定・子宮頸癌患者・死者との比較
+  en: Trends in Post-HPV-Vaccination Symptom New Hospital Visits Compared with Vaccine Injury Certifications and Cervical Cancer Cases/Deaths
+- href: cod.rb
+  ja: 日本の月ごとの死因別死者数
+  en: Deaths by Cause in Japan
+- href: codtr.rb
+  ja: 日本の主な死因別死者推移
+  en: Trends in Deaths by Major Cause in Japan
+- href: nhk-kyushu.rb
+  ja: 浜松市2021年2月〜2024年5月の年齢階級別死亡率
+  en: Hamamatsu age-specific mortality
+- href: mortality.rb
+  ja: 各国・各地域の全死因死亡率とコロナ死亡率
+  en: All-cause and COVID-19 mortality
+- href: mort.rb
+  ja: 年代別の死亡統計推移
+  en: Mortality Trends by Age
+- href: vaxx.rb
+  ja: ワクチン接種率と新型コロナ感染状況
+  en: Vaccination rates and COVID-19 infection
+- href: infect.rb
+  ja: 新型コロナ感染状況(多種データ比較)
+  en: COVID-19 infection comparisons
+- href: enmort.rb
+  ja: イングランドのワクチン接種状況別全死因死亡率
+  en: All-cause mortality in England by vaccination status
+- href: vaxxinj.rb
+  ja: 予防接種健康被害救済制度の認定者数
+  en: Vaccine injury compensation certifications
+- href: myocarditis.rb
+  ja: ワクチンと新型コロナの心筋炎報告の実数比較
+  en: Myocarditis reports after vaccination and COVID-19
+- href: death-incdec.rb
+  ja: 年代別人口当り死者数の前年比増減率
+  en: Year-on-year changes in age-specific deaths
+- href: vaccine-deaths-2021.rb
+  ja: ワクチン副反応疑い死亡報告
+  en: Suspected vaccine-related death reports
+- href: data.rb
+  ja: グラフ作成のため加工した新型コロナデータ一覧
+  en: Modified COVID-19 Data Sets for Plotting
+- href: moderna.rb
+  ja: モデルナワクチン6-11歳評価論文の表
+  en: Moderna Vaccine Trial Table for Ages 6-11
+- href: pfizer.rb
+  ja: ファイザーワクチン6箇月追跡論文から作成の表
+  en: Pfizer Vaccine Six-Month Follow-up Table
+- href: pneumonia.rb
+  ja: 新型コロナ死者と肺炎死者・全死因死者
+  en: COVID-19, Pneumonia, and All-Cause Deaths
+- href: vaxx-co19-jp-us.rb
+  ja: 日米の年代別新型コロナ死者とワクチン接種率
+  en: COVID-19 Deaths and Vaccination Rates by Age in Japan and the US

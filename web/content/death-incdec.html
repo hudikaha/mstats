@@ -1,0 +1,1081 @@
+<style media="screen">
+      /* Add space between Vega-Embed links  */
+      .vega-actions a {
+      margin-right: 5px;
+      }
+    </style>
+<div class="legacy-page">
+      <div class="legacy-content">
+        <div id="vis" style="text-align: center;"></div>
+        <script>
+          // Assign the specification to a local variable vlSpec.
+          var vlSpec = {
+            "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+            "title": [
+              "年代別人口当り死者数の前年比増減率(%)",
+              ""
+            ],
+            "data": {
+              "values": [
+                {
+                  "year" : 2016,
+                  "age00" : -3.33,
+                  "age10" : -3.82,
+                  "age20" : -1.94,
+                  "age30" : -1.57,
+                  "age40" : -3.26,
+                  "age50" : -0.19,
+                  "age60" : -0.88,
+                  "age70" : -2.11,
+                  "age80" : -2.12,
+                  "age90" : -0.84,
+                  "age100" : 1.14
+                },
+                {
+                  "year" : 2017,
+                  "age00" : -5.57,
+                  "age10" : 0.36,
+                  "age20" : -4.75,
+                  "age30" : -3.62,
+                  "age40" : -1.52,
+                  "age50" : -4.11,
+                  "age60" : 0.42,
+                  "age70" : -2.1,
+                  "age80" : -0.42,
+                  "age90" : 1.51,
+                  "age100" : 2.07
+                },
+                {
+                  "year" : 2018,
+                  "age00" : -0.52,
+                  "age10" : 2.16,
+                  "age20" : -1.39,
+                  "age30" : -0.92,
+                  "age40" : -2.07,
+                  "age50" : -0.81,
+                  "age60" : -0.9,
+                  "age70" : -1.26,
+                  "age80" : -1.16,
+                  "age90" : -2.5,
+                  "age100" : -1.09
+                },
+                {
+                  "year" : 2019,
+                  "age00" : -0.35,
+                  "age10" : 0.7,
+                  "age20" : -2.53,
+                  "age30" : -0.93,
+                  "age40" : -1.54,
+                  "age50" : -1.23,
+                  "age60" : -1.28,
+                  "age70" : -1.48,
+                  "age80" : -1.54,
+                  "age90" : -1.4,
+                  "age100" : 2.68
+                },
+                {
+                  "year" : 2020,
+                  "age00" : -13.49,
+                  "age10" : 7.34,
+                  "age20" : 7.64,
+                  "age30" : 0.37,
+                  "age40" : 1.22,
+                  "age50" : -1.17,
+                  "age60" : -2.86,
+                  "age70" : 0.21,
+                  "age80" : -4.48,
+                  "age90" : -6.14,
+                  "age100" : -6.48
+                }
+              ]
+            },
+            "config": {
+              "title": {
+                "fontSize": 15
+              },
+              "axis": {
+                "titleFontSize": 14,
+                "labelFontSize": 14
+              },
+              "legend": {
+                "disable": true
+              }
+            },
+            "spacing": 2,
+            "hconcat": [
+              {
+                "title": "0-9歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age00",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "orient": "left",
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age00",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year",
+                    "scale": {
+                      "range": [
+                        "#0000e0",
+                        "#0000e0",
+                        "#0000e0",
+                        "#0000e0",
+                        "#e00000"
+                      ]
+                    }
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "10-19歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age10",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age10",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "20-29歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age20",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age20",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "30-39歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age30",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age30",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "40-49歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age40",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age40",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "50-59歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age50",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age50",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal"
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "60-69歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age60",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age60",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "70-79歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age70",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age70",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "80-89歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age80",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age80",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "90-99歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age90",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age90",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "100歳以上",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age100",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "orient": "right",
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age100",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              }
+            ]
+          };
+          vegaEmbed('#vis', vlSpec);
+        </script>
+        <p class=l>
+          <ul>
+            <li> <span style="color: red; font-weight: bold;">赤</span>が2020年の増減率を示す
+            <li> 10代20代の自殺者が増え、人口当り死者数の前年比が突出して増えた
+            <li> 絶対数では他の世代と比べてそれ程多く見えないかもしれないが、10代20代は他の世代と比べると、自殺と不慮の事故での死亡が元から多く、他の要因での死者が少ないので、自殺が増えると人口当り死者数の前年比増減率が格段に上がる
+            <li> 日本ではコロナ自体による被害は全体から見れば無いに等しいが、過剰対応による若者の被害が甚大
+          </ul>
+        <p align=left>
+          参考資料:
+          <ul>
+            <li> <a href="https://www.npa.go.jp/safetylife/seianki/jisatsu/R03/R02_jisatuno_joukyou.pdf">https://www.npa.go.jp/safetylife/seianki/jisatsu/R03/R02_jisatuno_joukyou.pdf</a>
+            <li> <a href="https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/geppo/nengai19/dl/h5.pdf">https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/geppo/nengai19/dl/h5.pdf</a>
+            <li> <a href="https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/geppo/nengai20/dl/h5.pdf">https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/geppo/nengai20/dl/h5.pdf</a>
+            <li> <a href="https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/geppo/nengai20/dl/gaikyouR2.pdf">https://www.mhlw.go.jp/toukei/saikin/hw/jinkou/geppo/nengai20/dl/gaikyouR2.pdf</a>
+          </ul>
+        <p>
+          <a href="death-gain-1.png"><img src="death-gain-1.png" width=500></a>
+          <a href="death-gain-2.png"><img src="death-gain-2.png" width=500></a>
+          <a href="death-gain-3.png"><img src="death-gain-3.png" height=500></a>
+          <a href="death-gain-4.png"><img src="death-gain-4.png" height=500></a>
+        </p>
+        <h3>スウェーデンの年代別死者数の前年比増減率</h3>
+        <div id="vis2" style="text-align: center;"></div>
+        <script>
+          // Assign the specification to a local variable vlSpec.
+          var vlSpec = {
+            "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+            "title": [
+              "年代別死者数の前年比増減率(%)",
+              "(スウェーデン)"
+            ],
+            "data": {
+              "values": [
+                {
+                  "year": 2016,
+                  "age00": 3.27,
+                  "age10": -24.32,
+                  "age20": -16.24,
+                  "age30": 4.89,
+                  "age40": 2.76,
+                  "age50": -6.19,
+                  "age60": -4.5,
+                  "age70": 1.43,
+                  "age80": -4.5,
+                  "age90": -0.86
+                },
+                {
+                  "year": 2017,
+                  "age00": -9.04,
+                  "age10": 17.78,
+                  "age20": 11.26,
+                  "age30": 0.13,
+                  "age40": -3.11,
+                  "age50": -1.77,
+                  "age60": -4.22,
+                  "age70": 2.41,
+                  "age80": 1.93,
+                  "age90": 1.99
+                },
+                {
+                  "year": 2018,
+                  "age00": -8.96,
+                  "age10": 11.33,
+                  "age20": -1.83,
+                  "age30": 1.17,
+                  "age40": -6.56,
+                  "age50": 0.77,
+                  "age60": -0.25,
+                  "age70": 3.67,
+                  "age80": -0.49,
+                  "age90": -1.01
+                },
+                {
+                  "year": 2019,
+                  "age00": -2.45,
+                  "age10": -18.02,
+                  "age20": -6.51,
+                  "age30": -2.13,
+                  "age40": -4.13,
+                  "age50": -4.14,
+                  "age60": -7.76,
+                  "age70": -1.54,
+                  "age80": -3.88,
+                  "age90": -4.1
+                },
+                {
+                  "year": 2020,
+                  "age00": 8.4,
+                  "age10": 17.7,
+                  "age20": -4.6,
+                  "age30": 1.19,
+                  "age40": 1.91,
+                  "age50": 7.08,
+                  "age60": 4.9,
+                  "age70": 11.57,
+                  "age80": 12.96,
+                  "age90": 12.13
+                },
+                {
+                  "year": 2021,
+                  "age00": -17.82,
+                  "age10": -15.47,
+                  "age20": -6.34,
+                  "age30": 5.24,
+                  "age40": -0.52,
+                  "age50": -3.03,
+                  "age60": -3.39,
+                  "age70": -4.72,
+                  "age80": -11.28,
+                  "age90": -13.76
+                }
+              ]
+            },
+            "config": {
+              "title": {
+                "fontSize": 15
+              },
+              "axis": {
+                "titleFontSize": 14,
+                "labelFontSize": 14
+              },
+              "legend": {
+                "disable": true
+              }
+            },
+            "spacing": 2,
+            "hconcat": [
+              {
+                "title": "0-9歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age00",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "orient": "left",
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age00",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year",
+                    "scale": {
+                      "range": [
+                        "#0000e0",
+                        "#0000e0",
+                        "#0000e0",
+                        "#0000e0",
+                        "#e00000",
+                        "#0000e0"
+                      ]
+                    }
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "10-19歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age10",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age10",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "20-29歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age20",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age20",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "30-39歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age30",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age30",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "40-49歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age40",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age40",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "50-59歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age50",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age50",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal"
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "60-69歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age60",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age60",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "70-79歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age70",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age70",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "80-89歳",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age80",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "labels": false,
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age80",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              },
+              {
+                "title": "90歳以上",
+                "width": {
+                  "step": 14
+                },
+                "height": 300,
+                "encoding": {
+                  "y": {
+                    "field": "age90",
+                    "type": "quantitative",
+                    "scale": {
+                      "domain": [
+                        -20,
+                        20
+                      ]
+                    },
+                    "axis": {
+                      "orient": "right",
+                      "title": ""
+                    }
+                  },
+                  "tooltip": {
+                    "field": "age90",
+                    "type": "quantitative"
+                  },
+                  "x": {
+                    "title": "年",
+                    "field": "year",
+                    "type": "nominal",
+                    "axis": {
+                      "title": ""
+                    }
+                  },
+                  "color": {
+                    "field": "year"
+                  }
+                },
+                "mark": "bar"
+              }
+            ]
+          };
+          vegaEmbed('#vis2', vlSpec);
+        </script>
+        <ul>
+          <li> <span style="color: red; font-weight: bold;">赤</span>が2020年の増減率を示す
+          <li> 人口あたりは未計算
+          <li> スウェーデンは人口が日本の12分の1で、10代死者の絶対数が少なくなるので、変動が大きい
+          <li> 資料: <a href="https://www.mortality.org/Public/STMF/Inputs/STMFinput.zip">https://www.mortality.org/Public/STMF/Inputs/STMFinput.zip</a>
+        </ul>
+      </div>
+    </div>
+</div>

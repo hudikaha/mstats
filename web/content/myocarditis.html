@@ -1,0 +1,227 @@
+<style media="screen">
+      /* Add space between Vega-Embed links  */
+      .vega-actions a {
+      margin-right: 5px;
+      }
+    </style>
+<div class="legacy-page">
+      <div class="legacy-content">
+	<hr>
+	<p class=c>
+	  <div id="vis"></div>
+	  <script>
+	    // Assign the specification to a local variable vlSpec.
+	    var vlSpec = {
+	      "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+	      "data": {
+		"values": [
+		  {"disease": "ファイザー", "age5":"10-14", "sex": "男性", "cases":28, "c":15},
+		  {"disease": "ファイザー", "age5":"15-19", "sex": "男性", "cases":48, "c":30},
+		  {"disease": "ファイザー", "age5":"20-24", "sex": "男性", "cases":22, "c":20},
+		  {"disease": "ファイザー", "age5":"25-29", "sex": "男性", "cases":18},
+		  {"disease": "ファイザー", "age5":"30-34", "sex": "男性", "cases":15},
+		  {"disease": "ファイザー", "age5":"35-39", "sex": "男性", "cases":7},
+		  {"disease": "ファイザー", "age5":"40-44", "sex": "男性", "cases":8},
+		  {"disease": "ファイザー", "age5":"45-49", "sex": "男性", "cases":7},
+		  {"disease": "ファイザー", "age5":"50-54", "sex": "男性", "cases":6},
+		  {"disease": "ファイザー", "age5":"55-59", "sex": "男性", "cases":6},
+		  {"disease": "ファイザー", "age5":"60-64", "sex": "男性", "cases":5},
+		  {"disease": "ファイザー", "age5":"65-69", "sex": "男性", "cases":10},
+		  {"disease": "ファイザー", "age5":"70-74", "sex": "男性", "cases":10},
+		  {"disease": "ファイザー", "age5":"75-79", "sex": "男性", "cases":7},
+		  {"disease": "ファイザー", "age5":"80-", "sex": "男性", "cases":11},
+		  {"disease": "モデルナ", "age5":"10-14", "sex": "男性", "cases":5, "c":3},
+		  {"disease": "モデルナ", "age5":"15-19", "sex": "男性", "cases":42, "c":38},
+		  {"disease": "モデルナ", "age5":"20-24", "sex": "男性", "cases":60},
+		  {"disease": "モデルナ", "age5":"25-29", "sex": "男性", "cases":37},
+		  {"disease": "モデルナ", "age5":"30-34", "sex": "男性", "cases":11, "c":10},
+		  {"disease": "モデルナ", "age5":"35-39", "sex": "男性", "cases":3},
+		  {"disease": "モデルナ", "age5":"40-44", "sex": "男性", "cases":7},
+		  {"disease": "モデルナ", "age5":"45-49", "sex": "男性", "cases":7},
+		  {"disease": "モデルナ", "age5":"50-54", "sex": "男性", "cases":1},
+		  {"disease": "モデルナ", "age5":"55-59", "sex": "男性", "cases":2},
+		  {"disease": "モデルナ", "age5":"60-64", "sex": "男性", "cases":1},
+		  {"disease": "モデルナ", "age5":"65-69", "sex": "男性", "cases":1},
+		  {"disease": "モデルナ", "age5":"70-74", "sex": "男性", "cases":0},
+		  {"disease": "モデルナ", "age5":"75-79", "sex": "男性", "cases":0},
+		  {"disease": "モデルナ", "age5":"80-", "sex": "男性", "cases":0},
+		  {"disease": "新型コロナ", "age20":"10-29", "sex": "男性", "cases":3},
+		  {"disease": "新型コロナ", "age20":"30-49", "sex": "男性", "cases":4},
+		  {"disease": "新型コロナ", "age20":"50-64", "sex": "男性", "cases":6},
+		  {"disease": "新型コロナ", "age20":"65以上", "sex": "男性", "cases":6},
+		  {"disease": "ファイザー", "age5":"10-14", "sex": "女性", "cases":4},
+		  {"disease": "ファイザー", "age5":"15-19", "sex": "女性", "cases":9},
+		  {"disease": "ファイザー", "age5":"20-24", "sex": "女性", "cases":2},
+		  {"disease": "ファイザー", "age5":"25-29", "sex": "女性", "cases":3},
+		  {"disease": "ファイザー", "age5":"30-34", "sex": "女性", "cases":3},
+		  {"disease": "ファイザー", "age5":"35-39", "sex": "女性", "cases":7},
+		  {"disease": "ファイザー", "age5":"40-44", "sex": "女性", "cases":7},
+		  {"disease": "ファイザー", "age5":"45-49", "sex": "女性", "cases":5},
+		  {"disease": "ファイザー", "age5":"50-54", "sex": "女性", "cases":12},
+		  {"disease": "ファイザー", "age5":"55-59", "sex": "女性", "cases":6, "c":5},
+		  {"disease": "ファイザー", "age5":"60-64", "sex": "女性", "cases":9},
+		  {"disease": "ファイザー", "age5":"65-69", "sex": "女性", "cases":6},
+		  {"disease": "ファイザー", "age5":"70-74", "sex": "女性", "cases":8},
+		  {"disease": "ファイザー", "age5":"75-79", "sex": "女性", "cases":4, "c":3},
+		  {"disease": "ファイザー", "age5":"80-", "sex": "女性", "cases":17},
+		  {"disease": "モデルナ", "age5":"10-14", "sex": "女性", "cases":0},
+		  {"disease": "モデルナ", "age5":"15-19", "sex": "女性", "cases":3},
+		  {"disease": "モデルナ", "age5":"20-24", "sex": "女性", "cases":2},
+		  {"disease": "モデルナ", "age5":"25-29", "sex": "女性", "cases":2},
+		  {"disease": "モデルナ", "age5":"30-34", "sex": "女性", "cases":4},
+		  {"disease": "モデルナ", "age5":"35-39", "sex": "女性", "cases":2},
+		  {"disease": "モデルナ", "age5":"40-44", "sex": "女性", "cases":2},
+		  {"disease": "モデルナ", "age5":"45-49", "sex": "女性", "cases":4},
+		  {"disease": "モデルナ", "age5":"50-54", "sex": "女性", "cases":3},
+		  {"disease": "モデルナ", "age5":"55-59", "sex": "女性", "cases":0},
+		  {"disease": "モデルナ", "age5":"60-64", "sex": "女性", "cases":0},
+		  {"disease": "モデルナ", "age5":"65-69", "sex": "女性", "cases":1},
+		  {"disease": "モデルナ", "age5":"70-74", "sex": "女性", "cases":0},
+		  {"disease": "モデルナ", "age5":"75-79", "sex": "女性", "cases":0},
+		  {"disease": "モデルナ", "age5":"80-", "sex": "女性", "cases":0},
+		  {"disease": "新型コロナ", "age20":"10-29", "sex": "女性", "cases":1},
+		  {"disease": "新型コロナ", "age20":"30-49", "sex": "女性", "cases":2},
+		  {"disease": "新型コロナ", "age20":"50-64", "sex": "女性", "cases":5},
+		  {"disease": "新型コロナ", "age20":"65以上", "sex": "女性", "cases":6}
+		]
+	      },
+	      "config": {
+		"title": {"fontSize": 16},
+		"axis": {"titleFontSize": 15, "labelFontSize": 15},
+		"legend": {"titleFontSize": 15, "labelFontSize": 15}
+	      },
+	      "hconcat": [
+		{
+                  "width": 300,
+		  "transform": [
+		    { "filter": "datum.sex == '男性'" },
+		    {
+		      "calculate": "datum.age20 != null ? datum.age20 : (datum.age5 == '10-14' || datum.age5 == '15-19' || datum.age5 == '20-24' || datum.age5 == '25-29') ? '10-29' : (datum.age5 == '30-34' || datum.age5 == '35-39' || datum.age5 == '40-44' || datum.age5 == '45-49') ? '30-49' : (datum.age5 == '50-54' || datum.age5 == '55-59' || datum.age5 == '60-64') ? '50-64' : '65以上'",
+		      "as": "age"
+		    }
+		  ],
+		  "encoding": {
+		    "y": {
+		      "title": "年齢区分",
+		      "field": "age"
+		    },
+		    "x": {
+		      "title": "心筋炎報告 (男性)",
+		      "field": "cases",
+		      "type": "quantitative",
+		      "aggregate": "sum",
+		      "scale": {"domain": [0, 200]},
+		      "axis": {"orient": "top"}
+		    },
+		    "yOffset": {"field": "disease"},
+		    "color": {
+		      "field": "disease",
+		      "title": "ワクチン種別/疾患",
+		      "scale": {"range": ["#0000ee","#ee0000", "#00ee00"]}
+		    }
+		  },
+		  "layer": [
+		    { "mark": "bar" },
+		    {
+		      "encoding": {
+			"text": {"field": "cases", "type": "quantitative", "aggregate": "sum"},
+			"color": {"value": "#000000"}
+		      },
+		      "mark": {
+			"type": "text",
+			"align": "left",
+			"baseline": "middle",
+			"dx": 5,
+			"fontSize": 14
+		      }
+		    }
+		  ]
+		},
+		{
+                  "width": 300,
+		  "transform": [
+		    { "filter": "datum.sex == '女性'" },
+		    {
+		      "calculate": "datum.age20 != null ? datum.age20 : (datum.age5 == '10-14' || datum.age5 == '15-19' || datum.age5 == '20-24' || datum.age5 == '25-29') ? '10-29' : (datum.age5 == '30-34' || datum.age5 == '35-39' || datum.age5 == '40-44' || datum.age5 == '45-49') ? '30-49' : (datum.age5 == '50-54' || datum.age5 == '55-59' || datum.age5 == '60-64') ? '50-64' : '65以上'",
+		      "as": "age"
+		    }
+		  ],
+		  "encoding": {
+		    "y": {
+		      "title": "年齢区分",
+		      "field": "age"
+		    },
+		    "x": {
+		      "title": "心筋炎報告 (女性)",
+		      "field": "cases",
+		      "type": "quantitative",
+		      "aggregate": "sum",
+		      "scale": {"domain": [0, 200]},
+		      "axis": {"orient": "top"}
+		    },
+		    "yOffset": {"field": "disease"},
+		    "color": {
+		      "field": "disease",
+		    }
+		  },
+		  "layer": [
+		    {
+		      "mark": "bar"
+		    },
+		    {
+		      "encoding": {
+			"text": {"field": "cases", "type": "quantitative", "aggregate": "sum"},
+			"color": {"value": "#000000"}
+		      },
+		      "mark": {
+			"type": "text",
+			"align": "left",
+			"baseline": "middle",
+			"dx": 5,
+			"fontSize": 14
+		      }
+		    }
+		  ]
+		}
+	      ]
+	    };
+            vegaEmbed('#vis', vlSpec);
+          </script>
+        <p class=l>
+	  <ul>
+	    <li> データ元:
+	      <ul>
+		<li> <a href="https://www.mhlw.go.jp/content/10601000/000862253.pdf">第73回厚生科学審議会予防接種・ワクチン分科会副反応検討部会 資料１－７―１ 副反応疑い報告の状況について (2021/12/3)</a>
+		<li> <a href="https://www.mhlw.go.jp/content/10601000/000872666.pdf">第74回資料(2021/12/24)</a>の心筋炎が第73回資料(2021/12/3)の心筋炎(心膜炎含む)報告より多い場合は、第74回資料の数値を利用
+	      </ul>
+	    <li> 厚労省資料には10-29歳男性の新型コロナ「入院患者3358人中3人」の心筋炎をもって「100万人あたり893人」と書いてあるが、10-29歳の男性の陽性者は2021/12/3までで33万人、入院率は10％以下(<a href="#nishiura">※1</a>)なので、推計29人以下。
+	    <li> 同様に10-29歳女性の新型コロナ「入院患者2949人中1人」の心筋炎をもって「100万人あたり339人」と書いてあるが、10-29歳の女性の陽性者は全期間で27万人、入院率は10％以下(<a href="#nishiura">※1</a>)なので、心筋炎の推計9人。
+	    <li><font color="red">10-29歳男女ともワクチン後の心筋炎の方が多いと推計される。</font>
+	    <li>そもそもワクチンは<font color=red>健康な人</font>に接種するのだから、<font color="red">比較できる桁になっていること自体がワクチン接種事業として疑問</font>。
+	  </ul>
+
+	<p class=c>
+	  <br>
+	  <a href="myocarditis-1.png"><img src="myocarditis-1.png" width=40%></a>
+	  <a href="myocarditis-2.png"><img src="myocarditis-2.png" width=40%></a>
+
+	<p class=l>
+	  <ul>
+	    <li> 副反応疑い報告10代20代の心筋炎は7割重篤。
+	    <li> 12/3の第73回ワクチン分科会副反応検討部会資料では、回復と軽快(症状が軽くなった)を併せ不明を除外して割合を算出し改善率8割以上と。
+	    <li> <font color="red">「だから多くは軽症」と重篤でも軽快すれば軽症というトンデモ理論</font>が書いてある。
+	  </ul>
+
+	<p class=c>
+	  <br>
+	  <a href="myocarditis-3.png"><img src="myocarditis-3.png" width=40%></a>
+	  <a href="myocarditis-4.png"><img src="myocarditis-4.png" width=40%></a>
+	<p class=l id="nishiura">
+	  ※1 <a href="https://www.mhlw.go.jp/content/10900000/000818359.pdf">第47回新型コロナウイルス感染症対策アドバイザリーボード（令和3年8月11日）資料３－３ 西浦先生提出資料 124ページ</a>
+	  <hr>
+	  <font size=2>
+	    グラフの iframe 埋込みタグ: &lt;iframe src="https://fujikawa.org/covid19/myocarditis-i.html" loading="lazy" style="width: 100%; height: 500px; border: 0px none;"&gt;&lt;/iframe&gt
+	  </font>
+	</p>
+      </div>
+    </div>

@@ -1,0 +1,13 @@
+# すべての .log ファイル
+*.log
+kkcor-old
+
+/logs/
+/data-ok/
+/data/
+/kkcor/
+/vdeath/data/
+/vdeath/var/
+/lib/elasticsearch-password
+/old/
+/cdeath/config/logstash/*.conf

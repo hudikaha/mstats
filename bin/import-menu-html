@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+# coding: utf-8
+
+require 'fileutils'
+
+SOURCE = File.expand_path(ARGV.fetch(0))
+ROOT = File.expand_path('..', __dir__)
+WEB = File.join(ROOT, 'web')
+NAMES = %w[
+  nhk-kyushu vaxxinj myocarditis death-incdec vaccine-deaths-2021
+  data moderna pfizer pneumonia vaxx-co19-jp-us
+].freeze
+
+FileUtils.mkdir_p(File.join(WEB, 'content'))
+FileUtils.mkdir_p(File.join(WEB, 'redirects'))
+
+NAMES.each do |name|
+  source = File.read(File.join(SOURCE, "#{name}.html"))
+  styles = source.scan(/<style\b[^>]*>.*?<\/style>/mi).join("\n")
+  body = source[/<body\b[^>]*>(.*)<\/body>/mi, 1] || abort("body not found: #{name}")
+  body.gsub!(/<link\b[^>]*\b(?:mfacts|covid19)\.css[^>]*>\s*/i, '')
+  body.gsub!(/<script\b[^>]*src=["']menu(?:_e)?\.js["'][^>]*><\/script>\s*/i, '')
+  body.gsub!(/<h1\b[^>]*>.*?<\/h1>\s*/mi, '')
+  body.gsub!(/<div\b([^>]*?)id=["']wrapper["']([^>]*)>/i, '<div class="legacy-page">')
+  body.gsub!(/<div\b[^>]*class=["']right-column["'][^>]*>/i, '<div class="legacy-content">')
+  content = [styles, body.strip, ''].reject(&:empty?).join("\n")
+  File.write(File.join(WEB, 'content', "#{name}.html"), content)
+
+  File.write(File.join(WEB, "#{name}.rb"), <<~RUBY)
+    #!/usr/bin/ruby
+    # coding: utf-8
+    require_relative 'content_page'
+    render_content_page(__FILE__)
+  RUBY
+  File.chmod(0o755, File.join(WEB, "#{name}.rb"))
+
+  File.write(File.join(WEB, 'redirects', "#{name}.html"), <<~HTML)
+    <!DOCTYPE html><meta charset="utf-8">
+    <meta http-equiv="refresh" content="0;URL=#{name}.rb">
+    <script>location.replace(#{"#{name}.rb".inspect} + location.search + location.hash)</script>
+    <a href="#{name}.rb">#{name}.rb</a>
+  HTML
+end
