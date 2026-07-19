@@ -307,9 +307,9 @@ print <<EOF
 EOF
     print '        "values": '
 
-data0 = elastic2(
+data0 = elastic_search(
     :index => 'en-mortality',
-    :must => [],
+    :filter => [],
     :should => [],
     :source => [],
     #:debug => 'SHOWONLY',
@@ -324,8 +324,9 @@ data0.each do |datum|
     #    exit 1
     #end
     datum2 = { 'date' =>
-               Date.parse("#{datum['_source']['Month']} 1 #{datum['_source']['Year']}")}
-    datum['_source'].each do |k, v|
+               Date.parse("#{datum[:Month]} 1 #{datum[:Year]}")}
+    datum.each do |key, v|
+        k = key.to_s
         if k == 'Cause of Death' ||
            k == 'Age group' ||
            k == 'Vaccination status'

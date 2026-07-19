@@ -470,9 +470,9 @@ $y0s.each do |k, v|
     source.push(v[:calc]) if v[:name] != v[:calc]
 end
 
-data = elastic2(
+data = elastic_search(
     :index => 'covid19',
-    :must => [{'range' => {'date' => {'gte' => "#{$from.to_s}", 'lte' => "#{$to.to_s}"}}}],
+    :filter => [{'range' => {'date' => {'gte' => "#{$from.to_s}", 'lte' => "#{$to.to_s}"}}}],
     :should => should,
     :source => source,
     #:debug => 'SHOWONLY',
@@ -485,28 +485,22 @@ $locations = Array.new
 prev_loc = nil
 totals = {}
 data.each do |datum|
+    datum.transform_keys!(&:to_s)
     if $l == :ja && datum['_id'] !~ /^jp-/
-        k = $locs_r[datum['_source']['location']]
+        k = $locs_r[datum['location']]
         if k != nil
             if $locs[k][:ja] != ''
-                datum['_source']['location'] = $locs[k][:ja]
+                datum['location'] = $locs[k][:ja]
             end
         end
     elsif $l == :en && datum['_id'] =~ /^jp-/
-        k = $locs_r[datum['_source']['location']]
+        k = $locs_r[datum['location']]
         if k != nil
-            datum['_source']['location'] = $locs[k][:en]
+            datum['location'] = $locs[k][:en]
         end
     end
 
-    datum['_source'].each do |k, v|
-        if k == 'date'
-            datum['date'] = Date.parse(datum['_source']['date'])
-        else
-            datum[k] = v
-        end
-    end
-    datum.delete('_source')
+    datum['date'] = Date.parse(datum['date'])
 
     $locations.push(datum['location']) if ! $locations.include?(datum['location'])
 end

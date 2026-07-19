@@ -247,23 +247,31 @@ $must_not = []
 $must = []
 $should = []
 
-data0 = elastic3(
+data0 = elastic_search(
     :index => $opts[:index],
     #:must_not => $must_not,
-    #:must => $must,
+    #:filter => $must,
     #:should => [],
     :must_not => [],
-    :must => [], # specify range in the future
+    :filter => [], # specify range in the future
     :should => [],
     :source => [ 'doc_id', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
     #:source => [],
     #:debug => 'SHOWONLY_QUERY',
     #:debug => 'SHOWONLY',
-)
+).to_h { |datum| [datum.delete(:_id), datum] }
 
 $data = Hash.new
 data0.each do |k, datum|
     datum2 = datum.dup
+    # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
+    # Convert numeric strings only in calculation fields from the legacy index.
+    %i[step deaths persondays mortality lives rr0 lb0 ub0].each do |field|
+        value = datum2[field]
+        next unless value.is_a?(String) && value.match?(/\A-?\d+(?:\.\d+)?\z/)
+
+        datum2[field] = value.include?('.') ? value.to_f : value.to_i
+    end
     if $l == :en && Cities[datum2[:areacode]]
         datum2[:area] = Cities[datum2[:areacode]][:en]
     end

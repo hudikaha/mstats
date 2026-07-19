@@ -8,7 +8,7 @@ require 'net/http'
 require 'time'
 require 'uri'
 
-INDEX = ENV.fetch('KCOR_INDEX', 'kcor2025')
+INDEX = ENV.fetch('KCOR_INDEX', 'kcor')
 ES_URL = ENV.fetch('ES_URL', 'http://127.0.0.1:9200')
 ES_USER = ENV.fetch('ES_USER', 'elastic')
 ES_PASSWORD = ENV.fetch('ES_PASSWORD')

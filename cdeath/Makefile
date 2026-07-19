@@ -19,9 +19,11 @@ SHELL := /bin/zsh
 #   logstash       -> stop service -> run server-side mstats2026.conf once
 
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-POP_ARCHIVE_DIR ?= $(HOME)/work/mstats/popjp
+POP_ARCHIVE_DIR ?= $(ROOT)/src/popjp
 DCAUSE_SOURCE_DIR ?= $(ROOT)/src/causejp
-DATA_DIR ?= $(HOME)/work/mstats/data
+STMF_DIR ?= $(ROOT)/src/stmf
+STMF_SOURCE ?= $(STMF_DIR)/stmf.csv
+DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
 
 POP_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0
@@ -33,7 +35,7 @@ SERVER_WEB_DIR ?= fujikawa/covid19
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all fetch fetch-pop fetch-death check csv upload logstash cod codtr
+.PHONY: help all fetch fetch-pop fetch-death fetch-stmf check csv mort-csv stmf-csv upload logstash cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -77,8 +79,11 @@ help:
 	@echo 'make fetch    Codexで人口・死因の次月公開確認と取得（既存CSVは検証しない）'
 	@echo 'make fetch-pop   Codexで人口の新規原CSVを取得'
 	@echo 'make fetch-death Codexで死因の新規原CSVを取得'
+	@echo 'make fetch-stmf HMD認証情報を環境変数から読みSTMF pooled CSVを取得'
 	@echo 'make all      Codexで取得後、CSV生成・必要時のみ投入'
 	@echo 'make csv      新規・更新原CSVがある場合だけ日時付き累積CSVを生成'
+	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
+	@echo 'make stmf-csv STMF pooled CSVをmstats2026週次CSVへ変換（投入しない）'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
 	@echo 'make codtr    make codと同じデータ更新（codtr.rbは年未完の月も表示）'
 	@echo 'make upload   最新の2つのCSVをサーバへ送って固定名リンクを更新'
@@ -127,6 +132,14 @@ fetch-death:
 	 else \
 	   echo '[error] Codexによる死因CSV取得に失敗しました。'; cat "$$log"; exit 1; \
 	 fi
+
+fetch-stmf:
+	@mkdir -p "$(STMF_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(STMF_DIR)/stmf-$$stamp.csv"; \
+	 echo '[fetch-stmf] HMDからSTMF pooled CSVを取得します。'; \
+	 if ! ruby "$(ROOT)/import/fetch-stmf.rb" "$$out"; then rm -f "$$out"; exit 1; fi; \
+	 ln -sfn "$${out:t}" "$(STMF_SOURCE)"; \
+	 echo "updated $(STMF_SOURCE) -> $${out:t}"
 
 check:
 	@pop_sources=("$(POP_ARCHIVE_DIR)"/*.csv(N)); \
@@ -179,6 +192,44 @@ csv:
 	    echo "新しい人口推計月次（$${pop_next}以降）を取ってきて、とAIに頼んでください。場所は" '$(POP_URL)'; \
 	    echo "新しい月次死因CSV（$${death_next}以降）を取ってきて、とAIに頼んでください。場所は" '$(DCAUSE_URL)'; \
 	  fi
+
+mort-csv:
+	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
+	 death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); death=$$death_files[1]; \
+	 test -n "$$pop" -a -n "$$death" || { echo 'mstats2026月次CSVが不足しています。先に make csv を実行してください。'; exit 1; }; \
+	 mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 tmp="$(DATA_DIR)/.jp-dcause-weekly-mstats2026-$$stamp.csv.tmp"; \
+	 out="$(DATA_DIR)/jp-dcause-weekly-mstats2026-$$stamp.csv"; \
+	 log="$(STATE_DIR)/jp-dcause-weekly.log"; \
+	 echo "[mort-csv] $${death:t}と$${pop:t}から週次CSVを生成します。"; \
+	 if ! ruby "$(ROOT)/import/jp-dcause-weekly.rb" --population "$$pop" "$$death" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
+	 header=$$(head -1 "$$tmp"); \
+	 [[ $$header == id,loc_code,location,yearweek,category,*age_50_64 ]] || { echo "wrong weekly mstats2026 header: $$tmp"; rm -f "$$tmp"; exit 1; }; \
+	 rows=$$(( $$(wc -l < "$$tmp") - 1 )); (( rows > 0 )) || { echo "no weekly data rows: $$tmp"; rm -f "$$tmp"; exit 1; }; \
+	 duplicates=$$(tail -n +2 "$$tmp" | cut -d, -f1 | LC_ALL=C sort | uniq -d | head -1); \
+	 [[ -z $$duplicates ]] || { echo "duplicate weekly id: $$duplicates"; rm -f "$$tmp"; exit 1; }; \
+	 periods=$$(tail -n +2 "$$tmp" | cut -d, -f4 | LC_ALL=C sort -u); \
+	 first=$$(print -r -- "$$periods" | head -1); last=$$(print -r -- "$$periods" | tail -1); \
+	 mv "$$tmp" "$$out"; \
+	 echo "created $$out: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
+	 echo '[mort-csv] uploadとElasticsearch投入はまだ行いません。'
+
+stmf-csv:
+	@source="$(STMF_SOURCE)"; test -s "$$source" || { echo 'STMF pooled CSVがありません: $(STMF_SOURCE)'; exit 1; }; \
+	 mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 tmp="$(DATA_DIR)/.stmf-weekly-mstats2026-$$stamp.csv.tmp"; \
+	 out="$(DATA_DIR)/stmf-weekly-mstats2026-$$stamp.csv"; \
+	 log="$(STATE_DIR)/stmf-weekly.log"; \
+	 echo "[stmf-csv] $${source:t}を週次CSVへ変換します。"; \
+	 if ! ruby "$(ROOT)/import/stmf-weekly.rb" "$$source" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
+	 rows=$$(( $$(wc -l < "$$tmp") - 1 )); (( rows > 0 )) || { echo "no STMF rows: $$tmp"; rm -f "$$tmp"; exit 1; }; \
+	 duplicates=$$(tail -n +2 "$$tmp" | cut -d, -f1 | LC_ALL=C sort | uniq -d | head -1); \
+	 [[ -z $$duplicates ]] || { echo "duplicate STMF id: $$duplicates"; rm -f "$$tmp"; exit 1; }; \
+	 periods=$$(tail -n +2 "$$tmp" | cut -d, -f4 | LC_ALL=C sort -u); \
+	 first=$$(print -r -- "$$periods" | head -1); last=$$(print -r -- "$$periods" | tail -1); \
+	 mv "$$tmp" "$$out"; \
+	 echo "created $$out: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
+	 echo '[stmf-csv] uploadとElasticsearch投入はまだ行いません。'
 
 upload:
 	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \

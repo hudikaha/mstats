@@ -93,14 +93,19 @@ def print_site_title(title, lang)
     print "</div>\n"
 end
 
-# Web公開領域外の秘密ファイルまたは環境変数からElasticsearch認証を設定する。
-# Configure Elasticsearch authentication from an environment variable or a secret outside the web root.
+# Web公開領域外の秘密ファイルからElasticsearch認証を設定する。
+# Configure Elasticsearch authentication from a secret file outside the web root.
 def elastic_basic_auth(request)
-    password_file = File.expand_path('~magician/.config/mstats/espass.txt')
-    password = ENV['ES_PASSWORD']
-    password = File.read(password_file).strip if password.to_s.empty? && File.file?(password_file)
-    raise 'ES_PASSWORD or ~/.config/mstats/espass.txt is required' if password.to_s.empty?
-    request.basic_auth(ENV.fetch('ES_USER', 'elastic'), password)
+    credentials_file = File.expand_path('~magician/.config/mstats/espass.txt')
+    unless File.file?(credentials_file) && File.readable?(credentials_file)
+        raise '~/.config/mstats/espass.txt is required'
+    end
+
+    user, password = File.read(credentials_file).strip.split(':', 2)
+    if user.to_s.empty? || password.to_s.empty?
+        raise '~/.config/mstats/espass.txt must use account:password format'
+    end
+    request.basic_auth(user, password)
 end
 
 # 言語、CSS、メニュー、タイトルを含む共通HTMLヘッダーを出力する。
@@ -141,162 +146,57 @@ EOF
     end
 end
 
-# Elasticsearchを検索し、旧形式の集計結果を返す。
-# Query Elasticsearch and return results in the legacy aggregation shape.
-def elastic(**opts)
+# Elasticsearchを検索し、Symbolキーの統一レコード配列を返す。
+# Query Elasticsearch and return a canonical array of symbol-keyed records.
+def elastic_search(**opts)
     uri = URI.parse("http://localhost:9200/#{opts[:index]}/_search")
-    request = Net::HTTP::Get.new(uri)
+    request = Net::HTTP::Post.new(uri)
     elastic_basic_auth(request)
     request.content_type = "application/json"
 
-    year = opts[:year].is_a?(Numeric) ? opts[:year] : 2009
-    request.body = <<EOF
-{
-  "query": {
-    "bool": {
-      "must": [
-        { "range": {"date": {"gte": "#{year}-01-01", "lt": "now" } } }
-      ]
-    }
-  },
-EOF
-if opts[:items]
-    request.body += <<EOF
-  "_source": [
-EOF
-    opts[:items].each do |i|
-        request.body += <<EOF
-    "#{i}",
-EOF
-    end
-    request.body += <<EOF
-    "date"
-  ]
-EOF
-end
-    request.body += <<EOF
-  "size": 100000
-}
-EOF
-
-    response = Net::HTTP.start(uri.hostname, uri.port) do |http|
-        http.request(request)
-    end
-
-    data = JSON.parse(response.body)['hits']['hits']
-
-    return data
-end
-
-# Elasticsearchを検索し、mstats系ページ向けに整形した結果を返す。
-# Query Elasticsearch and return results shaped for mstats-based pages.
-def elastic2(**opts)
-    uri = URI.parse("http://localhost:9200/#{opts[:index]}/_search")
-    request = Net::HTTP::Get.new(uri)
-    elastic_basic_auth(request)
-    request.content_type = "application/json"
-
-    size = opts[:size] ? opts[:size] : 100000
+    filters = opts[:filter] || []
+    should = opts[:should] || []
     body = {
-        "size" => size,
+        "size" => opts[:size] || 100000,
         "query" => {
             "bool" => {
-                "must" => [
-                    {
-                        "bool" => {
-                            "should" => opts[:should]
-                        }
-                    }
-                ]
+                "filter" => filters,
+                "must_not" => opts[:must_not] || []
             }
         },
-        "_source" => opts[:source]
+        "_source" => opts[:source] || []
     }
-
-    body['query']['bool']['must'] += opts[:must]
-    request.body = JSON.pretty_generate(body)
-
-    response = Net::HTTP.start(uri.hostname, uri.port) do |http|
-        http.request(request)
+    unless should.empty?
+        body['query']['bool']['should'] = should
+        body['query']['bool']['minimum_should_match'] = 1
     end
-
-    if opts[:debug] == 'SHOWONLY'
-        puts
-        puts request.body
-        puts response.body
-        return
-    end
-
-    data = JSON.parse(response.body)['hits']['hits']
-
-    return data
-end
-
-# 統計CSV由来の文字列を欠測値に配慮して数値化する。
-# Convert statistical CSV strings to numbers while preserving missing values.
-class String
-    def to_numeric
-        begin
-            Integer(self)
-        rescue ArgumentError
-            begin
-                Float(self)
-            rescue ArgumentError
-                self
-            end
-        end
-    end
-end
-
-# Elasticsearchの複合集計をキー順のHashへ正規化する。
-# Normalize compound Elasticsearch aggregations into a key-sorted Hash.
-def elastic3(**opts)
-    uri = URI.parse("http://localhost:9200/#{opts[:index]}/_search")
-    request = Net::HTTP::Get.new(uri)
-    elastic_basic_auth(request)
-    request.content_type = "application/json"
-
-    size = opts[:size] ? opts[:size] : 100000
-    body = {
-        "size" => size,
-        "query" => {
-            "bool" => {
-                "must_not" => opts[:must_not],
-                "filter" => [
-                    {
-                        "bool" => {
-                            "should" => opts[:should]
-                        }
-                    }
-                ] + opts[:must]
-            }
-        },
-        "_source" => opts[:source]
-    }
 
     request.body = JSON.pretty_generate(body)
-
     if opts[:debug] =~ /^SHOWONLY/
         puts
         puts request.body
-        return if opts[:debug] == 'SHOWONLY_QUERY'
+        return [] if opts[:debug] == 'SHOWONLY_QUERY'
     end
 
     response = Net::HTTP.start(uri.hostname, uri.port) do |http|
         http.request(request)
     end
-
-    if opts[:debug] == 'SHOWONLY'
-        puts JSON.parse(response.body)['hits']['hits'].map{|v| [v['_id'], v['_source']]}.to_h
-        return
+    unless response.is_a?(Net::HTTPSuccess)
+        raise "Elasticsearch search failed: HTTP #{response.code}: #{response.body}"
     end
 
-    JSON.parse(response.body)['hits']['hits'].
-        map{|v| [v['_id'],
-                 v['_source'].
-                     map{|k, v| [k.to_sym,
-                                 v.is_a?(String) ? v.to_numeric : nil]}.to_h]}.
-        sort{|a, b| a[0]<=>b[0]}.to_h
+    if opts[:debug] == 'SHOWONLY'
+        puts response.body
+    end
+
+    parsed = JSON.parse(response.body)
+    if parsed['error']
+        raise "Elasticsearch search failed: #{parsed['error']}"
+    end
+
+    parsed.fetch('hits').fetch('hits').map do |hit|
+        hit.fetch('_source', {}).transform_keys(&:to_sym).merge(_id: hit['_id'])
+    end
 end
 
 # 標準出力を画面とキャッシュファイルへ同時に書き出す補助機能。

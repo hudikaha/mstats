@@ -1569,9 +1569,9 @@ should = [
     },
 ]
 
-data0 = elastic2(
+data0 = elastic_search(
     :index => 'mstats2026',
-    :must => [
+    :filter => [
         #{'range' => {'year' => {'gte' => '2009', 'lte' => '2025'}}},
         {'term' => {'loc_code' => 'jpn'}},
         {'term' => {'sex' => $sex}},
@@ -1592,16 +1592,17 @@ data0 = elastic2(
 #
 $data = Hash.new
 data0.each do |datum0|
-    source_year = datum0['_source']['year'].to_s
+    source_year = datum0[:year].to_s
     next if ! Years[source_year] ||
             (Years[source_year][:sel] != 'checked' &&
              ! $years_ref.find{|v| v == source_year} &&
              ! $years_context.find{|v| v == source_year})
     #next if datum0['_source']['type'] && datum0['_source']['type'] != 'confirmed'
     datum = {
-        'doc_id' => datum0['_source']['id'] || datum0['_id']
+        'doc_id' => datum0[:id] || datum0[:_id]
     }
-    datum0['_source'].each do |k, v|
+    datum0.each do |key, v|
+        k = key.to_s
         if k =~ /^category/
             datum[k] = (v == 'pop' ? 'population' : v)
             if v == 'pop'

@@ -713,9 +713,9 @@ print '        "values": '
 death_codes = $causes.keys.map{|type| CauseCodes.fetch(type)}
 source_age_fields = $ages.keys.map{|age| AgeFields.fetch(age, "age_#{age}")}
 
-data0 = elastic2(
+data0 = elastic_search(
     :index => 'mstats2026',
-    :must => [
+    :filter => [
         { 'range' => {'date' => {'gte' => "#{$oldest}-01-01", 'lt' => $data_before } } },
         { 'term' => {'category' => 'death'} },
         { 'term' => {'loc_code' => 'jpn'} },
@@ -731,26 +731,26 @@ max_date = date_covid19
 data = Array.new
 
 data0.each do |datum|
-    date = Date.parse(datum['_source']['date'])
+    date = Date.parse(datum[:date])
     max_date = date > max_date ? date : max_date
 
     deaths = 0
     ages.each do |age|
-        deaths += datum['_source'][AgeFields.fetch(age, "age_#{age}")].to_i
+        deaths += datum[AgeFields.fetch(age, "age_#{age}").to_sym].to_i
     end
 
     # average
     total_deaths = 0
     total_ages = 0.0
     $ages.each do |k, v|
-        age_value = datum['_source'][AgeFields.fetch(k, "age_#{k}")]
+        age_value = datum[AgeFields.fetch(k, "age_#{k}").to_sym]
         if v[:avg] && age_value && age_value.to_i > 0
             total_deaths += age_value.to_i
             total_ages += age_value.to_i * v[:avg]
         end
     end
 
-    cause_type = CauseCodes.key(datum['_source']['death_code'])
+    cause_type = CauseCodes.key(datum[:death_code])
     next if ! cause_type
 
     data.push({'date' => date.to_s,

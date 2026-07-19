@@ -19,7 +19,7 @@ vdeath/
 
 ## Elasticsearch
 
-- index名は `kcor2025`。
+- 実体index名は `kcor2025`、公開・検索用aliasは `kcor`。
 - `mstats2026` とは文書スキーマもindexも統合しない。
 - 旧 `kkcor` indexは使用しない。
 - 原資料は `~/fujikawa/pub/kkcor/*_CUMD-WK.csv.xz`。

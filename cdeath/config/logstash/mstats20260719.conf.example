@@ -1,0 +1,96 @@
+input {
+    file {
+        path => "/Users/magician/mstats/jp-dcause-mstats2026.csv"
+        sincedb_path => "/dev/null"
+        start_position => "beginning"
+        tags => ["mstats20260719-death-monthly"]
+    }
+    file {
+        path => "/Users/magician/mstats/jp-pop-mstats2026.csv"
+        sincedb_path => "/dev/null"
+        start_position => "beginning"
+        tags => ["mstats20260719-pop-monthly"]
+    }
+    file {
+        path => "/Users/magician/mstats/jp-dcause-weekly-mstats2026.csv"
+        sincedb_path => "/dev/null"
+        start_position => "beginning"
+        tags => ["mstats20260719-death-weekly"]
+    }
+    file {
+        path => "/Users/magician/mstats/stmf-weekly-mstats2026.csv"
+        sincedb_path => "/dev/null"
+        start_position => "beginning"
+        tags => ["mstats20260719-stmf-weekly"]
+    }
+}
+
+filter {
+    if "mstats20260719-death-monthly" in [tags] {
+        csv {
+            id => "mstats20260719-death-monthly-csv"
+            autodetect_column_names => true
+            skip_header => true
+        }
+    } else if "mstats20260719-pop-monthly" in [tags] {
+        csv {
+            id => "mstats20260719-pop-monthly-csv"
+            autodetect_column_names => true
+            skip_header => true
+        }
+    } else if "mstats20260719-death-weekly" in [tags] {
+        csv {
+            id => "mstats20260719-death-weekly-csv"
+            autodetect_column_names => true
+            skip_header => true
+        }
+    } else if "mstats20260719-stmf-weekly" in [tags] {
+        csv {
+            id => "mstats20260719-stmf-weekly-csv"
+            autodetect_column_names => true
+            skip_header => true
+        }
+    }
+
+    mutate {
+        convert => {
+            "year" => "integer"
+            "month" => "integer"
+            "week" => "integer"
+        }
+    }
+    ruby {
+        id => "mstats20260719-age-numbers"
+        code => '
+            event.to_hash.each do |key, value|
+                next unless key.start_with?("age_")
+                if value.nil? || value == "" || value == "-" || value == "・"
+                    event.remove(key)
+                else
+                    begin
+                        event.set(key, Float(value))
+                    rescue ArgumentError, TypeError
+                        event.remove(key)
+                    end
+                end
+            end
+        '
+    }
+    date {
+        match => ["date", "yyyy-MM-dd"]
+    }
+    mutate {
+        remove_field => ["message", "@version", "host", "path", "event", "log", "tags"]
+    }
+}
+
+output {
+    elasticsearch {
+        hosts => ["${MSTATS_ES_HOST:fujikawa.org:9200}"]
+        user => "${MSTATS_ES_USER:elastic}"
+        password => "${ES_PASSWORD}"
+        index => "mstats20260719"
+        document_id => "%{id}"
+        action => "index"
+    }
+}

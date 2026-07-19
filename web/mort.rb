@@ -31,7 +31,7 @@ require './mort-vars.rb'
 #
 $opts = {
     debug: false,
-    index: "mstats"
+    index: "mstats2026"
 }
 
 op = OptionParser.new do |opts|
@@ -379,54 +379,44 @@ print <<EOS
 EOS
 print '        "values": '
 
-$must_not = ['exists' => {'field' => 'death_code'}]
-$must = [
-    {'terms' => {'category.keyword' => ['death']}},
-    {'terms' => {'rate.keyword' => $rates}},
-    {'terms' => {'algo.keyword' => ['']}},
-    {'terms' => {'loc_code.keyword' => $locs}},
-    {'terms' => {'sex.keyword' => $sexes}}
-]
-if $death_codes[0] != '00000'
-    $must_not = []
-    $must += [ {'term' => {'death_code.keyword' => $death_codes[0]}} ]
-end
-
-$should = []
-$locs.each do |loc_code|
-    ['death'].each do |category|
-        $rates.each do |rate|
-            $sexes.each do |sex|
-                $death_codes.each do |death_code|
-                    if loc_code == 'JPN' #&&
-                       #($ages.include?('age_00_04') ||
-                       # $ages.include?('age_05_14') ||
-                       # $ages.include?('age_15_29'))
-                        $should.push('regexp' => {'doc_id.keyword' => "#{loc_code}_.*_#{category}_#{rate}_#{death_code}_.*_#{sex}"})
-                        $should.push('regexp' => {'doc_id.keyword' => "#{loc_code}_.*_c19vaxx____#{sex}"})
-                    elsif death_code == '00000'
-                        $should.push('regexp' => {'doc_id.keyword' => "#{loc_code}_.*_#{category}_#{rate}___#{sex}"})
-                    end
-                end
-            end
-        end
+# 空文字のCSV列はElasticsearch文書に存在しないため、rateなしもOR条件に含める。
+# Empty CSV fields are absent from Elasticsearch documents, so include a missing rate in the OR condition.
+$rate_should = $rates.filter_map do |rate|
+    if rate == ''
+        {'bool' => {'must_not' => [{'exists' => {'field' => 'rate'}}]}}
+    else
+        {'term' => {'rate' => rate}}
     end
 end
 
-Log.debug $should
+$must = [
+    {'term' => {'category' => 'death'}},
+    {'terms' => {'loc_code' => $locs.map(&:downcase)}},
+    {'terms' => {'sex' => $sexes}},
+    {'terms' => {'death_code' => $death_codes}},
+    {'bool' => {'should' => $rate_should, 'minimum_should_match' => 1}}
+]
 
-data0 = elastic3(
+data0 = elastic_search(
     :index => $opts[:index],
-    #:must_not => $must_not,
-    #:must => $must,
-    #:should => [],
     :must_not => [],
-    :must => [], # specify range in the future
-    :should => $should,
-    :source => [ 'doc_id', 'loc_code', 'yearweek', 'category', 'rate', 'death_code',
+    :filter => $must,
+    :should => [],
+    :source => [ 'id', 'loc_code', 'yearweek', 'category', 'rate', 'death_code',
                  'algo', 'date', 'year', 'week', 'sex', 'age_all' ] + $ages,
     #:debug => 'SHOWONLY_QUERY',
 )
+
+# 既存の表示・計算処理が使う大文字国コードとdoc_idへ正規化する。
+# Normalize to uppercase location codes and doc_id expected by the existing display and calculations.
+data0 = data0.to_h do |datum|
+    id = datum.delete(:_id)
+    datum[:loc_code] = datum[:loc_code].upcase
+    datum[:doc_id] = (datum[:id] || id).sub(/^[^_]+/, datum[:loc_code])
+    datum[:rate] ||= ''
+    datum[:algo] ||= ''
+    [datum[:doc_id], datum]
+end
 
 data = data0.select{|k, datum| datum[:category] == 'death'}
 
