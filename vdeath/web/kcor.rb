@@ -46,7 +46,7 @@ text = {
 
 config = {
   language: $l,
-  manifest_url: "#{page_name}-data/manifest.json",
+  elasticsearch_url: 'elastic/kcor/_search',
   text: text
 }
 

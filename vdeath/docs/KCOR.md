@@ -20,6 +20,8 @@ vdeath/
 ## Elasticsearch
 
 - 実体index名は `kcor2025`、公開・検索用aliasは `kcor`。
+- `kcor.js`は公開API `/elastic/kcor/_search`からcutoff一覧と選択cutoffのrecordを取得する。
+- `index.max_result_window`とbrowserの一回のrequest上限は100万件とする。
 - `mstats2026` とは文書スキーマもindexも統合しない。
 - 旧 `kkcor` indexは使用しない。
 - 原資料は `~/fujikawa/pub/kkcor/*_CUMD-WK.csv.xz`。

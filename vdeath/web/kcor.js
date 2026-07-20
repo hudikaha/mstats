@@ -16,8 +16,11 @@
     element.hidden = !message;
   };
 
-  const fetchJson = async url => {
-    const response = await fetch(url, {cache: 'no-cache'});
+  const fetchJson = async (url, body) => {
+    const response = await fetch(url, body ? {
+      method: 'POST', cache: 'no-cache', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    } : {cache: 'no-cache'});
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${url}`);
     return response.json();
   };
@@ -61,10 +64,26 @@
     status(text.loading);
     try {
       if (!cache.has(cutoff)) {
-        const entry = manifest.cutoffs.find(item => item.cutoff === cutoff);
-        if (!entry) throw new Error(`Unknown cutoff: ${cutoff}`);
-        const base = config.manifest_url.replace(/[^/]+$/, '');
-        cache.set(cutoff, fetchJson(base + entry.file));
+        cache.set(cutoff, fetchJson(config.elasticsearch_url, {
+          size: 1000000,
+          _source: ['areacode', 'area', 'areaj', 'date', 'age', 'dose', 'deaths'],
+          query: {term: {cutoff}},
+          sort: [{date: 'asc'}, {id: 'asc'}]
+        }).then(result => {
+          const records = result.hits.hits.map(hit => hit._source);
+          const areaMap = new Map();
+          records.forEach(row => areaMap.set(row.areacode, [row.areacode, row.area, row.areaj]));
+          const areas = [...areaMap.values()].sort((a, b) => a[0].localeCompare(b[0]));
+          const dates = [...new Set(records.map(row => row.date))].sort();
+          const ages = [...new Set(records.map(row => row.age))].sort();
+          const areaIndex = new Map(areas.map((area, index) => [area[0], index]));
+          const dateIndex = new Map(dates.map((date, index) => [date, index]));
+          const ageIndex = new Map(ages.map((age, index) => [age, index]));
+          return {
+            areas, dates, ages,
+            rows: records.map(row => [areaIndex.get(row.areacode), dateIndex.get(row.date), ageIndex.get(row.age), row.dose, row.deaths])
+          };
+        }));
       }
       currentData = await cache.get(cutoff);
       rebuildSliceControls(currentData, previous);
@@ -250,7 +269,15 @@
 
   const start = async () => {
     try {
-      manifest = await fetchJson(config.manifest_url);
+      const metadata = await fetchJson(config.elasticsearch_url, {
+        size: 0,
+        aggs: {cutoffs: {terms: {field: 'cutoff', size: 100, order: {_key: 'asc'}}}}
+      });
+      manifest = {
+        anchor_date: '2024-03-03',
+        default_cutoff: '2021-09-05',
+        cutoffs: metadata.aggregations.cutoffs.buckets.map(bucket => ({cutoff: bucket.key_as_string}))
+      };
       const cutoff = document.createElement('select');
       cutoff.className = 'cutoff';
       for (const item of manifest.cutoffs) {
