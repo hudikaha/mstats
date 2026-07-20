@@ -52,11 +52,9 @@
 - href: pfizer.rb
   ja: ファイザーワクチン6箇月追跡論文から作成の表
   en: Pfizer Vaccine Six-Month Follow-up Table
-  enabled: [ja]
 - href: moderna.rb
   ja: モデルナワクチン6-11歳評価論文の表
   en: Moderna Vaccine Trial Table for Ages 6-11
-  enabled: [ja]
 - href: pneumonia.rb
   ja: 新型コロナ死者と肺炎死者・全死因死者
   en: COVID-19, Pneumonia, and All-Cause Deaths

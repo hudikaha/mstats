@@ -30,7 +30,24 @@ def render_content_page(program)
   abort "content not found: #{content}" unless File.file?(content)
 
   print_header(title: title, iframe: iframe)
+  print <<~HTML
+    <form action="#{CGI.escapeHTML(page)}" method="get" class="language-selector">
+      <label><input type="radio" name="l" value="ja" #{'checked' if $l == :ja} onchange="this.form.submit()">日本語</label>
+      <label><input type="radio" name="l" value="en" #{'checked' if $l == :en} onchange="this.form.submit()">English</label>
+      #{'<input type="hidden" name="i" value="true">' if iframe}
+    </form>
+  HTML
   print File.read(content)
+  print <<~HTML
+    <script>
+      document.querySelectorAll('[data-ja][data-en]').forEach(function (element) {
+        element.textContent = element.getAttribute('data-#{$l}');
+      });
+      document.querySelectorAll('[data-language]').forEach(function (element) {
+        element.hidden = element.getAttribute('data-language') !== '#{$l}';
+      });
+    </script>
+  HTML
   print "</div></div>\n" unless iframe
   print "</body></html>\n"
 end
