@@ -68,8 +68,3 @@ password、token、非公開取得元credential、`.env`、machine固有Logstash
 text fileはBOMなしUTF-8、LF改行、末尾改行ありに統一します。自明でない保守境界を説明する
 Ruby commentは日本語を先、その次に英語を置きます。短いcommentは一行に両言語を併記して
 構いません。
-
-## repositoryの由来
-
-このrepositoryは非公開の旧 `mstats2025` repositoryから履歴を引き継がず、新しく開始
-しました。旧Git履歴と旧 `old/` directoryは意図的に移行していません。

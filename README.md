@@ -76,9 +76,3 @@ This software is available under the [MIT License](LICENSE).
 Text files use UTF-8 without a BOM, LF line endings, and a final newline. Ruby
 comments for non-obvious maintenance boundaries are bilingual: Japanese first,
 followed by English. Short comments may contain both languages on one line.
-
-## History
-
-This repository is a clean successor to the private historical `mstats2025`
-repository. Historical Git data and the former `old/` directory were
-intentionally not imported.
