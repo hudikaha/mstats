@@ -32,8 +32,32 @@ const values = [
   {"age":"90歳以上","status":"接種(2021年4月〜)","lbm":15520.3,"ubm":16141.69,"mortality":15830.99}
 ];
 
-const ORDER = ["非接種(2021年2-3月)", "非接種(2021年4月〜)", "接種(2021年4月〜)"];
-const AGE_SORT = ["00-09歳","10-19歳","20-29歳","30-39歳","40-49歳","50-59歳","60-69歳","70-79歳","80-89歳","90歳以上"];
+const language = window.CONTENT_LANGUAGE || 'ja';
+const labels = language === 'en' ? {
+  ageAxis: 'Age group', mortalityAxis: 'Mortality (deaths per 100,000 person-years)',
+  statusLegend: 'Vaccination status', ageTooltip: 'Age',
+  ages: {'90歳以上': '90+'},
+  statuses: {
+    '非接種(2021年2-3月)': 'Unvaccinated (Feb–Mar 2021)',
+    '非接種(2021年4月〜)': 'Unvaccinated (from Apr 2021)',
+    '接種(2021年4月〜)': 'Vaccinated (from Apr 2021)'
+  }
+} : {
+  ageAxis: '年齢階級', mortalityAxis: '死亡率(10万人年死亡数)',
+  statusLegend: '接種区分', ageTooltip: '年齢', ages: {},
+  statuses: {
+    '非接種(2021年2-3月)': '非接種(2021年2-3月)',
+    '非接種(2021年4月〜)': '非接種(2021年4月〜)',
+    '接種(2021年4月〜)': '接種(2021年4月〜)'
+  }
+};
+values.forEach(value => {
+  value.ageLabel = labels.ages[value.age] || value.age.replace('歳', '');
+  value.statusLabel = labels.statuses[value.status];
+});
+
+const ORDER = Object.values(labels.statuses);
+const AGE_SORT = ["00-09","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80-89", language === 'en' ? '90+' : '90以上'];
 
 const spec = {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
@@ -70,19 +94,19 @@ const spec = {
     {
       "mark": "bar",
       "encoding": {
-        "x": {"field": "age","type": "ordinal","axis": {"title": "年齢階級"},"sort": AGE_SORT},
-        "xOffset": {"field": "status", "sort": ORDER},
+        "x": {"field": "ageLabel","type": "ordinal","axis": {"title": labels.ageAxis},"sort": AGE_SORT},
+        "xOffset": {"field": "statusLabel", "sort": ORDER},
         "y": {"field": "mortality_safe","type": "quantitative","stack": null,
               "scale": {"type": "log", "base": 10},
-              "axis": {"title": "死亡率(10万人年死亡数)"}},
-        "color": {"field": "status","type": "nominal",
+              "axis": {"title": labels.mortalityAxis}},
+        "color": {"field": "statusLabel","type": "nominal",
                   "scale": {"domain": ORDER, "scheme": "magma", "reverse": true},
-                  "legend": {"title": "接種区分"}},
+                  "legend": {"title": labels.statusLegend}},
         "tooltip": [
-          {"field":"age","title":"年齢"},
-          {"field":"m_非接種2021","title":"非接種(2021年2-3月)"},
-          {"field":"m_非接種(2021年4月〜)","title":"非接種(2021年4月〜)"},
-          {"field":"m_接種(2021年4月〜)","title":"接種(2021年4月〜)"}
+          {"field":"ageLabel","title":labels.ageTooltip},
+          {"field":"m_非接種2021","title":labels.statuses['非接種(2021年2-3月)']},
+          {"field":"m_非接種(2021年4月〜)","title":labels.statuses['非接種(2021年4月〜)']},
+          {"field":"m_接種(2021年4月〜)","title":labels.statuses['接種(2021年4月〜)']}
         ]
       }
     },
@@ -90,8 +114,8 @@ const spec = {
     {
       "mark": {"type": "rule","stroke":"black","strokeWidth":2},
       "encoding": {
-        "x": {"field": "age","type": "ordinal","sort": AGE_SORT},
-        "xOffset": {"field": "status", "sort": ORDER},
+        "x": {"field": "ageLabel","type": "ordinal","sort": AGE_SORT},
+        "xOffset": {"field": "statusLabel", "sort": ORDER},
         "y": {"field": "lbm_safe","type": "quantitative"},
         "y2": {"field": "ubm_safe"},
         "tooltip": null
@@ -101,8 +125,8 @@ const spec = {
     {
       "mark": {"type":"tick","stroke":"black","strokeWidth":2,"size":12},
       "encoding": {
-        "x": {"field": "age","type": "ordinal","sort": AGE_SORT},
-        "xOffset": {"field": "status", "sort": ORDER},
+        "x": {"field": "ageLabel","type": "ordinal","sort": AGE_SORT},
+        "xOffset": {"field": "statusLabel", "sort": ORDER},
         "y": {"field": "lbm_safe","type": "quantitative"},
         "tooltip": null
       }
@@ -110,8 +134,8 @@ const spec = {
     {
       "mark": {"type":"tick","stroke":"black","strokeWidth":2,"size":12},
       "encoding": {
-        "x": {"field": "age","type": "ordinal","sort": AGE_SORT},
-        "xOffset": {"field": "status", "sort": ORDER},
+        "x": {"field": "ageLabel","type": "ordinal","sort": AGE_SORT},
+        "xOffset": {"field": "statusLabel", "sort": ORDER},
         "y": {"field": "ubm_safe","type": "quantitative"},
         "tooltip": null
       }

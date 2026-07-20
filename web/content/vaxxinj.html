@@ -5,6 +5,20 @@
   <span id="blink1223" style="font-size: large; font-weight: bold;"></span><script>with(blink1223)id='',style.opacity=1,setInterval(function(){style.opacity^=1},500)</script>
   </div>
   <script>
+    const english = window.CONTENT_LANGUAGE === 'en';
+    const text = english ? {
+      certifiedCumulative: 'Vaccine injury certifications (cumulative)',
+      certifiedBiennial: 'Vaccine injury certifications (two-year periods)',
+      deathCumulative: 'Certified deaths after vaccination (cumulative)',
+      deathBiennial: 'Certified deaths after vaccination (two-year periods)',
+      date: 'Announcement date (through 2023-07-31)', dateFormat: '%Y-%m'
+    } : {
+      certifiedCumulative: 'ワクチンによる健康被害認定者(累計)',
+      certifiedBiennial: 'ワクチンによる健康被害認定者(2年ごと)',
+      deathCumulative: 'ワクチンによる死亡認定者数(累計)',
+      deathBiennial: 'ワクチンによる死亡認定者(2年ごと)',
+      date: '発表年月日(2023-07-31 まで)', dateFormat: '%Y年%m月'
+    };
     const spec = {
       "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
       "config": {
@@ -697,12 +711,12 @@
       "concat": [
         {
           "width": 500,
-          "title": ["", "ワクチンによる健康被害認定者(累計)"],
+          "title": ["", text.certifiedCumulative],
           "encoding": {
             "x": {
-              "title": "発表年月日(2023-07-31 まで)", "field": "審査会発表日",
+              "title": text.date, "field": "審査会発表日",
               "type": "temporal", "timeUnit": "yearmonthdate",
-              "axis": {"format": "%Y年%m月"},
+              "axis": {"format": text.dateFormat},
               "scale": {
                 "domain": [
                   {"year": "start_year", "month": "Mar", "date": 31},
@@ -760,10 +774,10 @@
           ]
         },
         {
-          "title": ["", "ワクチンによる健康被害認定者(2年ごと)"],
+          "title": ["", text.certifiedBiennial],
           "transform": [ {"filter": "datum.type == '認定' || datum.type == '全認定' || datum.type == '＊未了'"} ],
           "encoding": {
-            "y": { "field": "year", "title": null, "type": "nominal" },
+            "y": { "field": "yearLabel", "title": null, "type": "nominal" },
             "x": { "field": "value", "title": null, "type": "quantitative" },
             "color": {
               "field": "type", "legend": false,
@@ -784,12 +798,12 @@
         },
         {
           "width": 500,
-          "title": ["", "ワクチンによる死亡認定者数(累計)"],
+          "title": ["", text.deathCumulative],
           "encoding": {
             "x": {
-              "title": "発表年月日(2023-07-31 まで)", "field": "審査会発表日",
+              "title": text.date, "field": "審査会発表日",
               "type": "temporal", "timeUnit": "yearmonthdate",
-              "axis": {"format": "%Y年%m月"},
+              "axis": {"format": text.dateFormat},
               "scale": {
                 "domain": [
                   {"year": "start_year", "month": "Mar", "date": 31},
@@ -847,10 +861,10 @@
           ]
         },
         {
-          "title": ["", "ワクチンによる死亡認定者(2年ごと)"],
+          "title": ["", text.deathBiennial],
           "transform": [ {"filter": "datum.type == '死亡' || datum.type == '全死亡' || datum.type == '＊死亡未了'"} ],
           "encoding": {
-            "y": { "field": "year", "title": null, "type": "nominal" },
+            "y": { "field": "yearLabel", "title": null, "type": "nominal" },
             "x": { "field": "value", "title": null, "type": "quantitative" },
             "color": {
               "field": "type", "legend": false,
@@ -873,12 +887,18 @@
       ],
       resolve: { scale: { color: "independent" } }
     };
+    spec.data.values.forEach(function (value) {
+      if (!value.year) return;
+      value.yearLabel = english
+        ? (value.year === '2023年度に持越し' ? 'Carried into FY2023' : value.year.replace('年度', ' FY').replace('〜', '–'))
+        : value.year;
+    });
     vegaEmbed("#vis", spec, {mode: "vega-lite"}).then(console.log).catch(console.warn);
   </script>
   <p class=r>
     © 2022 <a href="https://medicalfacts.info">MedicalFacts.info</a> powered by <a href="https://www.elastic.co/" target><img src="https://images.contentstack.io/v3/assets/bltefdd0b53724fa2ce/blt280217a63b82a734/5bbdaacf63ed239936a7dd56/elastic-logo.svg" style="height: 2em"></a> <a href="https://vega.github.io/vega-lite/" style="text-decoration: none;"><img src="https://raw.githubusercontent.com/vega/logos/master/assets/VL_Color%40128.png" style="width: 2em;"> Vega-Lite</a>
   <hr>
-  <p class=l>
+  <div data-language="ja"><p class=l>
     データ元:
     <ul>
       <li> <a href="https://www.mhlw.go.jp/stf/shingi/shingi-shippei_127696_00001.html">厚労省 疾病・障害認定審査会</a>
@@ -887,5 +907,15 @@
       <li> <a href="http://web.archive.org/web/20210328080952/https://www.mhlw.go.jp/topics/bcg/other/6.html">厚労省 予防接種健康被害救済制度　認定者数 (2019年3月まで)</a>
       <li> <a href="http://web.archive.org/web/20190506222544/https://www.mhlw.go.jp/topics/bcg/other/6.html">厚労省 予防接種健康被害救済制度　認定者数 (2017年3月まで)</a>
       <!-- http://web.archive.org/web/20170915005934/https://www.mhlw.go.jp/topics/bcg/other/6.html -->
+    </ul></div>
+  <div data-language="en"><p class=l>
+    Sources:
+    <ul>
+      <li><a href="https://www.mhlw.go.jp/stf/shingi/shingi-shippei_127696_00001.html">MHLW Disease and Disability Certification Review Board</a>
+      <li><a href="https://docs.google.com/spreadsheets/d/14B-SQ7DQRotnQaTNXhjmjX6gVfN5uLbmumQKr03fKJc/edit#gid=884889595">Public spreadsheet on adverse-reaction compensation maintained by attorney Hitofumi Yanai</a>
+      <li><a href="https://www.mhlw.go.jp/topics/bcg/other/6.html">MHLW vaccine injury relief certifications (through March 2021)</a>
+      <li><a href="http://web.archive.org/web/20210328080952/https://www.mhlw.go.jp/topics/bcg/other/6.html">MHLW vaccine injury relief certifications (through March 2019)</a>
+      <li><a href="http://web.archive.org/web/20190506222544/https://www.mhlw.go.jp/topics/bcg/other/6.html">MHLW vaccine injury relief certifications (through March 2017)</a>
     </ul>
+  </div>
   </div>

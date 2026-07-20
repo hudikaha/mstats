@@ -103,7 +103,7 @@
 		  "encoding": {
 		    "y": {
 		      "title": "年齢区分",
-		      "field": "age"
+		      "field": "ageLabel"
 		    },
 		    "x": {
 		      "title": "心筋炎報告 (男性)",
@@ -113,9 +113,9 @@
 		      "scale": {"domain": [0, 200]},
 		      "axis": {"orient": "top"}
 		    },
-		    "yOffset": {"field": "disease"},
+		    "yOffset": {"field": "diseaseLabel"},
 		    "color": {
-		      "field": "disease",
+		      "field": "diseaseLabel",
 		      "title": "ワクチン種別/疾患",
 		      "scale": {"range": ["#0000ee","#ee0000", "#00ee00"]}
 		    }
@@ -149,7 +149,7 @@
 		  "encoding": {
 		    "y": {
 		      "title": "年齢区分",
-		      "field": "age"
+		      "field": "ageLabel"
 		    },
 		    "x": {
 		      "title": "心筋炎報告 (女性)",
@@ -159,9 +159,9 @@
 		      "scale": {"domain": [0, 200]},
 		      "axis": {"orient": "top"}
 		    },
-		    "yOffset": {"field": "disease"},
+		    "yOffset": {"field": "diseaseLabel"},
 		    "color": {
-		      "field": "disease",
+		      "field": "diseaseLabel",
 		    }
 		  },
 		  "layer": [
@@ -185,8 +185,27 @@
 		}
 	      ]
 	    };
+            const english = window.CONTENT_LANGUAGE === 'en';
+            const diseaseLabels = english
+              ? {'ファイザー': 'Pfizer', 'モデルナ': 'Moderna', '新型コロナ': 'COVID-19'}
+              : {'ファイザー': 'ファイザー', 'モデルナ': 'モデルナ', '新型コロナ': '新型コロナ'};
+            vlSpec.data.values.forEach(function (value) {
+              const age = value.age20 ||
+                (['10-14', '15-19', '20-24', '25-29'].includes(value.age5) ? '10-29' :
+                 ['30-34', '35-39', '40-44', '45-49'].includes(value.age5) ? '30-49' :
+                 ['50-54', '55-59', '60-64'].includes(value.age5) ? '50-64' : '65以上');
+              value.ageLabel = english && age === '65以上' ? '65+' : age;
+              value.diseaseLabel = diseaseLabels[value.disease];
+            });
+            vlSpec.hconcat[0].encoding.y.title = english ? 'Age group' : '年齢区分';
+            vlSpec.hconcat[0].encoding.x.title = english ? 'Myocarditis reports (male)' : '心筋炎報告 (男性)';
+            vlSpec.hconcat[0].encoding.color.title = english ? 'Vaccine/disease' : 'ワクチン種別/疾患';
+            vlSpec.hconcat[1].encoding.y.title = english ? 'Age group' : '年齢区分';
+            vlSpec.hconcat[1].encoding.x.title = english ? 'Myocarditis reports (female)' : '心筋炎報告 (女性)';
+            vlSpec.hconcat[1].encoding.color.title = english ? 'Vaccine/disease' : 'ワクチン種別/疾患';
             vegaEmbed('#vis', vlSpec);
           </script>
+	<div data-language="ja">
         <p class=l>
 	  <ul>
 	    <li> データ元:
@@ -200,28 +219,52 @@
 	    <li>そもそもワクチンは<font color=red>健康な人</font>に接種するのだから、<font color="red">比較できる桁になっていること自体がワクチン接種事業として疑問</font>。
 	  </ul>
 
+	</div>
+	<div data-language="en">
+	<p class=l><ul>
+	  <li>Sources:
+	    <ul>
+	      <li><a href="https://www.mhlw.go.jp/content/10601000/000862253.pdf">73rd meeting of the MHLW adverse-reaction review committee, Material 1-7-1 (December 3, 2021)</a>
+	      <li>When the <a href="https://www.mhlw.go.jp/content/10601000/000872666.pdf">74th meeting material (December 24, 2021)</a> reported more myocarditis cases than the 73rd meeting material (including pericarditis), the later figure was used.
+	    </ul>
+	  <li>The MHLW material describes 3 myocarditis cases among 3,358 hospitalized male COVID-19 patients aged 10–29 as 893 per million. There were about 330,000 male positive cases in this age group through December 3, 2021, and the hospitalization rate was under 10% (<a href="#nishiura-en">Note 1</a>), giving an estimate of no more than 29 cases.
+	  <li>Likewise, it describes 1 case among 2,949 hospitalized female patients aged 10–29 as 339 per million. There were about 270,000 female positive cases in this age group and the hospitalization rate was under 10% (<a href="#nishiura-en">Note 1</a>), giving an estimate of 9 cases.
+	  <li><font color="red">For both males and females aged 10–29, myocarditis after vaccination is estimated to be more frequent.</font>
+	  <li>Vaccines are administered to <font color="red">healthy people</font>; the fact that the figures are even of a comparable order raises questions about the vaccination program.
+	</ul></div>
+
 	<p class=c>
 	  <br>
 	  <a href="myocarditis-1.png"><img src="myocarditis-1.png" width=40%></a>
 	  <a href="myocarditis-2.png"><img src="myocarditis-2.png" width=40%></a>
 
-	<p class=l>
+	<div data-language="ja"><p class=l>
 	  <ul>
 	    <li> 副反応疑い報告10代20代の心筋炎は7割重篤。
 	    <li> 12/3の第73回ワクチン分科会副反応検討部会資料では、回復と軽快(症状が軽くなった)を併せ不明を除外して割合を算出し改善率8割以上と。
 	    <li> <font color="red">「だから多くは軽症」と重篤でも軽快すれば軽症というトンデモ理論</font>が書いてある。
-	  </ul>
+	  </ul></div>
+	<div data-language="en"><p class=l><ul>
+	  <li>About 70% of suspected myocarditis reports among teenagers and people in their twenties were classified as serious.
+	  <li>The December 3 material combined “recovered” and “improving,” excluded unknown outcomes, and reported an improvement rate above 80%.
+	  <li><font color="red">It then argued that most cases were mild, treating a serious case as mild once it improved.</font>
+	</ul></div>
 
 	<p class=c>
 	  <br>
 	  <a href="myocarditis-3.png"><img src="myocarditis-3.png" width=40%></a>
 	  <a href="myocarditis-4.png"><img src="myocarditis-4.png" width=40%></a>
-	<p class=l id="nishiura">
+	<div data-language="ja"><p class=l id="nishiura">
 	  ※1 <a href="https://www.mhlw.go.jp/content/10900000/000818359.pdf">第47回新型コロナウイルス感染症対策アドバイザリーボード（令和3年8月11日）資料３－３ 西浦先生提出資料 124ページ</a>
 	  <hr>
 	  <font size=2>
 	    グラフの iframe 埋込みタグ: &lt;iframe src="https://fujikawa.org/covid19/myocarditis-i.html" loading="lazy" style="width: 100%; height: 500px; border: 0px none;"&gt;&lt;/iframe&gt
 	  </font>
-	</p>
+	</p></div>
+	<div data-language="en"><p class=l id="nishiura-en">
+	  Note 1: <a href="https://www.mhlw.go.jp/content/10900000/000818359.pdf">47th COVID-19 Advisory Board (August 11, 2021), Material 3-3 submitted by Professor Nishiura, page 124</a>
+	  <hr>
+	  <font size=2>Graph iframe embed code: &lt;iframe src="https://fujikawa.org/covid19/myocarditis-i.html" loading="lazy" style="width: 100%; height: 500px; border: 0px none;"&gt;&lt;/iframe&gt;</font>
+	</p></div>
       </div>
     </div>

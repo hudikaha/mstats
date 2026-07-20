@@ -36,6 +36,7 @@ def render_content_page(program)
       <label><input type="radio" name="l" value="en" #{'checked' if $l == :en} onchange="this.form.submit()">English</label>
       #{'<input type="hidden" name="i" value="true">' if iframe}
     </form>
+    <script>window.CONTENT_LANGUAGE = '#{$l}';</script>
   HTML
   print File.read(content)
   print <<~HTML
