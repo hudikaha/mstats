@@ -49,7 +49,6 @@
   en: Suspected vaccine-related death reports
   enabled: [ja]
 - type: separator
-  enabled: [ja]
 - href: pfizer.rb
   ja: ファイザーワクチン6箇月追跡論文から作成の表
   en: Pfizer Vaccine Six-Month Follow-up Table

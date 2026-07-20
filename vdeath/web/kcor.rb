@@ -22,6 +22,7 @@ end
 
 iframe = %w[1 true].include?(cgi['i'])
 page_name = File.basename($PROGRAM_NAME, '.rb')
+asset_version = File.mtime(File.join(__dir__, "#{page_name}.js")).to_i
 title = {
   ja: 'Kirsch累積アウトカム比（KCOR）',
   en: 'Kirsch Cumulative Outcomes Ratio (KCOR)'
@@ -52,7 +53,7 @@ config = {
 
 print_header(title: title, iframe: iframe)
 print <<~HTML
-  <link rel="stylesheet" href="#{page_name}.css">
+  <link rel="stylesheet" href="#{page_name}.css?v=#{asset_version}">
   <form action="#{page_name}.rb" method="get" class="language-selector">
     <label><input type="radio" name="l" value="ja" #{'checked' if $l == :ja} onchange="this.form.submit()">日本語</label>
     <label><input type="radio" name="l" value="en" #{'checked' if $l == :en} onchange="this.form.submit()">English</label>
@@ -133,7 +134,7 @@ print <<~HTML
       EN
     end}
   <script>window.KCOR_CONFIG = #{JSON.generate(config)};</script>
-  <script src="#{page_name}.js"></script>
+  <script src="#{page_name}.js?v=#{asset_version}"></script>
 HTML
 
 unless iframe
