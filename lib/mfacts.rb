@@ -31,8 +31,12 @@ end
 # 指定言語の共通サイトメニューをHTMLとして出力する。
 # Render the shared site menu in the requested language.
 def print_site_menu(lang)
-    links = '<hr>' + site_menu_entries.filter_map{|item|
-        next '<hr>' if item['type'] == 'separator'
+    visible_entries = site_menu_entries.take_while { |item| item['type'] != 'stop' }
+    links = '<hr>' + visible_entries.filter_map{|item|
+        if item['type'] == 'separator'
+            next '<hr>' if site_menu_item_enabled?(item, lang)
+            next
+        end
         next unless item['href']
         next if item['enabled'] == false
 

@@ -16,6 +16,7 @@
 - href: nhk-kyushu.rb
   ja: 浜松市2021年2月〜2024年5月の年齢階級別死亡率
   en: Hamamatsu age-specific mortality
+  enabled: [ja]
 - href: mortality.rb
   ja: 各国・各地域の全死因死亡率とコロナ死亡率
   en: All-cause and COVID-19 mortality
@@ -34,25 +35,29 @@
 - href: vaxxinj.rb
   ja: 予防接種健康被害救済制度の認定者数
   en: Vaccine injury compensation certifications
+  enabled: [ja]
 - href: myocarditis.rb
   ja: ワクチンと新型コロナの心筋炎報告の実数比較
   en: Myocarditis reports after vaccination and COVID-19
+  enabled: [ja]
 - href: death-incdec.rb
   ja: 年代別人口当り死者数の前年比増減率
   en: Year-on-year changes in age-specific deaths
+  enabled: [ja]
 - href: vaccine-deaths-2021.rb
   ja: ワクチン副反応疑い死亡報告
   en: Suspected vaccine-related death reports
-- href: data.rb
-  ja: グラフ作成のため加工した新型コロナデータ一覧
-  en: Modified COVID-19 Data Sets for Plotting
-- href: moderna.rb
-  ja: モデルナワクチン6-11歳評価論文の表
-  en: Moderna Vaccine Trial Table for Ages 6-11
+  enabled: [ja]
 - type: separator
+  enabled: [ja]
 - href: pfizer.rb
   ja: ファイザーワクチン6箇月追跡論文から作成の表
   en: Pfizer Vaccine Six-Month Follow-up Table
+  enabled: [ja]
+- href: moderna.rb
+  ja: モデルナワクチン6-11歳評価論文の表
+  en: Moderna Vaccine Trial Table for Ages 6-11
+  enabled: [ja]
 - href: pneumonia.rb
   ja: 新型コロナ死者と肺炎死者・全死因死者
   en: COVID-19, Pneumonia, and All-Cause Deaths
@@ -60,4 +65,9 @@
 - href: vaxx-co19-jp-us.rb
   ja: 日米の年代別新型コロナ死者とワクチン接種率
   en: COVID-19 Deaths and Vaccination Rates by Age in Japan and the US
+  enabled: [ja]
+- type: stop
+- href: data.rb
+  ja: グラフ作成のため加工した新型コロナデータ一覧
+  en: Modified COVID-19 Data Sets for Plotting
   enabled: false
