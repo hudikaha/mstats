@@ -5,6 +5,10 @@
 `medicalfacts.info` は、3つのdatasetをHTTPSとnginx経由で読取専用公開します。
 Elasticsearch自体の認証は維持し、browserやAPI clientには認証情報を渡しません。
 
+server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
+`http://localhost:8080/elastic/`から同じ読取専用APIを使用します。公開datasetを読むCGIは
+`espass.txt`を使用しません。
+
 ```text
 公開名  Elasticsearchでの接続先
 mstats  alias -> mstats20260719
@@ -53,6 +57,9 @@ account:password
 5. Nginxをreloadする。
 6. client認証なしで3つの公開名を検証する。
 7. 書込みAPIと対象外indexが403、404、または405になることを確認する。
+
+内部listenerは`config/nginx/elasticsearch-internal.conf.example`を基に設定し、
+外部interfaceでは待ち受けないでください。
 
 Elasticsearchのanonymous認証を有効にせず、管理accountをNginx設定へ書いてはいけません。
 

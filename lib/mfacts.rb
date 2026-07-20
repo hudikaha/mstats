@@ -173,12 +173,28 @@ EOF
     end
 end
 
+# 公開datasetはloopback上の読取専用Nginx APIを使用する。
+# Use the read-only Nginx API on loopback for public datasets.
+PUBLIC_ELASTIC_INDEXES = {
+    'mstats' => 'mstats',
+    'mstats2026' => 'mstats',
+    'kcor' => 'kcor',
+    'kcor2025' => 'kcor',
+    'vdeath' => 'vdeath'
+}.freeze
+
 # Elasticsearchを検索し、Symbolキーの統一レコード配列を返す。
 # Query Elasticsearch and return a canonical array of symbol-keyed records.
 def elastic_search(**opts)
-    uri = URI.parse("http://localhost:9200/#{opts[:index]}/_search")
+    requested_index = opts[:index].to_s
+    public_index = PUBLIC_ELASTIC_INDEXES[requested_index]
+    uri = if public_index
+              URI.parse("http://localhost:8080/elastic/#{public_index}/_search")
+          else
+              URI.parse("http://localhost:9200/#{requested_index}/_search")
+          end
     request = Net::HTTP::Post.new(uri)
-    elastic_basic_auth(request)
+    elastic_basic_auth(request) unless public_index
     request.content_type = "application/json"
 
     filters = opts[:filter] || []

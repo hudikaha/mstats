@@ -1,0 +1,8 @@
+# 公開読取APIと同じ制限を、server-side CGIからloopbackで使用する。
+# Expose the public read-only API restrictions to server-side CGI on loopback.
+server {
+  listen 127.0.0.1:8080;
+  server_name localhost;
+
+  include /etc/nginx/snippets/medicalfacts-elastic.conf;
+}

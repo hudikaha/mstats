@@ -6,6 +6,10 @@ English | [日本語](ELASTICSEARCH_PUBLIC_ja.md)
 HTTPS and nginx. Elasticsearch remains authenticated; browsers and API clients
 do not receive Elasticsearch credentials.
 
+Server-side CGI uses the same read-only API through the loopback-only listener
+at `http://localhost:8080/elastic/`, avoiding external DNS and TLS. CGI
+that reads public datasets does not use `espass.txt`.
+
 ```text
 public name  Elasticsearch target
 mstats       alias -> mstats20260719
@@ -55,6 +59,10 @@ must remain private under `/etc/nginx`.
 5. Reload nginx.
 6. Test all three aliases without client credentials.
 7. Confirm write APIs and unrelated indices return 403 or 404.
+
+Configure the internal listener from
+`config/nginx/elasticsearch-internal.conf.example`, and never bind it to an
+external interface.
 
 Do not enable Elasticsearch anonymous authentication and do not put the
 administrative account in nginx configuration.
