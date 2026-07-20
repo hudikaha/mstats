@@ -89,8 +89,9 @@ __MENU__
 </div>
 
 <div style="margin-bottom:10px">
-<span id="src2Text">HPVワクチン健康被害認定者（旧任意接種・PMDA）：厚生労働省「HPVワクチン副反応被害判定調査会」。2024年4月以降は一覧ページを参照し、2018年4月〜2024年2月分は開催回名から資料を個別検索。</span><br>
+<span id="src2Text">HPVワクチン健康被害認定者（旧任意接種・PMDA）：厚生労働省「HPVワクチン副反応被害判定調査会」</span><br>
 <a target="_blank" rel="noopener" href="https://www.mhlw.go.jp/stf/shingi-yakuji_39216.html">https://www.mhlw.go.jp/stf/shingi-yakuji_39216.html</a><br>
+<a target="_blank" rel="noopener" href="https://warp.ndl.go.jp/web/20250702154652/https://www.mhlw.go.jp/stf/shingi/shingi-yakuji_366199.html">https://warp.ndl.go.jp/web/20250702154652/https://www.mhlw.go.jp/stf/shingi/shingi-yakuji_366199.html</a><br>
 </div>
 
 <div style="margin-bottom:10px">
@@ -138,7 +139,7 @@ var I18N = {
     note3: "受診患者は20歳未満・25歳未満の区別ができないので切替え不可",
     sourcesHeading: "出典",
     src1: "HPVワクチン健康被害認定者(定期接種側・疾病・障害認定審査会 感染症・予防接種審査分科会 各回審議結果)",
-    src2: "HPVワクチン健康被害認定者（旧任意接種・PMDA）：厚生労働省「HPVワクチン副反応被害判定調査会」。2024年4月以降は一覧ページを参照し、2018年4月〜2024年2月分は開催回名から資料を個別検索。",
+    src2: "HPVワクチン健康被害認定者（旧任意接種・PMDA）：厚生労働省「HPVワクチン副反応被害判定調査会」",
     src3: "PMDA側 2021年3月末時点317人",
     src4: "PMDA側 2025年3月末時点321人",
     src5: "子宮頸癌罹患・死亡データ(がん統計・国立がん研究センター)",
