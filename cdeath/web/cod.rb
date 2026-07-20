@@ -1770,16 +1770,11 @@ end
 #exit
 
 sums_per_capita = Hash.new
-$death_codes.each do |death_code|
-    sums_per_capita[death_code] = Hash.new
-    $years_ref.each do |year|
-        begin
+if per_capita_selected
+    $death_codes.each do |death_code|
+        sums_per_capita[death_code] = Hash.new
+        $years_ref.each do |year|
             sums_per_capita[death_code][year] = data_by_code_year[[death_code, year]].sum{|datum| datum['sum_per_capita']}.round(6)
-        rescue
-            pp $data.values.select{|datum| datum['year'] == year && datum['death_code'] == death_code}
-            pp year
-            pp sums_per_capita
-            exit
         end
     end
 end
@@ -1791,9 +1786,11 @@ $death_codes.each do |death_code|
 end
 
 avgs_per_capita = Hash.new
-$death_codes.each do |death_code|
-    next if sums[death_code].count == 0
-    avgs_per_capita[death_code] = (sums_per_capita[death_code].sum{|k, v| v}.to_f / sums_per_capita[death_code].count).round(6)
+if per_capita_selected
+    $death_codes.each do |death_code|
+        next if sums[death_code].count == 0
+        avgs_per_capita[death_code] = (sums_per_capita[death_code].sum{|_k, v| v}.to_f / sums_per_capita[death_code].count).round(6)
+    end
 end
 
 $death_codes.each do |death_code|
@@ -1806,22 +1803,17 @@ $death_codes.each do |death_code|
         if death_code == 'population'
             datum['yearly_sum'] /= 12
         end
-        begin
-        datum['yearly_sum_per_capita'] =
-            values.sum{|v| v['sum_per_capita']}.round(6)
-        rescue
-            pp datum
-            pp $data.values.select{|datum| datum['death_code'] == death_code &&
-                                 datum['year'] == year}
-            exit
+        if per_capita_selected
+            datum['yearly_sum_per_capita'] =
+                values.sum{|v| v['sum_per_capita']}.round(6)
         end
         datum['yearly_avg'] = avgs[death_code]
-        datum['yearly_avg_per_capita'] = avgs_per_capita[death_code]
+        datum['yearly_avg_per_capita'] = avgs_per_capita[death_code] if per_capita_selected
 
         if datum['yearly_sum'] && datum['yearly_avg']
             datum['yearly_diff'] = datum['yearly_sum'] - datum['yearly_avg']
         end
-        if datum['yearly_sum_per_capita'] && datum['yearly_avg_per_capita']
+        if per_capita_selected && datum['yearly_sum_per_capita'] && datum['yearly_avg_per_capita']
             datum['yearly_diff_per_capita'] =
                 datum['yearly_sum_per_capita'] - datum['yearly_avg_per_capita']
         end
@@ -1829,10 +1821,12 @@ $death_codes.each do |death_code|
         next if ! avgs[death_code] || avgs[death_code] == 0
 
         datum['yearly_ratio'] = (datum['yearly_sum'] / avgs[death_code] - 1).round(6)
-        if avgs_per_capita[death_code] > 0
-            datum['yearly_ratio_per_capita'] = (datum['yearly_sum_per_capita'] / avgs_per_capita[death_code] - 1).round(6)
-        else
-            datum['yearly_ratio_per_capita'] = 0
+        if per_capita_selected
+            if avgs_per_capita[death_code] > 0
+                datum['yearly_ratio_per_capita'] = (datum['yearly_sum_per_capita'] / avgs_per_capita[death_code] - 1).round(6)
+            else
+                datum['yearly_ratio_per_capita'] = 0
+            end
         end
         #puts "#{datum['yearly_ratio_per_capita']} #{datum['yearly_sum_per_capita']} #{avgs_per_capita[death_code]}"
     end
