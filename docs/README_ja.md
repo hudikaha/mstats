@@ -8,3 +8,4 @@
 - [Elasticsearch APIの利用方法](ELASTICSEARCH_API_ja.md)
 - [公開Elasticsearch APIの運用](ELASTICSEARCH_PUBLIC_ja.md)
 - [KCOR設計](../vdeath/docs/KCOR.md)
+- [vdeath個票変換](../vdeath/docs/IMPORT_ja.md)

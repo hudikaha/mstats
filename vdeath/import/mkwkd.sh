@@ -23,10 +23,10 @@ do
     opts=''
     case $k in
     *愛知県豊川市*|*神奈川県相模原市*)
-	opts+=( --allow-dup-id yes)
+	opts+=( --allow-dup-id)
 	;;
     *東京都小金井市*)
-	opts+=( --prohibit-reason-in yes)
+	opts+=( --prohibit-reason-in)
 	;;
     *大阪市*)
 	continue
@@ -43,7 +43,7 @@ do
     if [ $force = 'no' -a -e py-wkd/${m}_PY-WKD.csv ]; then
 	echo SKIP: py-wkd/${m}_PY-WKD.csv exists
     else
-	ev time ./vdeathp.rb --header ${headers} --steps week-after-dose --ages 80+,all ${opts} ${args} --pyear py-wkd/${m}_PY-WKD.csv
+	ev time ./vdeathp.rb afterdose --headers ${headers} --weeks 1-99 --ages 80+,all ${opts} --output py-wkd/${m}_PY-WKD.csv ${args}
     fi
     ev xz -f -9 -T0 -k py-wkd/${m}_PY-WKD.csv
     ev mv py-wkd/${m}_PY-WKD.csv.xz kkcor/kkcor/

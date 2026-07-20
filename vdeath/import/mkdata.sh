@@ -23,10 +23,10 @@ do
     opts=''
     case $k in
     *愛知県豊川市*|*神奈川県相模原市*)
-	opts+=( --allow-dup-id yes)
+	opts+=( --allow-dup-id)
 	;;
     *東京都小金井市*)
-	opts+=( --prohibit-reason-in yes)
+	opts+=( --prohibit-reason-in)
 	;;
     *大阪市*)
 	continue
@@ -43,7 +43,7 @@ do
     if [ $force = 'no' -a -e data/${m}_PY.csv ]; then
 	echo SKIP: data/${m}_PY.csv exists
     else
-	ev time ./vdeathp.rb --header ${headers} --steps 1,3,6,all --ages 00-09,10-19,20-29,30-39,40-49,50-59,60-69,70-79,80-89,90-99,100+,80+,all ${opts} ${args} --pyear data/${m}_PY.csv
+	ev time ./vdeathp.rb personyear --headers ${headers} --steps 1,3,6,all --ages 00-09,10-19,20-29,30-39,40-49,50-59,60-69,70-79,80-89,90-99,100+,80+,all ${opts} --output data/${m}_PY.csv ${args}
     fi
     ev xz -f -9 -T0 -k data/${m}_PY.csv
     ev mv data/${m}_PY.csv.xz kkcor/kkcor/
