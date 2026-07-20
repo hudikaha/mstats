@@ -37,3 +37,12 @@ vdeathp.rb excess    [options] INPUT...
 ```
 
 旧式の複数用途版は`import/vdeathp-20251027.rb`として保存している。
+
+`import/Makefile`は自治体ごとに`PY`、`PY-WKD`、`CUMD-WK`、`IND-WKA`を生成する。死亡者個票だけの大阪市は`CUMD-WK`と`DTH-WKA`を生成する。
+
+```sh
+cd vdeath/import
+make              # 全自治体
+make jp132101     # 小金井市だけ
+make FORCE=1      # 既存出力も再生成
+```

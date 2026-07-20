@@ -8,6 +8,7 @@ kkcor-old
 /kkcor/
 /vdeath/data/
 /vdeath/var/
+/vdeath/outputs/
 /lib/elasticsearch-password
 /old/
 /cdeath/config/logstash/*.conf

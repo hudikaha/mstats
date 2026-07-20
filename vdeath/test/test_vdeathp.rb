@@ -57,7 +57,7 @@ class VdeathpTest < Minitest::Test
     original, = run_command('personyear', '--start', '2023-01-01', '--until', '2024-07-01',
                             '--steps', 'all', '--ages', 'all')
     anonymized, = run_command('anonymize')
-    refute_empty anonymized.filter_map { |row| row['date_out'] }
+    refute_empty anonymized.map { |row| row['date_out'] }.compact
     anonymous_file = File.join(@dir, 'anonymize.csv')
     roundtrip_file = File.join(@dir, 'roundtrip.csv')
     stdout, stderr, status = Open3.capture3('ruby', SCRIPT, 'personyear', '--output', roundtrip_file,

@@ -15,13 +15,13 @@ OUTPUT_HEADER = %w[id areacode area areaj step period age dose lives persondays 
 def parse_date(value)
   return nil if value.nil? || value.to_s.strip.empty? || value.to_s.match?(/^(NA|#N\/A|NULL|0)$/i)
   Date.parse(value.to_s)
-rescue Date::Error
+rescue ArgumentError
   nil
 end
 
 def safe_ago(date, years)
   date.prev_year(years)
-rescue Date::Error
+rescue ArgumentError
   Date.new(date.year - years, date.month, -1)
 end
 
@@ -179,8 +179,8 @@ class Dataset
     reason_out = row['reason_out'].to_s
     out = parse_date(row['out']) || parse_date(row['date_out'])
     death ||= out if reason_out.include?('死')
-    in_dates = (['in', 'date_in'] + (2..5).map { |index| "in#{index}" }).filter_map { |field| parse_date(row[field]) }
-    out_dates = (['out', 'date_out'] + (2..5).map { |index| "out#{index}" }).filter_map { |field| parse_date(row[field]) }
+    in_dates = (['in', 'date_in'] + (2..5).map { |index| "in#{index}" }).map { |field| parse_date(row[field]) }.compact
+    out_dates = (['out', 'date_out'] + (2..5).map { |index| "out#{index}" }).map { |field| parse_date(row[field]) }.compact
     in_dates << out if reason_out.include?('転入') && out
     date_in = in_dates.min
     date_out = if reason_out.include?('死') || reason_out.include?('転入')
@@ -275,12 +275,12 @@ def each_age_segment(person, start_date, end_date)
     age = age_on(person[:birthday], cursor)
     next_birthday = begin
       Date.new(cursor.year, person[:birthday].month, person[:birthday].day)
-    rescue Date::Error
+    rescue ArgumentError
       Date.new(cursor.year, 2, 28)
     end
     next_birthday = begin
       Date.new(cursor.year + 1, person[:birthday].month, person[:birthday].day)
-    rescue Date::Error
+    rescue ArgumentError
       Date.new(cursor.year + 1, 2, 28)
     end if next_birthday <= cursor
     finish = [end_date, next_birthday].min
@@ -320,6 +320,7 @@ def run_personyear(dataset, opts)
     end
   end
   sums_by_period = definitions.map { Hash.new { |hash, key| hash[key] = { lives: 0, days: 0, deaths: 0 } } }
+  age_label_cache = Hash.new { |hash, age| hash[age] = age_labels(age, opts[:ages]) }
   dataset.each_person do |person|
     next unless person[:valid_doses]
     definitions.each_with_index do |(_step, period_start, period_end, _label), index|
@@ -329,7 +330,7 @@ def run_personyear(dataset, opts)
                           (!person[:date_out] || death <= person[:date_out])
       if resident_at_death && period_start <= death && death < period_end
         dose = dose_at(person, death)
-        age_labels(age_on(person[:birthday], death), opts[:ages]).each { |age| sums[[age, dose]][:deaths] += 1 }
+        age_label_cache[age_on(person[:birthday], death)].each { |age| sums[[age, dose]][:deaths] += 1 }
       end
       obs_start = [period_start, person[:date_in] || period_start].max
       obs_end = observation_end(person, period_end)
@@ -339,7 +340,7 @@ def run_personyear(dataset, opts)
       boundaries.sort.each_cons(2) do |left, right|
         dose = dose_at(person, left)
         each_age_segment(person, left, right) do |age, from, to|
-          age_labels(age, opts[:ages]).each do |age_label|
+          age_label_cache[age].each do |age_label|
             sums[[age_label, dose]][:days] += (to - from).to_i
             seen[[age_label, dose]] = true
           end
@@ -361,32 +362,45 @@ def run_afterdose(dataset, opts)
   sums_by_week = opts[:weeks].to_h do |week|
     [week, Hash.new { |hash, key| hash[key] = { lives: 0, days: 0, deaths: 0 } }]
   end
+  age_label_cache = Hash.new { |hash, age| hash[age] = age_labels(age, opts[:ages]) }
+  observation_limit = opts[:until] || dataset.age_reference
   dataset.each_person do |person|
     next unless person[:valid_doses]
-    opts[:weeks].each do |week|
-      sums = sums_by_week[week]
-      seen = {}
-      (0..dataset.max_dose).each do |dose|
-        next if dose.positive? && !person[:doses][dose]
-        origin = dose.zero? ? opts[:start] : person[:doses][dose][:date]
-        left = origin + 7 * (week - 1)
-        right = origin + 7 * week
-        state_end = dose.zero? ? person.dig(:doses, 1, :date) : person.dig(:doses, dose + 1, :date)
-        finish = [right, state_end, person[:death], person[:date_out], opts[:until] || dataset.age_reference].compact.min
-        death = person[:death]
-        if death && left <= death && death < right && (!state_end || death <= state_end) &&
-           (!person[:date_in] || person[:date_in] <= death) && (!person[:date_out] || death <= person[:date_out])
-          age_labels(age_on(person[:birthday], death), opts[:ages]).each { |label| sums[[label, dose]][:deaths] += 1 }
-        end
-        next unless left < finish
-        each_age_segment(person, left, finish) do |age, from, to|
-          age_labels(age, opts[:ages]).each do |label|
-            sums[[label, dose]][:days] += (to - from).to_i
-            seen[[label, dose]] = true
+    (0..dataset.max_dose).each do |dose|
+      next if dose.positive? && !person[:doses][dose]
+      origin = dose.zero? ? opts[:start] : person[:doses][dose][:date]
+      state_end = dose.zero? ? person.dig(:doses, 1, :date) : person.dig(:doses, dose + 1, :date)
+      finish = [state_end, person[:death], person[:date_out], observation_limit].compact.min
+
+      # 日本語: この接種状態と重なる週だけを処理し、全99週の総当たりを避ける。
+      # English: Process only weeks overlapping this dose state instead of scanning all 99 weeks.
+      if origin < finish
+        max_week = ((finish - origin).to_i + 6) / 7
+        opts[:weeks].each do |week|
+          break if week > max_week
+          left = origin + 7 * (week - 1)
+          right = [origin + 7 * week, finish].min
+          next unless left < right
+          sums = sums_by_week[week]
+          seen = {}
+          each_age_segment(person, left, right) do |age, from, to|
+            age_label_cache[age].each do |label|
+              sums[[label, dose]][:days] += (to - from).to_i
+              seen[[label, dose]] = true
+            end
           end
+          seen.each_key { |key| sums[key][:lives] += 1 }
         end
       end
-      seen.each_key { |key| sums[key][:lives] += 1 }
+
+      death = person[:death]
+      next unless death && origin <= death && (!state_end || death <= state_end) &&
+                  (!person[:date_in] || person[:date_in] <= death) && (!person[:date_out] || death <= person[:date_out])
+      death_week = ((death - origin).to_i / 7) + 1
+      next unless sums_by_week.key?(death_week)
+      age_label_cache[age_on(person[:birthday], death)].each do |label|
+        sums_by_week[death_week][[label, dose]][:deaths] += 1
+      end
     end
   end
   CSV.open(opts[:output], 'w') do |csv|
@@ -405,6 +419,7 @@ def run_kcor(dataset, opts)
     month = month.next_month
   end
   grouped_by_cutoff = cutoffs.to_h { |cutoff| [cutoff, Hash.new { |hash, key| hash[key] = Hash.new(0) }] }
+  age_label_cache = Hash.new { |hash, age| hash[age] = age_labels(age, opts[:ages]) }
   dataset.each_person do |person|
     next unless person[:valid_doses]
     death = person[:death]
@@ -412,7 +427,7 @@ def run_kcor(dataset, opts)
     cutoffs.each do |cutoff|
       next unless cutoff < death
       dose = dose_at(person, cutoff)
-      age_labels(age_on(person[:birthday], cutoff), opts[:ages]).each do |age|
+      age_label_cache[age_on(person[:birthday], cutoff)].each do |age|
         sunday = Date.commercial(death.cwyear, death.cweek, 7)
         grouped_by_cutoff[cutoff][[age, dose]][sunday] += 1
       end

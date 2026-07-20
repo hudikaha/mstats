@@ -37,3 +37,12 @@ Example:
 ```
 
 The previous multi-purpose implementation is preserved as `import/vdeathp-20251027.rb`.
+
+`import/Makefile` generates `PY`, `PY-WKD`, `CUMD-WK`, and `IND-WKA` for each municipality. Osaka, whose source contains death records only, produces `CUMD-WK` and `DTH-WKA`.
+
+```sh
+cd vdeath/import
+make              # all municipalities
+make jp132101     # Koganei only
+make FORCE=1      # regenerate existing outputs
+```
