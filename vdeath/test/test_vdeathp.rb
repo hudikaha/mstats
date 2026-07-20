@@ -50,6 +50,35 @@ class VdeathpTest < Minitest::Test
     second, = run_command('anonymize')
     assert_equal first.map(&:to_h), second.map(&:to_h)
     assert_equal '80-89', first[1]['age']
+    refute_nil first[1]['vbirthday']
+  end
+
+  def test_anonymized_output_can_be_read_again
+    original, = run_command('personyear', '--start', '2023-01-01', '--until', '2024-07-01',
+                            '--steps', 'all', '--ages', 'all')
+    anonymized, = run_command('anonymize')
+    refute_empty anonymized.filter_map { |row| row['date_out'] }
+    anonymous_file = File.join(@dir, 'anonymize.csv')
+    roundtrip_file = File.join(@dir, 'roundtrip.csv')
+    stdout, stderr, status = Open3.capture3('ruby', SCRIPT, 'personyear', '--output', roundtrip_file,
+                                            '--start', '2023-01-01', '--until', '2024-07-01',
+                                            '--steps', 'all', '--ages', 'all', anonymous_file)
+    assert status.success?, "#{stdout}\n#{stderr}"
+    roundtrip = CSV.read(roundtrip_file, headers: true)
+    before = original.find { |row| row['age'] == 'all' && row['dose'] == 'all' }
+    after = roundtrip.find { |row| row['age'] == 'all' && row['dose'] == 'all' }
+    assert_equal before['deaths'], after['deaths']
+    difference = (before['persondays'].to_i - after['persondays'].to_i).abs
+    fields = %w[id date_in date_out date_death]
+    detail = anonymized.map { |row| fields.to_h { |field| [field, row[field]] } }
+    assert_operator difference, :<=, 18, "#{before['persondays']} -> #{after['persondays']} #{detail}"
+
+    reanonymized_file = File.join(@dir, 'reanonymized.csv')
+    _stdout, stderr, status = Open3.capture3('ruby', SCRIPT, 'anonymize', '--output', reanonymized_file,
+                                             anonymous_file)
+    assert status.success?, stderr
+    reanonymized = CSV.read(reanonymized_file, headers: true)
+    assert_equal anonymized.map { |row| row['vbirthday'] }, reanonymized.map { |row| row['vbirthday'] }
   end
 
   def test_all_commands_generate_rows

@@ -82,8 +82,10 @@ class Dataset
     @headers = headers
     parse_area(files.first)
     scan_metadata
-    raise '死亡日がないため年齢基準日を決定できません。--age-referenceを指定してください' if !@max_death && !opts[:age_reference]
-    @age_reference = opts[:age_reference] || @max_death + 1
+    if !@max_death && !@source_age_reference && !opts[:age_reference]
+      raise '死亡日がないため年齢基準日を決定できません。--age-referenceを指定してください'
+    end
+    @age_reference = opts[:age_reference] || @source_age_reference || @max_death + 1
   end
 
   def each_person
@@ -94,7 +96,10 @@ class Dataset
       range = age_range(row['age'], @opts[:open_age_max])
       next unless range
       raw_id = row['id'].to_s.strip
-      next if row.headers.include?('id') && !raw_id.match?(/^\d+$/)
+      if row.headers.include?('id')
+        next if raw_id.empty?
+        next if !row.headers.include?('vbirthday') && !raw_id.match?(/^\d+$/)
+      end
       identity = raw_id.empty? ? "#{file_index}:#{row_number}" : raw_id
       seen[identity] += 1
       if seen[identity] > 1 && !@opts[:allow_dup_id]
@@ -113,17 +118,27 @@ class Dataset
 
   def parse_area(file)
     match = File.basename(file).match(/^(jp\d+)_([^_]+)_(?:all|lives)/)
-    raise "入力file名から自治体を判定できません: #{file}" unless match
-    @areacode = match[1]
-    names = match[2].split('-', 2)
-    @areaj = names[0]
-    @area = (names[1] || names[0]).tr('-', '/')
+    if match
+      @areacode = match[1]
+      names = match[2].split('-', 2)
+      @areaj = names[0]
+      @area = (names[1] || names[0]).tr('-', '/')
+      return
+    end
+    first = first_raw_row(file)
+    @areacode = first&.[]('areacode').to_s
+    @area = first&.[]('area').to_s
+    @areaj = first&.[]('areaj').to_s
+    raise "入力file名またはCSVから自治体を判定できません: #{file}" if @areacode.empty?
   end
 
   def each_raw_row
-    raise '入力CSVとheaderの数が一致しません' unless @files.length == @headers.length
-    @files.zip(@headers).each_with_index do |(file, header), file_index|
-      names = CSV.parse_line(File.open(header, &:readline).sub("\uFEFF", ''))
+    if !@headers.empty? && @files.length != @headers.length
+      raise '入力CSVとheaderの数が一致しません'
+    end
+    @files.each_with_index do |file, file_index|
+      header = @headers[file_index]
+      names = header ? CSV.parse_line(File.open(header, &:readline).sub("\uFEFF", '')) : true
       row_number = 0
       CSV.foreach(file, headers: names, row_sep: :auto) do |row|
         row_number += 1
@@ -132,24 +147,40 @@ class Dataset
     end
   end
 
+  def first_raw_row(file)
+    header = @headers[@files.index(file)] unless @headers.empty?
+    names = header ? CSV.parse_line(File.open(header, &:readline).sub("\uFEFF", '')) : true
+    CSV.foreach(file, headers: names, row_sep: :auto).first
+  end
+
   def scan_metadata
     @max_death = nil
     @max_dose = 0
     each_raw_row do |row, _file_index, _row_number, _file|
-      death = parse_date(row['death'])
+      death = parse_date(row['death']) || parse_date(row['date_death'])
       death ||= parse_date(row['out']) if row['reason_out'].to_s.include?('死')
       @max_death = death if death && (!@max_death || @max_death < death)
-      (1..9).each { |dose| @max_dose = dose if parse_date(row["dose#{dose}"]) && @max_dose < dose }
+      date_age = parse_date(row['date_age'])
+      if date_age
+        if @source_age_reference && @source_age_reference != date_age
+          raise "date_ageが一致しません: #{@source_age_reference} / #{date_age}"
+        end
+        @source_age_reference = date_age
+      end
+      (1..9).each do |dose|
+        date = parse_date(row["dose#{dose}"]) || parse_date(row["date_dose#{dose}"])
+        @max_dose = dose if date && @max_dose < dose
+      end
     end
   end
 
   def build_person(row, key, identity, range)
-    death = parse_date(row['death'])
+    death = parse_date(row['death']) || parse_date(row['date_death'])
     reason_out = row['reason_out'].to_s
-    out = parse_date(row['out'])
+    out = parse_date(row['out']) || parse_date(row['date_out'])
     death ||= out if reason_out.include?('死')
-    in_dates = (['in'] + (2..5).map { |index| "in#{index}" }).filter_map { |field| parse_date(row[field]) }
-    out_dates = (['out'] + (2..5).map { |index| "out#{index}" }).filter_map { |field| parse_date(row[field]) }
+    in_dates = (['in', 'date_in'] + (2..5).map { |index| "in#{index}" }).filter_map { |field| parse_date(row[field]) }
+    out_dates = (['out', 'date_out'] + (2..5).map { |index| "out#{index}" }).filter_map { |field| parse_date(row[field]) }
     in_dates << out if reason_out.include?('転入') && out
     date_in = in_dates.min
     date_out = if reason_out.include?('死') || reason_out.include?('転入')
@@ -160,9 +191,10 @@ class Dataset
     date_out = nil if @opts[:prohibit_reason_in] && reason_out == '転入'
     doses = {}
     (1..9).each do |dose|
-      date = parse_date(row["dose#{dose}"])
+      date = parse_date(row["dose#{dose}"]) || parse_date(row["date_dose#{dose}"])
       next unless date
-      doses[dose] = { date: date, pharma: normalize_pharma(row["pharma#{dose}"]), lot: row["lot#{dose}"].to_s }
+      pharma = row["pharma#{dose}"] || row["pharma_dose#{dose}"]
+      doses[dose] = { date: date, pharma: normalize_pharma(pharma), lot: row["lot#{dose}"].to_s }
     end
     person = {
       key: key, source_id: identity, sex: row['sex'].to_s, age_source: row['age'].to_s,
@@ -171,6 +203,11 @@ class Dataset
       date_in: date_in, date_out: date_out, doses: doses,
       valid_doses: doses.keys == (1..doses.length).to_a
     }
+    virtual_birthday = parse_date(row['vbirthday'])
+    if virtual_birthday
+      person[:birthday] = virtual_birthday
+      return person
+    end
     min_age, max_age = range
     earliest = safe_ago(@age_reference, max_age + 1) + 1
     latest = safe_ago(@age_reference, min_age)
@@ -405,7 +442,7 @@ end
 
 def run_anonymize(dataset, opts)
   CSV.open(opts[:output], 'w') do |csv|
-    header = %w[id areacode area areaj age date_age cweek_death date_death dose_final]
+    header = %w[id areacode area areaj age date_age vbirthday cweek_in date_in cweek_out date_out cweek_death date_death dose_final]
     (1..9).each { |dose| header.concat(["cweek_dose#{dose}", "date_dose#{dose}", "pharma_dose#{dose}"]) }
     csv << header
     dataset.each_person do |person|
@@ -414,7 +451,15 @@ def run_anonymize(dataset, opts)
       age_label = age >= 100 ? '100+' : format('%02d-%02d', age / 10 * 10, age / 10 * 10 + 9)
       anon = Digest::SHA256.hexdigest([opts[:age_seed_version], dataset.areacode, person[:key]].join(':'))[0, 16]
       row = ["#{dataset.areacode}_#{age_label}_#{anon}", dataset.areacode, dataset.area, dataset.areaj,
-             age_label, dataset.age_reference]
+             age_label, dataset.age_reference, person[:birthday]]
+      [person[:date_in], person[:date_out]].each do |date|
+        if date
+          sunday = Date.commercial(date.cwyear, date.cweek, 7)
+          row.concat([format('%04d-W%02d', sunday.cwyear, sunday.cweek), sunday])
+        else
+          row.concat([nil, nil])
+        end
+      end
       if person[:death]
         sunday = Date.commercial(person[:death].cwyear, person[:death].cweek, 7)
         row.concat([format('%04d-W%02d', sunday.cwyear, sunday.cweek), sunday])
@@ -515,7 +560,7 @@ parser = OptionParser.new do |option|
 end
 parser.parse!
 
-abort parser.to_s if ARGV.empty? || opts[:headers].empty? || !opts[:output]
+abort parser.to_s if ARGV.empty? || !opts[:output]
 dataset = Dataset.new(ARGV, opts[:headers], opts)
 
 case command

@@ -15,14 +15,15 @@ vdeathp.rb excess    [options] INPUT...
 - `personyear`: person-time by calendar period, age, and dose
 - `afterdose`: person-time by week since each dose
 - `kcor`: cumulative deaths for cohorts fixed at each cutoff
-- `anonymize`: anonymous individual records with dates rounded to ISO-week Sundays
+- `anonymize`: anonymous individual records with entry, exit, death, and dose dates rounded to ISO-week Sundays
 - `excess`: annual deaths and age-standardized results, including long-term records without vaccination histories
 
 Common options are `--headers FILE[,FILE...]`, `--output FILE`, `--age-reference DATE`,
 `--age-seed-version VERSION`, `--open-age-max AGE`, `--allow-dup-id`,
 `--prohibit-reason-in`, and `--report FILE`. When `--age-reference` is omitted, the day after the latest death in all inputs is used.
+Municipal CSV files without an embedded header require `--headers`. A CSV with its own header row, including `anonymize` output, can be read again without `--headers`.
 
-The program derives a possible birth-date interval from an exact age or age band. It chooses a reproducible imputed birth date using a SHA-256 digest of the municipality code, record ID, source age, and seed version. `personyear` splits person-days at birthdays and assigns deaths to age on the date of death. Imputed birth dates are never exported.
+The program derives a possible birth-date interval from an exact age or age band. It chooses a reproducible virtual birthday using a SHA-256 digest of the municipality code, record ID, source age, and seed version. `anonymize` writes this non-real date as `vbirthday`. When a CSV containing `vbirthday` is read again, that value is used as the birthday and is not regenerated. `personyear` splits person-days at birthdays and assigns deaths to age on the date of death.
 
 Example:
 
