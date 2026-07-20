@@ -9,18 +9,40 @@ require 'yaml'
 
 # メニュー定義をYAMLから読み込み、プロセス内でキャッシュする。
 # Load menu definitions from YAML and cache them for the process lifetime.
+def site_menu_entries
+    @site_menu_entries ||= YAML.load_file(File.join(__dir__, 'menu.yml'))
+end
+
+# page検索用として、区切りなどを除いたlink定義だけを返す。
+# Return link definitions only, excluding separators and other controls.
 def site_menu_items
-    @site_menu_items ||= YAML.load_file(File.join(__dir__, 'menu.yml'))
+    site_menu_entries.select { |entry| entry['href'] }
+end
+
+# enabled未指定は両言語、配列指定は列挙した言語だけを表示する。
+# With no enabled setting, show both languages; an array limits visibility.
+def site_menu_item_enabled?(item, lang)
+    enabled = item.fetch('enabled', true)
+    return enabled if enabled == true || enabled == false
+
+    Array(enabled).map(&:to_s).include?(lang.to_s)
 end
 
 # 指定言語の共通サイトメニューをHTMLとして出力する。
 # Render the shared site menu in the requested language.
 def print_site_menu(lang)
-    links = '<hr>' + site_menu_items.map{|item|
+    links = '<hr>' + site_menu_entries.filter_map{|item|
+        next '<hr>' if item['type'] == 'separator'
+        next unless item['href']
+        next if item['enabled'] == false
+
         label = item[lang.to_s] || item['ja']
         separator = item['href'].include?('?') ? '&amp;' : '?'
         href = "#{item['href']}#{separator}l=#{lang}"
-        "<p><a class=\"site-menu-label\" data-ja=\"#{item['ja']}\" data-en=\"#{item['en']}\" data-path=\"#{item['href']}\" href=\"#{href}\">#{label}</a></p>"
+        enabled_ja = site_menu_item_enabled?(item, :ja)
+        enabled_en = site_menu_item_enabled?(item, :en)
+        hidden = site_menu_item_enabled?(item, lang) ? '' : ' hidden'
+        "<p#{hidden}><a class=\"site-menu-label\" data-ja=\"#{item['ja']}\" data-en=\"#{item['en']}\" data-enabled-ja=\"#{enabled_ja}\" data-enabled-en=\"#{enabled_en}\" data-path=\"#{item['href']}\" href=\"#{href}\">#{label}</a></p>"
     }.join
     print <<~HTML
       <style>
@@ -65,6 +87,7 @@ def print_site_menu(lang)
           window.updateSiteMenu = function (language) {
             document.querySelectorAll('.site-menu-label').forEach(function (link) {
               link.textContent = link.getAttribute('data-' + language) || link.getAttribute('data-ja');
+              link.parentElement.hidden = link.getAttribute('data-enabled-' + language) === 'false';
               const path = link.getAttribute('data-path');
               link.href = path + (path.includes('?') ? '&' : '?') + 'l=' + language;
             });
