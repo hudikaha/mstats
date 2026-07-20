@@ -1550,6 +1550,11 @@ death_code_terms = if $topflag
                        Death_codes.select{|k, v| v[:sel] == 'checked'}.keys
                    end
 death_code_terms = death_code_terms.map{|code| code == 'all' ? '00000' : code}
+per_capita_selected = Per_capita['true'][:sel] == 'checked'
+population_selected = $cgi['category'] =~ /population/
+needs_population = $adjustment != 'none' || per_capita_selected || population_selected
+required_years = ($years + $years_ref + $years_context).map(&:to_i).uniq.sort
+
 should = [
     {
         'bool' => {
@@ -1558,28 +1563,41 @@ should = [
                 {'terms' => {'death_code' => death_code_terms}},
             ]
         }
-    },
-    {
+    }
+]
+if needs_population
+    should.push({
         'bool' => {
             'must' => [
                 {'term' => {'category' => 'pop'}},
                 {'term' => {'type' => 'conf'}},
             ]
         }
-    },
-]
+    })
+end
+
+# 集計方法に必要な年齢fieldだけを取得し、巨大な不要応答を避ける。
+# Fetch only the age fields required by the selected aggregation mode.
+age_sources = if $adjustment != 'none' || per_capita_selected
+                  ($ages.map{|k, _v| "age_#{k}"} + ['age_85over'] +
+                   ($all_ages_selected ? ['age_all'] : [])).uniq
+              elsif $all_ages_selected
+                  ['age_all']
+              else
+                  $ages.map{|k, _v| "age_#{k}"}
+              end
 
 data0 = elastic_search(
     :index => 'mstats2026',
     :filter => [
-        #{'range' => {'year' => {'gte' => '2009', 'lte' => '2025'}}},
+        {'terms' => {'year' => required_years}},
         {'term' => {'loc_code' => 'jpn'}},
         {'term' => {'sex' => $sex}},
+        {'exists' => {'field' => 'yearmonth'}},
     ],
     :should => should,
     :source => ['id', 'category', 'date', 'year', 'month', 'death_code', 'death_cause', 'sex', 'type'] +
-               ($ages.map{|k, v| "age_#{k}"} + ['age_85over'] +
-                ($all_ages_selected ? ['age_all'] : [])).uniq,
+               age_sources,
     #:debug => 'SHOWONLY',
 )
 
@@ -1647,46 +1665,51 @@ $data = $data.sort.to_h
 $selected_years = Years.select{|k, v| v[:sel] == 'checked'}.keys
 $population_by_period = $data.each_value.select{|datum| datum['category'] == 'population'}.
     to_h{|datum| [[datum['year'], datum['month'], datum['sex']], datum]}
-$last_pop = $population_by_period.values.
-    select{|datum| $selected_years.include?(datum['year'])}.
-    max_by{|datum| [datum['year'].to_i, datum['month'].to_i]}
+$data.each_value{|datum| datum['sum_none'] = datum['sum']}
 
-adjustment_groups = $ages.keys.
-                        select{|age| StandardPopulation2015[age]}.
-                        map{|age| [[age], StandardPopulation2015[age]]}
-if $ages['95_99'] || $ages['100over']
-    adjustment_groups.push([['95_99', '100over'], StandardPopulation2015['95over']])
-end
-
-$data.each do |id, datum|
-    population = $population_by_period[[datum['year'], datum['month'], datum['sex']]]
-    next if ! population
-
-    datum['sum_none'] = datum['sum']
-    latest_groups = $ages.keys.map{|age| [age]}
-    standard_groups = adjustment_groups
-    if $includes_all_oldest && population['age_85over'].to_f > 0
-        latest_groups = ($ages.keys - OldestAgeKeys).map{|age| [age]} + [OldestAgeKeys]
-        standard_groups = adjustment_groups.reject{|ages, weight| (ages & OldestAgeKeys).any?} +
-            [[OldestAgeKeys, StandardPopulation2015['85_89'] +
-                              StandardPopulation2015['90_94'] +
-                              StandardPopulation2015['95over']]]
+if $adjustment != 'none'
+    last_pop = $population_by_period.values.
+        select{|datum| $selected_years.include?(datum['year'])}.
+        max_by{|datum| [datum['year'].to_i, datum['month'].to_i]}
+    adjustment_groups = $ages.keys.
+                            select{|age| StandardPopulation2015[age]}.
+                            map{|age| [[age], StandardPopulation2015[age]]}
+    if $ages['95_99'] || $ages['100over']
+        adjustment_groups.push([['95_99', '100over'], StandardPopulation2015['95over']])
     end
-    datum['sum_latest'] = latest_groups.sum{|ages|
-        deaths = ages == OldestAgeKeys && datum['age_85over'].to_f > 0 ?
-            datum['age_85over'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
-        denominator = ages == OldestAgeKeys ? population['age_85over'].to_f :
-                                              population["age_#{ages.first}"].to_f
-        target = ages.sum{|age| $last_pop["age_#{age}"].to_f}
-        denominator > 0 ? deaths * target / denominator : 0
-    }.round(2)
-    datum['sum_standard2015'] = standard_groups.sum{|ages, standard_population|
-        deaths = ages == OldestAgeKeys && datum['age_85over'].to_f > 0 ?
-            datum['age_85over'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
-        denominator = ages == OldestAgeKeys ? population['age_85over'].to_f :
-                                              ages.sum{|age| population["age_#{age}"].to_f}
-        denominator > 0 ? deaths * standard_population / denominator : 0
-    }.round(2)
+
+    $data.each_value do |datum|
+        population = $population_by_period[[datum['year'], datum['month'], datum['sex']]]
+        next if ! population
+
+        latest_groups = $ages.keys.map{|age| [age]}
+        standard_groups = adjustment_groups
+        if $includes_all_oldest && population['age_85over'].to_f > 0
+            latest_groups = ($ages.keys - OldestAgeKeys).map{|age| [age]} + [OldestAgeKeys]
+            standard_groups = adjustment_groups.reject{|ages, _weight| (ages & OldestAgeKeys).any?} +
+                [[OldestAgeKeys, StandardPopulation2015['85_89'] +
+                                  StandardPopulation2015['90_94'] +
+                                  StandardPopulation2015['95over']]]
+        end
+        if $adjustment == 'latest'
+            datum['sum_latest'] = latest_groups.sum{|ages|
+                deaths = ages == OldestAgeKeys && datum['age_85over'].to_f > 0 ?
+                    datum['age_85over'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
+                denominator = ages == OldestAgeKeys ? population['age_85over'].to_f :
+                                                      population["age_#{ages.first}"].to_f
+                target = ages.sum{|age| last_pop["age_#{age}"].to_f}
+                denominator > 0 ? deaths * target / denominator : 0
+            }.round(2)
+        else
+            datum['sum_standard2015'] = standard_groups.sum{|ages, standard_population|
+                deaths = ages == OldestAgeKeys && datum['age_85over'].to_f > 0 ?
+                    datum['age_85over'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
+                denominator = ages == OldestAgeKeys ? population['age_85over'].to_f :
+                                                      ages.sum{|age| population["age_#{age}"].to_f}
+                denominator > 0 ? deaths * standard_population / denominator : 0
+            }.round(2)
+        end
+    end
 end
 
 $data.each_value{|datum| datum['sum'] = datum["sum_#{$adjustment}"]}
@@ -1694,19 +1717,21 @@ $data.each_value{|datum| datum['sum'] = datum["sum_#{$adjustment}"]}
 #
 # Prepare for per-Capita
 #
-$data.each do |id, datum|
-    population = $population_by_period[[datum['year'], datum['month'], datum['sex']]]
-    next if ! population
+if per_capita_selected
+    $data.each_value do |datum|
+        population = $population_by_period[[datum['year'], datum['month'], datum['sex']]]
+        next if ! population
 
-    (['sum'] + $ages.map{|k, v| "age_#{k}" }).each do |age|
-        #puts "+++++++++++++++++++++++++++ #{age}"
-        if datum[age] && population[age] && (pop = population[age].to_i) > 0
-            age_per_capita = "#{age}_per_capita"
-            datum[age_per_capita] = ((datum[age].to_f * 100000.00000) / pop).round(6)
-        else
-            next
+        (['sum'] + $ages.map{|k, _v| "age_#{k}" }).each do |age|
+            #puts "+++++++++++++++++++++++++++ #{age}"
+            if datum[age] && population[age] && (pop = population[age].to_i) > 0
+                age_per_capita = "#{age}_per_capita"
+                datum[age_per_capita] = ((datum[age].to_f * 100000.00000) / pop).round(6)
+            else
+                next
+            end
+            #puts "#{id} #{age}: #{datum[age]} #{pop} #{datum[age_per_capita]}"
         end
-        #puts "#{id} #{age}: #{datum[age]} #{pop} #{datum[age_per_capita]}"
     end
 end
 
