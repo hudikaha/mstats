@@ -10,6 +10,7 @@ require 'cgi'
 require 'date'
 require 'optparse'
 require 'pp'
+
 mfacts = [
     File.expand_path('../../lib/mfacts.rb', __dir__),
     File.expand_path('lib/mfacts.rb', __dir__)
@@ -25,11 +26,16 @@ abort 'mstats.rb not found' unless mstats
 require mstats
 
 #
+# page名に対応するindexを選ぶ。vdeath.rbは従来index、vdeath2026.rbは年齢補正版を読む。
+# Select the matching index: vdeath.rb uses the legacy data and vdeath2026.rb the age-adjusted data.
+page_name = File.basename(ENV.fetch('SCRIPT_NAME', $PROGRAM_NAME))
+default_index = File.basename(page_name, '.rb')
+
 # Debug option
 #
 $opts = {
     debug: false,
-    index: "vdeath"
+    index: default_index
 }
 
 op = OptionParser.new do |opts|
@@ -55,9 +61,9 @@ end
 #
 Lang = {
     'en' => { sel: nil, ja: 'English', en: 'English',
-              menu: 'menu_e.js', title: 'COVID-19 Vaxx Doses and Deaths/Mortality in Japan, Weekly-after-dose<br>(All Causes, Person-year Analysis, For unvaxx Weekly from 2021-02-01)'},
-    'ja' => { sel: nil, ja: '日本語', en: '日本語',
-              menu: 'menu.js', title: '新型コロナワクチン接種回数と接種後週ごとの死亡数・死亡率<br>(全死因、人年法による解析、未接種者は2021-02-01からの週数)'},
+              menu: 'menu_e.js', title: 'COVID-19 Vaxx Doses and Deaths/Mortality in Japan (All Causes, Person-year Analysis)'},
+              'ja' => { sel: nil, ja: '日本語', en: '日本語',
+              menu: 'menu.js', title: '新型コロナワクチン接種回数と死亡数・死亡率(人年法、全死因による解析)'},
 }
 
 #
@@ -104,13 +110,19 @@ Ages = {
     '80+'  => { sel: nil, ja: '80歳以上', en: '80+' },
 }
 
-Sources = {
-    'org' => { sel: nil, ja: '日単位の元データから計算', en: 'Calculated from daily source data' },
-    'anon' => { sel: nil, ja: '公開した週単位匿名化から計算', en: 'Calculated from published weekly anonymization' }
-}
+# 集計元の日付精度。通常stepは公開WKA、org stepは元の日単位個票から作る。
+# Event-date source: regular steps come from public WKA; org steps use daily source records.
+Sources = if default_index == 'vdeath2026'
+              {
+                  'org' => { sel: nil, ja: '日単位の元データから計算', en: 'Calculated from daily source data' },
+                  'anon' => { sel: nil, ja: '公開した週単位匿名化から計算(月次単純集計なので月ごとは誤差大)', en: 'Calculated from published weekly anonymization (monthly simple aggregation has large month-to-month errors)' }
+              }
+          else
+              { 'anon' => { sel: nil, ja: '従来data', en: 'Legacy data' } }
+          end
 
 #
-# Types weekly stacks
+# Types monthly stacks
 #
 Stacks = {
     'deaths'     => { sel: nil, ja: '死亡数', en: 'Deaths' },
@@ -120,7 +132,7 @@ Stacks = {
 }
 
 #
-# Types weekly lines
+# Types monthly lines
 #
 Lines = {
     'deaths'     => { sel: nil, ja: '死亡数', en: 'Deaths' },
@@ -130,6 +142,9 @@ Lines = {
     'rr0'        => { sel: nil, ja: 'リスク比', en: 'Risk-ratio' },
     'rr0ci'      => { sel: nil, ja: '信頼区間', en: 'CI' },
     'rr0log'     => { sel: nil, ja: '対数表示', en: 'Logscale' },
+    'rrp'        => { sel: nil, ja: 'リスク比(過去)', en: 'Risk-ratio(past)' },
+    'rrpci'      => { sel: nil, ja: '信頼区間(過去)', en: 'CI(past)' },
+    'rrplog'     => { sel: nil, ja: '対数表示(過去)', en: 'Logscale(past)' },
 }
 
 #
@@ -161,8 +176,8 @@ Doses = {
     '5'    => { sel: nil, ja: '5', en: '5' },
     '6'    => { sel: nil, ja: '6', en: '6' },
     '7'    => { sel: nil, ja: '7', en: '7' },
-    'all'  => { sel: nil, ja: '全体', en: 'All',  },
-    'vaxx' => { sel: nil, ja: '接種者全体', en: 'All Vaxxed' },
+    'all'  => { sel: nil, ja: '全体平均', en: 'All Average',  },
+    'vaxx' => { sel: nil, ja: '接種者平均', en: 'Vaxxed Average' },
 }
 
 #
@@ -232,11 +247,11 @@ $legend = <<EOS
 EOS
 if $l == :ja
     $legend = <<EOS
-"legend": {"labelExpr": "datum.label == '0' ? '0 (未接種)' : (datum.label == 'all' ? '全体' : (datum.label == 'vaxx' ? '接種者全体' : datum.label))"},
+"legend": {"labelExpr": "datum.label == '0' ? '0 (未接種)' : (datum.label == 'all' ? '全体平均' : (datum.label == 'vaxx' ? '接種者平均' : datum.label))"},
 EOS
 else
     $legend = <<EOS
-"legend": {"labelExpr": "datum.label == '0' ? '0 (Unvaxx)' : (datum.label == 'all' ? 'All' : (datum.label == 'vaxx' ? 'All Vaxx' : datum.label))"},
+"legend": {"labelExpr": "datum.label == '0' ? '0 (Unvaxx)' : (datum.label == 'all' ? 'All Avg' : (datum.label == 'vaxx' ? 'Vaxx Avg' : datum.label))"},
 EOS
 end
 
@@ -244,7 +259,11 @@ if Lines['rr0ci'][:sel] || Lines['rr0log'][:sel]
     Lines['rr0'][:sel] = 'checked'
 end
 
-$opacity = Lines['rr0ci'][:sel] ? '' :
+if Lines['rrpci'][:sel] || Lines['rrplog'][:sel]
+    Lines['rrp'][:sel] = 'checked'
+end
+
+$opacity = (Lines['rr0ci'][:sel] || Lines['rrpci'][:sel]) ? '' :
                '"opacity": { "condition": {"param": "highlight", "value": 1}, "value": 0.1},'
 
 #
@@ -257,8 +276,7 @@ def add_commas(number)
   number.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
 end
 
-print_header(:title => Lang[$l.to_s][:title], :menu => Lang[$l.to_s][:menu],
-             :iframe => IFrame['true'][:sel])
+print_header(:title => Lang[$l.to_s][:title], :iframe => IFrame['true'][:sel])
 
 $must_not = []
 $must = []
@@ -270,9 +288,14 @@ data0 = elastic_search(
     #:filter => $must,
     #:should => [],
     :must_not => [],
+    # 年齢と系列を別々のbool filterにし、双方を必須にする。
+    # Require both age and source-series filters with separate bool clauses.
     :filter => [
         { bool: { should: [{ terms: { 'age.keyword': Ages.keys } }, { terms: { age: Ages.keys } }], minimum_should_match: 1 } },
-        { term: { step: Sources['org'][:sel] ? 'orgweek' : 'week' } }
+        { bool: { should: [
+            { terms: { 'step.keyword': Sources['org']&.dig(:sel) ? %w[org1 org3 org6 orgall] : %w[1 3 6 all] } },
+            { terms: { step: Sources['org']&.dig(:sel) ? %w[org1 org3 org6 orgall] : %w[1 3 6 all] } }
+        ], minimum_should_match: 1 } }
     ],
     :should => [],
     :source => [ 'doc_id', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
@@ -282,10 +305,13 @@ data0 = elastic_search(
 ).to_h { |datum| [datum.delete(:_id), datum] }
 
 $data = Hash.new
+cutoff = Date.parse('2024-07-01')
 data0.each do |k, datum|
     datum2 = datum.dup
-    k = k.sub(/_orgweek_/, '_week_')
-    datum2[:step] = 'week' if datum2[:step] == 'orgweek'
+    # 比較系列は内部計算用にorg接頭辞を外し、既存の系列lookupと同じIDへ揃える。
+    # Remove the org prefix for internal lookups so comparison data shares the normal series keys.
+    k = k.sub(/_org(1|3|6|all)_/, '_\1_')
+    datum2[:step] = datum2[:step].sub(/\Aorg/, '') if datum2[:step].is_a?(String)
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
     # Convert numeric strings only in calculation fields from the legacy index.
     %i[deaths persondays mortality lives rr0 lb0 ub0].each do |field|
@@ -294,12 +320,30 @@ data0.each do |k, datum|
 
         datum2[field] = value.include?('.') ? value.to_f : value.to_i
     end
+    begin
+        datum2[:period] = datum2[:period].sub('m', '-')
+    rescue
+        Log.error PP.pp(data0, '')
+        Log.error PP.pp(datum, '')
+        exit
+    end
     if $l == :en && Cities[datum2[:areacode]]
         datum2[:area] = Cities[datum2[:areacode]][:en]
     end
-    datum2[:mortality] = 0 if datum2[:mortality] == '-'
-    datum2[:rr0] = '-' if datum2[:rr0] == 0 || datum2[:rr0] == '0.0'
-    $data[k] = datum2
+    if Date.parse(datum2[:period] + '-01') < cutoff
+        if datum2[:step].to_s == '6'
+            if datum2[:period][5..6].to_i < 6
+                #datum2[:period] = [ datum2[:period], "--06"]
+                datum2[:period] += " --06"
+            elsif datum2[:period][5..6].to_i < 12
+                #datum2[:period] = [ datum2[:period], "--12"]
+                datum2[:period] += " --12"
+            end
+        end
+        datum2[:mortality] = 0 if datum2[:mortality] == '-'
+        datum2[:rr0] = '-' if datum2[:rr0] == 0 || datum2[:rr0] == '0.0'
+        $data[k] = datum2
+    end
 end
 
 # all を作る
@@ -376,6 +420,38 @@ end
 
 $data.merge!(data_all)
 
+# Risk Ratio against each area's past baseline:
+# <areacode>_1_2021m02_80+_0
+# Because period is converted from 2021m02 to 2021-02 above, find by fields.
+past0_by_area = Hash.new
+$data.values.each do |v|
+    next unless v[:step].to_s == '1'
+    next unless v[:period] == '2021-02'
+    next unless v[:age] == '80+'
+    next unless v[:dose].to_s == '0'
+    next unless v[:deaths].to_f > 0 && v[:persondays].to_f > 0
+
+    past0_by_area[v[:areacode]] = v
+end
+
+$data.each do |id, datum|
+    past0 = past0_by_area[datum[:areacode]]
+
+    if past0 && datum[:age] == '80+' && datum[:step].to_s == '1'
+        datum[:rrp], datum[:lbp], datum[:ubp], dummy =
+            rr_with_ci(datum[:deaths], datum[:persondays],
+                       past0[:deaths], past0[:persondays])
+    else
+        datum[:rrp] = '-'
+        datum[:lbp] = '-'
+        datum[:ubp] = '-'
+    end
+
+    datum[:rrp] = '-' if datum[:rrp] == 0 || datum[:rrp] == 0.0 || datum[:rrp] == '0.0'
+    datum[:lbp] = '-' if datum[:lbp] == 0 || datum[:lbp] == 0.0 || datum[:lbp] == '0.0'
+    datum[:ubp] = '-' if datum[:ubp] == 0 || datum[:ubp] == 0.0 || datum[:ubp] == '0.0'
+end
+
 #Log.debug PP.pp($data.values, '')
 
 print <<EOS
@@ -400,7 +476,7 @@ print <<EOS
     var doses = Array.from(document.querySelectorAll('input[name="doses"]:checked'),
                        checkbox => checkbox.value);
 
-    var queryString = 'afterdose.rb?l=' + l
+    var queryString = #{page_name.to_json} + '?l=' + l
                     + '&c=' + c.join('~')
                     + '&ages=' + ages.join('~')
                     + '&src=' + src
@@ -430,7 +506,25 @@ EOS
 end
 print <<EOS
   <br>
-  #{{ja: '週ごとの線 (80歳以上限定)', en: 'Weekly Lines (age 80+ only)'}[$l]}
+EOS
+print "#{{ja: '  月ごとの積上げ (', en: '  Monthly Stacks ('}[$l]}"
+Ages.each do |k, v|
+    print <<EOS
+  <span><input type="checkbox" name="ages" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
+EOS
+end
+print <<EOS
+  )
+EOS
+Stacks.each do |k, v|
+    next if k == 'mortality'
+    print <<EOS
+   <span><input type="checkbox" name="stacks" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
+EOS
+end
+print <<EOS
+  <br>
+  #{{ja: '月ごとの線 (80歳以上限定)', en: 'Monthly Lines (age 80+ only)'}[$l]}
 EOS
 Lines.each do |k, v|
     print <<EOS
@@ -438,7 +532,23 @@ Lines.each do |k, v|
 EOS
 end
 print <<EOS
+  <br>
+  #{{ja: '半年ごとの棒 (80歳以上限定)', en: 'Semiannual Bars (age 80+ only)'}[$l]}
+EOS
+Bars.each do |k, v|
+    print <<EOS
+   <span><input type="checkbox" name="types" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
+EOS
+end
+    print <<EOS
 <br>
+EOS
+#Omits.each do |k, v|
+#    print <<EOS
+#   <span><input type="checkbox" name="omits" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
+#EOS
+#end
+    print <<EOS
 #{{ja: '接種回数', en: 'Doses'}[$l]}
 EOS
 Doses.each do |k, v|
@@ -476,7 +586,7 @@ print <<EOS
       "width": "container",
       "resolve": { "scale": { "color": "independent" } },
 EOS
-if ! Lines['rr0ci'][:sel]
+if ! Lines['rr0ci'][:sel] && ! Lines['rrpci'][:sel]
     print <<EOS
       "params": [
         {
@@ -492,37 +602,111 @@ print <<EOS
 EOS
 $firstflag = true
 
+# 地域別・死因別の積み上げグラフを出力する。
+# Render stacked charts by area and cause of death.
+def print_stacks (code, city)
+    Ages.each do |age, v0|
+        next if ! v0[:sel]
+        Stacks.each do |type, v|
+            next if ! v[:sel]
+            title = {ja: " #{v0[$l]}の#{v[$l]}", en: ", #{v[$l]}, #{v0[$l]}"}[$l]
+            if age == '80+'
+                title += {ja: " (解析人数 #{$lives_80o}/#{$lives_all}",
+                          en: " (N=#{$lives_80o} from #{$lives_all}"}[$l]
+            else
+                title += {ja: " (解析人数 #{$lives_all}", en: " (N=#{$lives_all}"}[$l]
+            end
+            if type == 'mortality'
+                title += {ja: "、全死因、月ごと、10万人年死亡数)",
+                          en: ", all causes, monthly, per 100,000 person-years)"}[$l]
+            elsif type == 'deaths'
+                title += {ja: "、全死因、月ごと)",
+                          en: ", all causes, monthly)"}[$l]
+                type = 'deaths'
+            elsif type == 'persondays' || type == 'lives'
+                title += {ja: "、月ごと)",
+                          en: ", monthly)"}[$l]
+            else
+                next
+            end
+            if $firstflag
+                $firstflag = false
+            else
+                puts '        ,'
+            end
+            print <<EOS
+        {
+          "title": {
+            "text": ["", "#{city[$l]}#{title}"],
+            "anchor": "start"
+          },
+          "width": {"step": 21.4},
+          "height": #{$height},
+          "transform": [
+            {"filter": "#{$filter_1st[:expr]}"},
+            {"filter": "datum.areacode == '#{code}'"},
+            {"filter": "datum.step == '1'"},
+            {"filter": "datum.age == '#{age}'"},
+            {"calculate": "test(/all|vaxx/, datum.dose) ? 0 : datum.#{type}", "as": "adj"},
+            {"calculate": "indexof(['0','1','2','3','4','5','6','7','vaxx','all'], datum.dose)", "as": "順序"}
+          ],
+          "encoding": {
+            "x": {"title": null, "field": "period", "type": "nominal"},
+            "y": {
+              "title": null,
+              "field": "adj",
+              "type": "quantitative"
+            },
+            "tooltip": {
+              "field": "adj",
+              "type": "quantitative"
+            },
+            "order": {"field": "順序", "type": "quantitative", "sort": "ascending"},
+            #{$opacity}
+            "color": {
+              "field": "dose",
+              "scale": {"scheme": "magma", "reverse": true},
+              #{$legend}
+              "title": "#{{ja: '接種回数', en: 'Dose'}[$l]}"
+            }
+          },
+          "layer": [
+            {"mark": "area"}
+          ]
+        }
+EOS
+        end
+    end
+end
+
 Cities.each do |code, city|
     next if ! city[:sel]
 
-    $lives_all = add_commas($data["#{code}_week_W01_all_0"][:lives])
-    $lives_80o = add_commas($data["#{code}_week_W01_80+_0"][:lives])
+    $lives_all = add_commas($data["#{code}_6_2021m02_all_0"][:lives])
+    $lives_80o = add_commas($data["#{code}_6_2021m02_80+_0"][:lives])
 
+    print_stacks(code, city)
     Lines.each do |type, v|
         $logscale = ''
-        next if ! v[:sel] || type =~ /rr0ci|rr0log/
+        next if ! v[:sel] || type =~ /rr0ci|rr0log|rrpci|rrplog/
         title = {ja: " 80歳以上の#{v[$l]}", en: ", #{v[$l]}, 80+"}[$l]
         title += {ja: " (解析人数 #{$lives_80o}/#{$lives_all}",
                   en: " (N=#{$lives_80o} from #{$lives_all}"}[$l]
-        if type == 'mortality' || type == 'rr0'
-            title += {ja: "、全死因、週ごと、10万人年死亡数)",
-                      en: ", all causes, weekly, per 100,000 person-years)"}[$l]
+        if type == 'mortality' || type == 'rr0' || type == 'rrp'
+            title += {ja: "、全死因、月ごと、10万人年死亡数)",
+                      en: ", all causes, monthly, per 100,000 person-years)"}[$l]
             if type == 'rr0' && Lines['rr0log'][:sel]
                 $logscale = '"scale": {"type": "log", "domain": [0.2, 5]}, '
-            elsif type == 'mortality'
-                if Doses['all'][:sel] || Doses['vaxx'][:sel]
-                    $logscale = '"scale": {"domain": [0, 11000]}, ' # XXX
-                else
-                    $logscale = '"scale": {"domain": [0, 25000]}, ' # XXX
-                end
+            elsif type == 'rrp' && Lines['rrplog'][:sel]
+                $logscale = '"scale": {"type": "log", "domain": [0.2, 5]}, '
             end
         elsif type == 'deaths'
-            title += {ja: "、全死因、週ごと)",
-                      en: ", all causes, weekly)"}[$l]
+            title += {ja: "、全死因、月ごと)",
+                      en: ", all causes, monthly)"}[$l]
             type = 'deaths'
         elsif type == 'persondays' || type == 'lives'
-            title += {ja: "、週ごと)",
-                      en: ", weekly)"}[$l]
+            title += {ja: "、月ごと)",
+                      en: ", monthly)"}[$l]
         else
             next
         end
@@ -537,12 +721,12 @@ Cities.each do |code, city|
             "text": ["", "#{city[$l]}#{title}"],
             "anchor": "start"
           },
-          "width": {"step": 11},
+          "width": {"step": 21.4},
           "height": #{$height},
           "transform": [
             {"filter": "#{$filter_1st[:expr]}"},
             {"filter": "datum.areacode == '#{code}'"},
-            {"filter": "datum.step == 'week'"},
+            {"filter": "datum.step == '1'"},
             {"filter": "datum.age == '80+'"},
 EOS
         if type == 'rr0'
@@ -554,13 +738,8 @@ EOS
             {"filter": "#{$filter_vaxx}"}
           ],
           "encoding": {
-            "x": {
-              "title": null,
-              "field": "period",
-              "type": "nominal",
-              "axis": { "labelOverlap": "greedy" }
-            },
-             "y": {
+            "x": {"title": null, "field": "period", "type": "nominal"},
+            "y": {
               "title": null,
               "field": "#{type}",
               #{$logscale}
@@ -592,8 +771,82 @@ EOS
               }
             }
 EOS
+        elsif type == 'rrp' && Lines['rrpci'][:sel]
+            print <<EOS
+            ,
+            {
+              "mark": {"type": "rule", "clip": true},
+              "encoding": {
+                "y": { "field": "lbp", #{$logscale} "type": "quantitative" },
+                "y2": { "field": "ubp", #{$logscale} "type": "quantitative" }
+              }
+            }
+EOS
         end
         print <<EOS
+          ]
+        }
+EOS
+    end
+    Bars.each do |type, v|
+        next if ! v[:sel]
+        title = {ja: " 80歳以上の#{v[$l]} (解析人数 #{$lives_80o}/#{$lives_all}",
+                 en: ", #{v[$l]} 80+ (N=#{$lives_80o} from #{$lives_all}"}[$l]
+        if type == 'mortality'
+            title += {ja: "、全死因、半年ごと、10万人年死亡数)",
+                      en: ", all causes, semiannually, per 100,000 person-years)"}[$l]
+        elsif type == 'deaths'
+            title += {ja: "、全死因、半年ごと)",
+                      en: ", all causes, semiannually)"}[$l]
+            type = 'deaths'
+        elsif type == 'persondays' || type == 'lives'
+            title += {ja: "、半年ごと)",
+                      en: ", semiannually)"}[$l]
+        else
+            next
+        end
+        if $firstflag
+            $firstflag = false
+        else
+            puts '        ,'
+        end
+        print <<EOS
+        {
+          "title": {
+            "text": ["", "#{city[$l]}#{title}"],
+            "anchor": "start"
+          },
+          "width": {"step": "#{$filter_1st[:step]}"},
+          "height": #{$height},
+          "transform": [
+            {"filter": "#{$filter_1st[:expr]}"},
+            {"filter": "datum.areacode == '#{code}'"},
+            {"filter": "datum.step == '6'"},
+            {"filter": "datum.age == '80+'"},
+            {"filter": "#{$filter_vaxx}"}
+          ],
+          "encoding": {
+            "x": {"title": null, "field": "period", "type": "nominal", "axis": {"labelAngle": 0}},
+            "y": {
+              "title": null,
+              "field": "#{type}",
+              "type": "quantitative"
+            },
+            "xOffset": {"field": "dose"},
+            "tooltip": {
+              "field": "#{type}",
+              "type": "quantitative"
+            },
+            #{$opacity}
+            "color": {
+              "field": "dose",
+              "title": "#{{ja: '接種回数', en: 'Dose'}[$l]}",
+              #{$legend}
+              "scale": {"scheme": "magma", "reverse": true}
+            }
+          },
+          "layer": [
+            {"mark": "bar"}
           ]
         }
 EOS
@@ -613,7 +866,7 @@ if $l == :ja
    <li> 注意
    <ul>
      <li> 各市町村での市民の皆様による情報開示請求により得られたデータを解析しグラフを作成
-     <li> 死亡率は人年法により、接種回数別の接種後の週ごとに計算している
+     <li> 死亡率は人年法により、接種回数別の月ごとまたは半年ごとの計算している
      <li> 全市民の年齢区分と回数ごとの接種日と死亡している場合は死亡日の情報を利用
      <li> 非接種の場合も非接種であるという情報と死亡している場合は死亡日の情報を利用
      <li> 年齢はデータ開示時点の年齢または年齢区分から再現した仮想誕生日を基準に、各観察日の年齢として計算
@@ -637,7 +890,7 @@ else
   <li> Note:
   <ul>
     <li> Graphs were created by analyzing data obtained through information disclosure requests made by residents to each municipality
-    <li> Mortality rates are calculated by the person-year method weekly-after-dose for each number of vaccine doses
+    <li> Mortality rates are calculated by the person-year method, either monthly or semiannually, for each number of vaccine doses
     <li> Information on age group and vaccination date by dose for all residents was used, along with the date of death (for residents who had died)
     <li> For unvaccinated individuals, information indicating non-vaccination and the date of death (for residents who had died) was used
     <li> Age is calculated for each observation date from a reproducible virtual birthday derived from the disclosed age or age band

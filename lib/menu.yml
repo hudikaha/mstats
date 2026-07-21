@@ -1,7 +1,7 @@
 - href: kcor.rb
   ja: Kirsch累積アウトカム比（KCOR）
   en: Kirsch Cumulative Outcomes Ratio (KCOR)
-- href: vdeath2026.rb
+- href: vdeath.rb
   ja: 新型コロナワクチン接種回数と死亡数・死亡率(人年法、全死因による解析)
   en: COVID-19 Vaxx Doses and Deaths/Mortality in Japan
 - href: afterdose.rb
