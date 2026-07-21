@@ -114,8 +114,8 @@ Ages = {
 # Event-date source: regular steps come from public WKA; org steps use daily source records.
 Sources = if default_index == 'vdeath2026'
               {
-                  'anon' => { sel: nil, ja: '週単位匿名化data（公開・default）', en: 'Weekly-anonymized data (public/default)' },
-                  'org' => { sel: nil, ja: '日単位の元data（比較用）', en: 'Daily source data (comparison)' }
+                  'org' => { sel: nil, ja: '日単位の元データ（default）', en: 'Daily source data (default)' },
+                  'anon' => { sel: nil, ja: '公開した週単位匿名化データ（月次単純集計では誤差大・比較用）', en: 'Published weekly-anonymized data (comparison; monthly simple aggregation can differ substantially)' }
               }
           else
               { 'anon' => { sel: nil, ja: '従来data', en: 'Legacy data' } }
@@ -190,7 +190,7 @@ Consts = {
     'i'       => { hash: IFrame,  defaults: ['false'],     selected: 'checked'},
     'c'       => { hash: Cities,  defaults: Cities.keys,   selected: 'checked', keys: [] },
     'ages'    => { hash: Ages,    defaults:   ['all'],     selected: 'checked', keys: [] },
-    'src'     => { hash: Sources, defaults: ['anon'],      selected: 'checked', keys: [] },
+    'src'     => { hash: Sources, defaults: ['org'],       selected: 'checked', keys: [] },
     'stacks'  => { hash: Stacks,  defaults: ['deaths'],    selected: 'checked', keys: [] },
     'lines'   => { hash: Lines,   defaults: ['mortality', 'rr0', 'rr0log'], selected: 'checked', keys: [] },
     'bars'    => { hash: Bars,    defaults: ['mortality'], selected: 'checked', keys: [] },
