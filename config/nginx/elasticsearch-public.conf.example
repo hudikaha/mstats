@@ -1,7 +1,7 @@
 # Replace __PUBLIC_BASIC_AUTH__ with the Base64 encoding of account:password.
 # Keep the rendered configuration private on the server.
 
-location ~ ^/elastic/(?<es_index>mstats|kcor|vdeath|indiv|covid19|enmort)/(?<es_api>_search|_count|_mapping|_field_caps)$ {
+location ~ ^/elastic/(?<es_index>mstats|kcor|vdeath|indiv)/(?<es_api>_search|_count|_mapping|_field_caps)$ {
   limit_except GET POST OPTIONS { deny all; }
 
   if ($request_method = OPTIONS) {
@@ -24,7 +24,7 @@ location ~ ^/elastic/(?<es_index>mstats|kcor|vdeath|indiv|covid19|enmort)/(?<es_
   add_header Cache-Control "no-store" always;
 }
 
-location ~ ^/elastic/(?<es_index>mstats|kcor|vdeath|indiv|covid19|enmort)/_doc/(?<es_id>[^/]+)$ {
+location ~ ^/elastic/(?<es_index>mstats|kcor|vdeath|indiv)/_doc/(?<es_id>[^/]+)$ {
   limit_except GET OPTIONS { deny all; }
 
   if ($request_method = OPTIONS) {
