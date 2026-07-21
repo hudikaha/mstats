@@ -52,4 +52,6 @@ make jp132101     # 小金井市だけ
 make FORCE=1      # 既存出力も再生成
 ```
 
-公開ElasticSearchの`indiv`は生成済み`IND-WKA`を投入した個人単位datasetです。`vdeath`の通常系列はこのデータを再入力して計算し、日単位元個票からの`org*`系列は週丸めによる境界差を確認する検証用です。
+`*-IND-WKA.csv`と`*-DTH-WKA.csv`は、非公開の日単位個票CSVから生成した匿名化個票です。これらはそれぞれElasticSearchの[`indiv`](https://medicalfacts.info/elastic/indiv)と`indivdth`として公開します。公開個票は日付を週単位へ丸めているため、内部処理の再現・検証に使えますが、日単位の精度は失われています。
+
+[`vdeath.rb`](https://medicalfacts.info/vdeath.rb)のデフォルト表示は、公開用に匿名化する前の非公開日単位CSVから計算した、より精度の高い系列です。ページのsourceオプションで、公開`indiv`を再解析した匿名化データ系列も表示できます。両者を比較することで、週単位匿名化による集計差を確認できます。

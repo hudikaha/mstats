@@ -92,6 +92,7 @@ _source:
 | `kcor` | cutoff別KCOR集計 | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths` |
 | `vdeath` | 年齢区分・接種回数ごとの年齢補正済み接種後死亡分析 | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | 週単位匿名化個票（IND-WKA） | `id`, `vbirthday`, `date_doseN`, `date_death` |
+| `indivdth` | 死亡者のみの週単位匿名化個票（DTH-WKA） | `id`, `vbirthday`, `date_death` |
 
 ## 基本
 
@@ -310,7 +311,7 @@ curl -sS 'https://medicalfacts.info/elastic/mstats/_field_caps?fields=*'
 
 ## 公開範囲と注意
 
-- 使用できる公開名は`mstats`、`kcor`、`vdeath`、`indiv`です。
+- 使用できる公開名は`mstats`、`kcor`、`vdeath`、`indiv`、`indivdth`です。
 - endpointは`_search`、`_count`、`_mapping`、`_field_caps`、ID指定の`_doc/{id}`です。
 - methodは`GET`、`POST`、CORS preflightの`OPTIONS`だけです。`_doc/{id}`はGET限定です。
 - 書込み、削除、bulk投入、他のindexへのアクセスはできません。

@@ -182,6 +182,7 @@ PUBLIC_ELASTIC_INDEXES = {
     'kcor2025' => 'kcor',
     'vdeath' => 'vdeath',
     'indiv' => 'indiv',
+    'indivdth' => 'indivdth',
     'covid19' => 'covid19',
     'enmort' => 'enmort'
 }.freeze

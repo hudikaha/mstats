@@ -53,4 +53,13 @@ make jp132101     # Koganei only
 make FORCE=1      # regenerate existing outputs
 ```
 
-The public Elasticsearch `indiv` dataset is imported from generated `IND-WKA` files. The regular `vdeath` series is recalculated from those files, while `org*` series from daily source records are validation data for checking boundary differences introduced by weekly rounding.
+`*-IND-WKA.csv` and `*-DTH-WKA.csv` are anonymized individual records generated from
+private daily individual CSVs. They are published in Elasticsearch as [`indiv`](https://medicalfacts.info/elastic/indiv)
+and `indivdth`, respectively. Because their dates are rounded to ISO weeks, these
+public datasets support reproducibility and validation but do not retain daily precision.
+
+The default view of [`vdeath.rb`](https://medicalfacts.info/vdeath.rb) is calculated from
+the private daily CSVs before anonymization and therefore has higher precision. The
+page's source option can also display a series recalculated from the public `indiv`
+dataset. Comparing the two makes the aggregation differences caused by weekly
+anonymization visible.
