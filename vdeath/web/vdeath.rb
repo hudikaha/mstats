@@ -110,6 +110,17 @@ Ages = {
     '80+'  => { sel: nil, ja: '80歳以上', en: '80+' },
 }
 
+# 集計元の日付精度。通常stepは公開WKA、org stepは元の日単位個票から作る。
+# Event-date source: regular steps come from public WKA; org steps use daily source records.
+Sources = if default_index == 'vdeath2026'
+              {
+                  'anon' => { sel: nil, ja: '週単位匿名化data（公開・default）', en: 'Weekly-anonymized data (public/default)' },
+                  'org' => { sel: nil, ja: '日単位の元data（比較用）', en: 'Daily source data (comparison)' }
+              }
+          else
+              { 'anon' => { sel: nil, ja: '従来data', en: 'Legacy data' } }
+          end
+
 #
 # Types monthly stacks
 #
@@ -179,6 +190,7 @@ Consts = {
     'i'       => { hash: IFrame,  defaults: ['false'],     selected: 'checked'},
     'c'       => { hash: Cities,  defaults: Cities.keys,   selected: 'checked', keys: [] },
     'ages'    => { hash: Ages,    defaults:   ['all'],     selected: 'checked', keys: [] },
+    'src'     => { hash: Sources, defaults: ['anon'],      selected: 'checked', keys: [] },
     'stacks'  => { hash: Stacks,  defaults: ['deaths'],    selected: 'checked', keys: [] },
     'lines'   => { hash: Lines,   defaults: ['mortality', 'rr0', 'rr0log'], selected: 'checked', keys: [] },
     'bars'    => { hash: Bars,    defaults: ['mortality'], selected: 'checked', keys: [] },
@@ -276,13 +288,16 @@ data0 = elastic_search(
     #:filter => $must,
     #:should => [],
     :must_not => [],
-    :filter => [], # specify range in the future
-    # 旧text mappingと新keyword mappingの双方で、表示対象の年齢だけを取得する。
-    # Fetch only displayed ages with either the legacy text or new keyword mapping.
-    :should => [
-        { terms: { 'age.keyword': Ages.keys } },
-        { terms: { age: Ages.keys } }
+    # 年齢と系列を別々のbool filterにし、双方を必須にする。
+    # Require both age and source-series filters with separate bool clauses.
+    :filter => [
+        { bool: { should: [{ terms: { 'age.keyword': Ages.keys } }, { terms: { age: Ages.keys } }], minimum_should_match: 1 } },
+        { bool: { should: [
+            { terms: { 'step.keyword': Sources['org']&.dig(:sel) ? %w[org1 org3 org6 orgall] : %w[1 3 6 all] } },
+            { terms: { step: Sources['org']&.dig(:sel) ? %w[org1 org3 org6 orgall] : %w[1 3 6 all] } }
+        ], minimum_should_match: 1 } }
     ],
+    :should => [],
     :source => [ 'doc_id', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
     #:source => [],
     #:debug => 'SHOWONLY_QUERY',
@@ -293,6 +308,7 @@ $data = Hash.new
 cutoff = Date.parse('2024-07-01')
 data0.each do |k, datum|
     datum2 = datum.dup
+    datum2[:step] = datum2[:step].sub(/\Aorg/, '') if datum2[:step].is_a?(String)
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
     # Convert numeric strings only in calculation fields from the legacy index.
     %i[step deaths persondays mortality lives rr0 lb0 ub0].each do |field|
@@ -445,6 +461,7 @@ print <<EOS
                        checkbox => checkbox.value);
     var ages = Array.from(document.querySelectorAll('input[name="ages"]:checked'),
                        checkbox => checkbox.value);
+    var src = document.querySelector('input[name="src"]:checked').value;
     var stacks = Array.from(document.querySelectorAll('input[name="stacks"]:checked'),
                        checkbox => checkbox.value);
     var lines = Array.from(document.querySelectorAll('input[name="lines"]:checked'),
@@ -459,6 +476,7 @@ print <<EOS
     var queryString = #{page_name.to_json} + '?l=' + l
                     + '&c=' + c.join('~')
                     + '&ages=' + ages.join('~')
+                    + '&src=' + src
                     + '&stacks=' + stacks.join('~')
                     + '&lines=' + lines.join('~')
                     + '&bars=' + bars.join('~')
@@ -473,6 +491,14 @@ EOS
 Cities.each do |k, v|
     print <<EOS
    <span><input type="checkbox" name="c" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
+EOS
+end
+print <<EOS
+  <br>
+EOS
+Sources.each do |k, v|
+    print <<EOS
+   <span><input type="radio" name="src" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
 EOS
 end
 print <<EOS

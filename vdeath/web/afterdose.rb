@@ -10,15 +10,26 @@ require 'cgi'
 require 'date'
 require 'optparse'
 require 'pp'
-require './mfacts.rb'
-require './mstats.rb'
+mfacts = [
+    File.expand_path('../../lib/mfacts.rb', __dir__),
+    File.expand_path('lib/mfacts.rb', __dir__)
+].find { |path| File.file?(path) }
+abort 'lib/mfacts.rb not found' unless mfacts
+require mfacts
+
+mstats = [
+    File.expand_path('../lib/mstats.rb', __dir__),
+    File.expand_path('mstats.rb', __dir__)
+].find { |path| File.file?(path) }
+abort 'mstats.rb not found' unless mstats
+require mstats
 
 #
-# Debug opttion
+# Debug option
 #
 $opts = {
     debug: false,
-    index: "afterdose"
+    index: "vdeath2026"
 }
 
 op = OptionParser.new do |opts|
@@ -93,6 +104,11 @@ Ages = {
     '80+'  => { sel: nil, ja: '80歳以上', en: '80+' },
 }
 
+Sources = {
+    'anon' => { sel: nil, ja: '週単位匿名化data（公開・default）', en: 'Weekly-anonymized data (public/default)' },
+    'org' => { sel: nil, ja: '日単位の元data（比較用）', en: 'Daily source data (comparison)' }
+}
+
 #
 # Types weekly stacks
 #
@@ -159,6 +175,7 @@ Consts = {
     'i'       => { hash: IFrame,  defaults: ['false'],     selected: 'checked'},
     'c'       => { hash: Cities,  defaults: Cities.keys,   selected: 'checked', keys: [] },
     'ages'    => { hash: Ages,    defaults:   ['all'],     selected: 'checked', keys: [] },
+    'src'     => { hash: Sources, defaults: ['anon'],      selected: 'checked', keys: [] },
     'stacks'  => { hash: Stacks,  defaults: ['deaths'],    selected: 'checked', keys: [] },
     'lines'   => { hash: Lines,   defaults: ['mortality', 'rr0', 'rr0log'], selected: 'checked', keys: [] },
     'bars'    => { hash: Bars,    defaults: ['mortality'], selected: 'checked', keys: [] },
@@ -253,7 +270,10 @@ data0 = elastic_search(
     #:filter => $must,
     #:should => [],
     :must_not => [],
-    :filter => [], # specify range in the future
+    :filter => [
+        { bool: { should: [{ terms: { 'age.keyword': Ages.keys } }, { terms: { age: Ages.keys } }], minimum_should_match: 1 } },
+        { term: { step: Sources['org'][:sel] ? 'orgweek' : 'week' } }
+    ],
     :should => [],
     :source => [ 'doc_id', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
     #:source => [],
@@ -264,6 +284,7 @@ data0 = elastic_search(
 $data = Hash.new
 data0.each do |k, datum|
     datum2 = datum.dup
+    datum2[:step] = 'week' if datum2[:step] == 'orgweek'
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
     # Convert numeric strings only in calculation fields from the legacy index.
     %i[step deaths persondays mortality lives rr0 lb0 ub0].each do |field|
@@ -366,6 +387,7 @@ print <<EOS
                        checkbox => checkbox.value);
     var ages = Array.from(document.querySelectorAll('input[name="ages"]:checked'),
                        checkbox => checkbox.value);
+    var src = document.querySelector('input[name="src"]:checked').value;
     var stacks = Array.from(document.querySelectorAll('input[name="stacks"]:checked'),
                        checkbox => checkbox.value);
     var lines = Array.from(document.querySelectorAll('input[name="lines"]:checked'),
@@ -380,6 +402,7 @@ print <<EOS
     var queryString = 'afterdose.rb?l=' + l
                     + '&c=' + c.join('~')
                     + '&ages=' + ages.join('~')
+                    + '&src=' + src
                     + '&stacks=' + stacks.join('~')
                     + '&lines=' + lines.join('~')
                     + '&bars=' + bars.join('~')
@@ -394,6 +417,14 @@ EOS
 Cities.each do |k, v|
     print <<EOS
    <span><input type="checkbox" name="c" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
+EOS
+end
+print <<EOS
+  <br>
+EOS
+Sources.each do |k, v|
+    print <<EOS
+   <span><input type="radio" name="src" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
 EOS
 end
 print <<EOS

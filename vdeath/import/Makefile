@@ -27,17 +27,24 @@ $(1):
 	  for input in $$$$inputs $$$${(s:,:)headers}; do [[ "$$$$input" -nt "$$$$output" ]] && return 0; done; \
 	  return 1; \
 	}; \
+	anon="$(OUT_DIR)/$(2)_$(6).csv"; \
+	if needs "$$$$anon"; then \
+	  $(RUN) anonymize --headers "$$$$headers" $$$$opts --output "$$$$anon" $$$$inputs || exit $$$$?; \
+	fi; \
+	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_PY-ORG.csv"; then \
+	  $(RUN) personyear --headers "$$$$headers" --steps 1,3,6,all --step-prefix org --ages "$(AGES)" $$$$opts --output "$(OUT_DIR)/$(2)_PY-ORG.csv" $$$$inputs || exit $$$$?; \
+	fi; \
+	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_PY-WKD-ORG.csv"; then \
+	  $(RUN) afterdose --headers "$$$$headers" --weeks 1-99 --step-prefix org --ages 80+,all $$$$opts --output "$(OUT_DIR)/$(2)_PY-WKD-ORG.csv" $$$$inputs || exit $$$$?; \
+	fi; \
 	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_PY.csv"; then \
-	  $(RUN) personyear --headers "$$$$headers" --steps 1,3,6,all --ages "$(AGES)" $$$$opts --output "$(OUT_DIR)/$(2)_PY.csv" $$$$inputs || exit $$$$?; \
+	  $(RUN) personyear --steps 1,3,6,all --ages "$(AGES)" --output "$(OUT_DIR)/$(2)_PY.csv" "$$$$anon" || exit $$$$?; \
 	fi; \
 	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_PY-WKD.csv"; then \
-	  $(RUN) afterdose --headers "$$$$headers" --weeks 1-99 --ages 80+,all $$$$opts --output "$(OUT_DIR)/$(2)_PY-WKD.csv" $$$$inputs || exit $$$$?; \
+	  $(RUN) afterdose --weeks 1-99 --ages 80+,all --output "$(OUT_DIR)/$(2)_PY-WKD.csv" "$$$$anon" || exit $$$$?; \
 	fi; \
 	if needs "$(OUT_DIR)/$(2)_CUMD-WK.csv"; then \
 	  $(RUN) kcor --headers "$$$$headers" $$$$opts --output "$(OUT_DIR)/$(2)_CUMD-WK.csv" $$$$inputs || exit $$$$?; \
-	fi; \
-	if needs "$(OUT_DIR)/$(2)_$(6).csv"; then \
-	  $(RUN) anonymize --headers "$$$$headers" $$$$opts --output "$(OUT_DIR)/$(2)_$(6).csv" $$$$inputs || exit $$$$?; \
 	fi; \
 	elapsed=$$$$(( $$$$(date +%s) - start )); \
 	printf '%s\t%s\n' '$(1)' "$$$$elapsed" | tee "$(OUT_DIR)/timings/$(1).tsv"

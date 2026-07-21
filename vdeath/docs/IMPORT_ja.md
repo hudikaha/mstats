@@ -18,6 +18,11 @@ vdeathp.rb excess    [options] INPUT...
 - `anonymize`: 転入、転出、死亡、接種日をISO週の日曜へ丸めた匿名個票
 - `excess`: 接種歴を含まない長期個票にも使える年別死亡・年齢調整集計
 
+公開用の2段階処理では、最初に`anonymize`で`IND-WKA`を作り、そのCSVを入力として
+`personyear`または`afterdose`をもう一度実行します。この出力は通常の`1`、`3`、`6`、
+`all`、`week`を使います。日単位の元個票に`--step-prefix org`を付けて同じ集計を行うと、
+`org1`や`orgweek`という比較系列になります。
+
 共通optionは`--headers FILE[,FILE...]`、`--output FILE`、`--age-reference DATE`、
 `--age-seed-version VERSION`、`--open-age-max AGE`、`--allow-dup-id`、
 `--prohibit-reason-in`、`--report FILE`である。`--age-reference`を省略すると、全入力中の最終死亡日の翌日を年齢基準日にする。

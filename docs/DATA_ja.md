@@ -78,6 +78,11 @@ Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrec
 
 年齢は各期間中の年齢で判定し、誕生日を跨ぐperson-daysは前後の年齢階級へ分割します。
 
+公開index `vdeath2026`には日付精度の異なる2系列があります。通常の`1`、`3`、`6`、
+`all`、`week`は、公開した週単位匿名化`IND-WKA` CSVを再入力して計算した系列です。
+`org1`、`org3`、`org6`、`orgall`、`orgweek`は日単位の元個票から計算した比較系列です。
+各pageは通常系列をdefaultで使い、比較時だけ`org*`を選択します。
+
 ## afterdose / PY-WKD
 
 `PY-WKD`は`PY`と同じfieldを持ちますが、`step=week`、`period=W01`〜`W99`です。各接種状態の

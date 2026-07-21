@@ -18,6 +18,12 @@ vdeathp.rb excess    [options] INPUT...
 - `anonymize`: anonymous individual records with entry, exit, death, and dose dates rounded to ISO-week Sundays
 - `excess`: annual deaths and age-standardized results, including long-term records without vaccination histories
 
+The public two-pass workflow first runs `anonymize` to create `IND-WKA`, then
+runs `personyear` or `afterdose` again using that CSV. These outputs retain the
+regular steps (`1`, `3`, `6`, `all`, `week`). Running the aggregation on daily
+source records with `--step-prefix org` creates comparison steps such as
+`org1` and `orgweek`.
+
 Common options are `--headers FILE[,FILE...]`, `--output FILE`, `--age-reference DATE`,
 `--age-seed-version VERSION`, `--open-age-max AGE`, `--allow-dup-id`,
 `--prohibit-reason-in`, and `--report FILE`. When `--age-reference` is omitted, the day after the latest death in all inputs is used.

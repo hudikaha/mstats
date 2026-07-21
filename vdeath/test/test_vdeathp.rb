@@ -92,4 +92,12 @@ class VdeathpTest < Minitest::Test
       refute_empty rows, command
     end
   end
+
+  def test_step_prefix_distinguishes_source_date_results
+    personyear, = run_command('personyear', '--steps', '1,all', '--step-prefix', 'org', '--ages', 'all')
+    assert_equal %w[org1 orgall], personyear.map { |row| row['step'] }.uniq
+
+    afterdose, = run_command('afterdose', '--weeks', '1-2', '--step-prefix', 'org', '--ages', 'all')
+    assert_equal ['orgweek'], afterdose.map { |row| row['step'] }.uniq
+  end
 end

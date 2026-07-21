@@ -352,7 +352,7 @@ def run_personyear(dataset, opts)
   CSV.open(opts[:output], 'w') do |csv|
     csv << OUTPUT_HEADER
     definitions.each_with_index do |(step, _start, _finish, label), index|
-      emit_aggregate(csv, dataset, step, label, opts[:ages], sums_by_period[index])
+      emit_aggregate(csv, dataset, "#{opts[:step_prefix]}#{step}", label, opts[:ages], sums_by_period[index])
     end
   end
 end
@@ -406,7 +406,7 @@ def run_afterdose(dataset, opts)
   CSV.open(opts[:output], 'w') do |csv|
     csv << OUTPUT_HEADER
     opts[:weeks].each do |week|
-      emit_aggregate(csv, dataset, 'week', format('W%02d', week), opts[:ages], sums_by_week[week])
+      emit_aggregate(csv, dataset, "#{opts[:step_prefix]}week", format('W%02d', week), opts[:ages], sums_by_week[week])
     end
   end
 end
@@ -548,7 +548,7 @@ opts = {
   cutoff_start: Date.new(2021, 6, 1), cutoff_until: Date.new(2024, 5, 1),
   start_year: 2010, until_year: 2025, standard_year: 2025,
   age_reference: nil, age_seed_version: 'v1', open_age_max: 124,
-  allow_dup_id: false, prohibit_reason_in: false, debug: false, report: nil
+  step_prefix: '', allow_dup_id: false, prohibit_reason_in: false, debug: false, report: nil
 }
 
 parser = OptionParser.new do |option|
@@ -568,6 +568,7 @@ parser = OptionParser.new do |option|
   option.on('--age-reference DATE') { |value| opts[:age_reference] = Date.parse(value) }
   option.on('--age-seed-version VERSION') { |value| opts[:age_seed_version] = value }
   option.on('--open-age-max AGE', Integer) { |value| opts[:open_age_max] = value }
+  option.on('--step-prefix PREFIX') { |value| opts[:step_prefix] = value }
   option.on('--allow-dup-id') { opts[:allow_dup_id] = true }
   option.on('--prohibit-reason-in') { opts[:prohibit_reason_in] = true }
   option.on('--debug') { opts[:debug] = true; Log.level = Logger::DEBUG }

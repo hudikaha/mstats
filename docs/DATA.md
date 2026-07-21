@@ -84,6 +84,12 @@ period, age group, and dose count. It is the basic format used by `vdeath`.
 Age is evaluated within each period. Person-days crossing a virtual birthday
 are split between the age groups before and after that date.
 
+The public `vdeath2026` index has two date-precision series. Regular steps
+(`1`, `3`, `6`, `all`, and `week`) are calculated by re-reading published
+weekly-anonymized `IND-WKA` CSV. `org1`, `org3`, `org6`, `orgall`, and `orgweek`
+are comparison calculations from daily source records. The pages use regular
+steps by default and select `org*` only for comparison.
+
 ## afterdose / PY-WKD
 
 `PY-WKD` uses the same fields as `PY`, with `step=week` and periods `W01` through

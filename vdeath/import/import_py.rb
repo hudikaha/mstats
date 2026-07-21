@@ -12,7 +12,8 @@ options = {
   url: 'http://localhost:9200',
   credentials: File.expand_path('~/.config/mstats/espass.txt'),
   mapping: File.expand_path('../config/elasticsearch/vdeath2026.json', __dir__),
-  batch_size: 1_000
+  batch_size: 1_000,
+  replace: false
 }
 
 OptionParser.new do |parser|
@@ -22,6 +23,7 @@ OptionParser.new do |parser|
   parser.on('--credentials FILE', 'account:password file') { |v| options[:credentials] = v }
   parser.on('--mapping FILE', 'Index mapping JSON') { |v| options[:mapping] = v }
   parser.on('--batch-size N', Integer, 'Documents per bulk request') { |v| options[:batch_size] = v }
+  parser.on('--replace', 'Delete and recreate the destination index') { options[:replace] = true }
 end.parse!
 abort 'CSV file is required' if ARGV.empty?
 
@@ -56,8 +58,12 @@ head_request.basic_auth(account, password)
 head_http = Net::HTTP.new(head_uri.hostname, head_uri.port, nil)
 head_http.use_ssl = head_uri.scheme == 'https'
 head = head_http.start { |http| http.request(head_request) }
+if options[:replace] && head.is_a?(Net::HTTPSuccess)
+  es_request(base_uri, account, password, Net::HTTP::Delete, index_path)
+  head = nil
+end
 unless head.is_a?(Net::HTTPSuccess)
-  abort "Cannot inspect #{options[:index]}: HTTP #{head.code}" unless head.code == '404'
+  abort "Cannot inspect #{options[:index]}: HTTP #{head.code}" if head && head.code != '404'
 
   es_request(base_uri, account, password, Net::HTTP::Put, index_path, File.read(options[:mapping]))
 end
