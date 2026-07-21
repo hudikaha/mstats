@@ -10,6 +10,7 @@ INDIV_INDEX ?= indiv20260721
 INDIV_MAPPING := ../config/elasticsearch/$(INDIV_INDEX).json
 INDIV_FILES := $(wildcard $(OUT_DIR)/*_IND-WKA.csv)
 INDIV_PUBLIC_DIR ?= /home/magician/fujikawa/pub/kkcor
+INDIV_LOGSTASH_CONF ?= ../config/logstash/indiv.conf
 KKCOR_HOST ?= fujikawa.org
 KKCOR_DIR ?= /home/magician/fujikawa/pub/kkcor
 INDIVDTH_INDEX ?= indivdth20260721
@@ -38,6 +39,7 @@ indiv: indiv-check
 # English: Production imports expand the already-published compressed CSVs and feed them to Logstash.
 indiv-logstash-input:
 	@echo "Logstash input directory: $(INDIV_PUBLIC_DIR)"
+	@echo "Logstash config: $(INDIV_LOGSTASH_CONF)"
 
 # 日本語: 生成物を圧縮し、公開ディレクトリへ差分転送する。ElasticSearch投入はサーバ側Logstashで行う。
 # English: Compress generated files and transfer only changed files; server-side Logstash imports them.

@@ -114,7 +114,7 @@ rounded to two decimal places can therefore share the same fields. The mapping
 keeps dynamic fields enabled and applies the numeric rule through an
 `age_*` dynamic template.
 
-`config/logstash/mstats20260719.conf.example` is the tracked four-input
+`config/logstash/mstats.conf` is the tracked four-input
 template for monthly population, monthly causes, weekly Japanese causes, and
 weekly STMF data. Copy it to the server's private configuration location and
 provide `ES_PASSWORD` externally. After validation, the logical name
