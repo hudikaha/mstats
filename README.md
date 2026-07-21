@@ -10,11 +10,6 @@ provided as a RESTful API through Elasticsearch. The repository contains Ruby
 CGI pages, shared presentation code, data converters, Elasticsearch mappings,
 Logstash templates, and maintenance documentation.
 
-Source datasets, generated cumulative CSV files, credentials, and local
-Logstash configurations are not stored in this repository. They remain outside
-Git and are connected through local paths, environment variables, or symbolic
-links.
-
 ## Layout
 
 ```text
@@ -24,7 +19,6 @@ lib/       Shared menu, page layout, QR, and Elasticsearch helpers
 vdeath/    Vaccination/death analyses and KCOR
 web/       Other maintained CGI pages and converted static content
 docs/      Repository-wide architecture, data, and security notes
-data       Local symbolic link to an external data directory
 ```
 
 Component documentation is available in
@@ -47,14 +41,16 @@ scp web/example.rb fujikawa.org:fujikawa/covid19/example.rb
 
 ## Data
 
-Large datasets are not committed. The local `data` entry points to
-`~/work/mstats/data`; other source directories are also connected without
-copying their contents into Git. `cdeath/Makefile` provides fetch, validation,
-conversion, upload, and one-shot Logstash targets.
+Published data is divided into formats according to purpose:
 
-The common cause-of-death and population schema is called **mstats2026**. KCOR
-uses a separate `kcor2025` index because its document structure and query model
-differ from mstats2026.
+- `mstats`: mortality and population by country or area, month or week, cause, sex, and age group
+- `kcor`: weekly cumulative deaths after a cutoff for cohorts defined by dose count at that cutoff
+- `vdeath`: people, person-days, deaths, and mortality by municipality, period, age group, and dose count
+- `afterdose`: person-time and deaths by week since vaccination
+
+`mstats`, `kcor`, and `vdeath` can be queried through the
+[public Elasticsearch API](docs/ELASTICSEARCH_API.md). See [Data formats](docs/DATA.md)
+for record meanings, CSV fields, time and age conventions, and anonymization.
 
 ## Security
 
@@ -70,7 +66,7 @@ This software is available under the [MIT License](LICENSE).
 
 - [Documentation index](docs/README.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Data](docs/DATA.md)
+- [Data formats](docs/DATA.md)
 - [Security](docs/SECURITY.md)
 
 ## Text and comments

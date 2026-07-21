@@ -9,9 +9,6 @@
 Ruby CGI、共通表示処理、data変換、Elasticsearch mapping、Logstash template、
 保守文書を収録します。
 
-原data、生成した累積CSV、認証情報、ローカル固有のLogstash設定は収録しません。
-これらはGitの外に置き、ローカルpath、環境変数、symbolic linkで接続します。
-
 ## 構成
 
 ```text
@@ -21,11 +18,10 @@ lib/       共通menu、page layout、QR、Elasticsearch補助処理
 vdeath/    ワクチン接種・死亡分析とKCOR
 web/       その他の保守対象CGIと静的HTMLから変換した内容
 docs/      repository全体の構成、data、security文書
-data       外部data directoryへのローカルsymbolic link
 ```
 
 各分野の詳細は [`cdeath/README.md`](cdeath/README.md)、[データ](docs/DATA_ja.md)、
-[`vdeath/docs/KCOR.md`](vdeath/docs/KCOR.md) を参照してください。
+[`vdeath/docs/KCOR_ja.md`](vdeath/docs/KCOR_ja.md) を参照してください。
 
 ## Web application
 
@@ -42,12 +38,16 @@ scp web/example.rb fujikawa.org:fujikawa/covid19/example.rb
 
 ## データ
 
-大容量dataはcommitしません。ローカルの `data` は `~/work/mstats/data` を指し、他の
-source directoryも内容をGitへコピーせず接続します。`cdeath/Makefile` が取得、検証、
-変換、upload、一回限りのLogstash投入targetを提供します。
+公開データは目的に応じて次の形式に分かれます。
 
-死因と人口の共通形式を **mstats2026** と呼びます。KCORはdocument構造と検索modelが
-異なるため、別の `kcor2025` indexを使用します。
+- `mstats`: 国・地域、月・週、死因、性別、年齢階級ごとの死亡数と人口
+- `kcor`: cutoff時点の接種回数別cohortについて、その後の累積死亡数を週ごとに記録
+- `vdeath`: 自治体、期間、年齢階級、接種回数ごとの人数、person-days、死亡数、死亡率
+- `afterdose`: 接種からの経過週ごとのperson-timeと死亡数
+
+`mstats`、`kcor`、`vdeath`は[公開Elasticsearch API](docs/ELASTICSEARCH_API_ja.md)から
+検索できます。各recordとCSVのfield、年齢・期間・匿名化の定義は
+[データ形式](docs/DATA_ja.md)を参照してください。
 
 ## セキュリティ
 
@@ -63,7 +63,7 @@ password、token、非公開取得元credential、`.env`、machine固有Logstash
 
 - [文書索引](docs/README_ja.md)
 - [構成](docs/ARCHITECTURE_ja.md)
-- [データ](docs/DATA_ja.md)
+- [データ形式](docs/DATA_ja.md)
 - [セキュリティ](docs/SECURITY_ja.md)
 
 ## テキストとコメント
