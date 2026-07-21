@@ -10,11 +10,15 @@ INDIV_INDEX ?= indiv20260721
 INDIV_MAPPING := ../config/elasticsearch/$(INDIV_INDEX).json
 INDIV_FILES := $(wildcard $(OUT_DIR)/*_IND-WKA.csv)
 INDIV_PUBLIC_DIR ?= /home/magician/fujikawa/pub/kkcor
+KKCOR_HOST ?= fujikawa.org
+KKCOR_DIR ?= /home/magician/fujikawa/pub/kkcor
+INDIVDTH_INDEX ?= indivdth20260721
+INDIVDTH_FILE := $(OUT_DIR)/jp271004_Osaka-Osaka-JP_DTH-WKA.csv
 AGES := 00-09,10-19,20-29,30-39,40-49,50-59,60-69,70-79,80-89,90-99,100+,80+,all
 CITIES := jp132101 jp141500 jp221309 jp222267 jp232068 jp232076 jp271004 jp442054
 comma := ,
 
-.PHONY: all indiv-check indiv $(CITIES)
+.PHONY: all indiv-check indiv indivdth publish-kkcor $(CITIES)
 all: $(CITIES)
 
 # 日本語: 生成済みの週単位匿名化INDを検査し、ElasticSearch投入用の入力を固定する。
@@ -34,6 +38,17 @@ indiv: indiv-check
 # English: Production imports expand the already-published compressed CSVs and feed them to Logstash.
 indiv-logstash-input:
 	@echo "Logstash input directory: $(INDIV_PUBLIC_DIR)"
+
+# 日本語: 生成物を圧縮し、公開ディレクトリへ差分転送する。ElasticSearch投入はサーバ側Logstashで行う。
+# English: Compress generated files and transfer only changed files; server-side Logstash imports them.
+publish-kkcor: indiv-check
+	@mkdir -p /tmp/mstats-kkcor-upload
+	@for f in $(INDIV_FILES) $(INDIVDTH_FILE); do xz -c "$$f" > "/tmp/mstats-kkcor-upload/$$(basename "$$f").xz"; done
+	scp -p /tmp/mstats-kkcor-upload/*.xz $(KKCOR_HOST):$(KKCOR_DIR)/
+
+indivdth:
+	@test -s "$(INDIVDTH_FILE)"
+	@echo "$(INDIVDTH_INDEX): $(INDIVDTH_FILE)"
 
 # 日本語: 自治体ごとの差だけをここで宣言し、生成手順は共通化する。
 # English: Declare only municipality-specific differences here and share the generation procedure.
