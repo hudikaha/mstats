@@ -95,6 +95,7 @@ nonexistent ID returns HTTP 404 with `found` set to `false`.
 | `mstats` | Mortality, causes of death, and population | `id`, `loc_code`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
 | `kcor` | KCOR results by cutoff | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths` |
 | `vdeath` | Post-vaccination death analyses by age group and dose | `doc_id`, `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
+| `vdeath2026` | Age-adjusted comparison version of `vdeath` | Same as `vdeath` |
 
 ## Basics
 
@@ -315,7 +316,7 @@ curl -sS 'https://medicalfacts.info/elastic/mstats/_field_caps?fields=*'
 
 ## Public scope and limits
 
-- The only available indices are `mstats`, `kcor`, and `vdeath`.
+- The only available indices are `mstats`, `kcor`, `vdeath`, and `vdeath2026`.
 - The endpoints are `_search`, `_count`, `_mapping`, `_field_caps`, and
   `_doc/{id}` for direct ID retrieval.
 - Allowed methods are `GET`, `POST`, and CORS preflight `OPTIONS`. `_doc/{id}`

@@ -180,7 +180,8 @@ PUBLIC_ELASTIC_INDEXES = {
     'mstats2026' => 'mstats',
     'kcor' => 'kcor',
     'kcor2025' => 'kcor',
-    'vdeath' => 'vdeath'
+    'vdeath' => 'vdeath',
+    'vdeath2026' => 'vdeath2026'
 }.freeze
 
 # Elasticsearchを検索し、Symbolキーの統一レコード配列を返す。

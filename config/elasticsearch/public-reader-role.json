@@ -2,7 +2,7 @@
   "cluster": [],
   "indices": [
     {
-      "names": ["mstats", "kcor", "vdeath"],
+      "names": ["mstats", "kcor", "vdeath", "vdeath2026"],
       "privileges": ["read", "view_index_metadata"],
       "allow_restricted_indices": false
     }

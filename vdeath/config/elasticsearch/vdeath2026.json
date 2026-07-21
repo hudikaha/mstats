@@ -1,0 +1,31 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "index.max_result_window": 1000000,
+    "index.mapping.coerce": false
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "id": { "type": "keyword" },
+      "doc_id": { "type": "keyword" },
+      "areacode": { "type": "keyword" },
+      "area": { "type": "keyword" },
+      "areaj": { "type": "keyword" },
+      "step": { "type": "keyword" },
+      "period": { "type": "keyword" },
+      "age": { "type": "keyword" },
+      "dose": { "type": "keyword" },
+      "lives": { "type": "long" },
+      "persondays": { "type": "long" },
+      "deaths": { "type": "long" },
+      "lb0": { "type": "double" },
+      "ub0": { "type": "double" },
+      "rr0": { "type": "double" },
+      "lbm": { "type": "double" },
+      "ubm": { "type": "double" },
+      "mortality": { "type": "double" }
+    }
+  }
+}

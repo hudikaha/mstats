@@ -2,7 +2,7 @@
 
 English | [日本語](ELASTICSEARCH_PUBLIC_ja.md)
 
-`medicalfacts.info` publishes read-only searches for three datasets through
+`medicalfacts.info` publishes read-only searches for four datasets through
 HTTPS and nginx. Elasticsearch remains authenticated; browsers and API clients
 do not receive Elasticsearch credentials.
 
@@ -15,16 +15,17 @@ public name  Elasticsearch target
 mstats       alias -> mstats20260719
 kcor         alias -> kcor2025
 vdeath       index vdeath
+vdeath2026   index vdeath2026 (age-adjusted comparison data)
 ```
 
 The public paths are limited to:
 
 ```text
-/elastic/{mstats,kcor,vdeath}/_search
-/elastic/{mstats,kcor,vdeath}/_count
-/elastic/{mstats,kcor,vdeath}/_mapping
-/elastic/{mstats,kcor,vdeath}/_field_caps
-/elastic/{mstats,kcor,vdeath}/_doc/{id}
+/elastic/{mstats,kcor,vdeath,vdeath2026}/_search
+/elastic/{mstats,kcor,vdeath,vdeath2026}/_count
+/elastic/{mstats,kcor,vdeath,vdeath2026}/_mapping
+/elastic/{mstats,kcor,vdeath,vdeath2026}/_field_caps
+/elastic/{mstats,kcor,vdeath,vdeath2026}/_doc/{id}
 ```
 
 Only `GET`, `POST`, and CORS preflight `OPTIONS` are accepted. Direct document
@@ -57,7 +58,7 @@ must remain private under `/etc/nginx`.
 3. Render the private nginx configuration from the example.
 4. Run `nginx -t`.
 5. Reload nginx.
-6. Test all three aliases without client credentials.
+6. Test all four public names without client credentials.
 7. Confirm write APIs and unrelated indices return 403 or 404.
 
 Configure the internal listener from

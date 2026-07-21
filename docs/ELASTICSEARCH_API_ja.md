@@ -91,6 +91,7 @@ _source:
 | `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc_code`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
 | `kcor` | cutoff別KCOR集計 | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths` |
 | `vdeath` | 年齢区分・接種回数ごとの接種後死亡分析 | `doc_id`, `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
+| `vdeath2026` | `vdeath`の年齢補正比較版 | `vdeath`と同じ |
 
 ## 基本
 
@@ -309,7 +310,7 @@ curl -sS 'https://medicalfacts.info/elastic/mstats/_field_caps?fields=*'
 
 ## 公開範囲と注意
 
-- 使用できるindexは`mstats`、`kcor`、`vdeath`だけです。
+- 使用できるindexは`mstats`、`kcor`、`vdeath`、`vdeath2026`だけです。
 - endpointは`_search`、`_count`、`_mapping`、`_field_caps`、ID指定の`_doc/{id}`です。
 - methodは`GET`、`POST`、CORS preflightの`OPTIONS`だけです。`_doc/{id}`はGET限定です。
 - 書込み、削除、bulk投入、他のindexへのアクセスはできません。

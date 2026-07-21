@@ -26,11 +26,16 @@ abort 'mstats.rb not found' unless mstats
 require mstats
 
 #
-# Debug opttion
+# page名に対応するindexを選ぶ。vdeath.rbは従来index、vdeath2026.rbは年齢補正版を読む。
+# Select the matching index: vdeath.rb uses the legacy data and vdeath2026.rb the age-adjusted data.
+page_name = File.basename(ENV.fetch('SCRIPT_NAME', $PROGRAM_NAME))
+default_index = File.basename(page_name, '.rb')
+
+# Debug option
 #
 $opts = {
     debug: false,
-    index: "vdeath"
+    index: default_index
 }
 
 op = OptionParser.new do |opts|
@@ -272,7 +277,12 @@ data0 = elastic_search(
     #:should => [],
     :must_not => [],
     :filter => [], # specify range in the future
-    :should => [],
+    # 旧text mappingと新keyword mappingの双方で、表示対象の年齢だけを取得する。
+    # Fetch only displayed ages with either the legacy text or new keyword mapping.
+    :should => [
+        { terms: { 'age.keyword': Ages.keys } },
+        { terms: { age: Ages.keys } }
+    ],
     :source => [ 'doc_id', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
     #:source => [],
     #:debug => 'SHOWONLY_QUERY',
@@ -446,7 +456,7 @@ print <<EOS
     var doses = Array.from(document.querySelectorAll('input[name="doses"]:checked'),
                        checkbox => checkbox.value);
 
-    var queryString = 'vdeath.rb?l=' + l
+    var queryString = #{page_name.to_json} + '?l=' + l
                     + '&c=' + c.join('~')
                     + '&ages=' + ages.join('~')
                     + '&stacks=' + stacks.join('~')
