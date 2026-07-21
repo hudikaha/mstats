@@ -117,8 +117,8 @@ keeps dynamic fields enabled and applies the numeric rule through an
 `config/logstash/mstats.conf` is the tracked four-input
 template for monthly population, monthly causes, weekly Japanese causes, and
 weekly STMF data. Copy it to the server's private configuration location and
-provide `ES_PASSWORD` externally. After validation, the logical name
-`mstats2026` will be an alias for `mstats20260719`.
+provide `ES_PASSWORD` externally. The public logical name `mstats` is an alias
+for `mstats20260719`.
 
 The server has `/Users -> /home`, so `mstats2026.conf` follows the existing
 fixed-path convention and reads `/Users/magician/mstats/*.csv`. Import with one
@@ -131,5 +131,6 @@ sudo /usr/share/logstash/bin/logstash --path.settings /etc/logstash \
   -w 1 -r -f mstats2026.conf
 ```
 
-The target Elasticsearch index is `mstats2026`. The current `cdeath/web/cod.rb`
-continues to use `health` until its search queries are migrated separately.
+Logstash writes to the physical Elasticsearch index `mstats20260719`.
+`cdeath/web/cod.rb`, `cdeath/web/codtr.rb`, and `web/mort.rb` query the logical
+`mstats` alias through the read-only API.

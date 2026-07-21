@@ -31,7 +31,7 @@ require './mort-vars.rb'
 #
 $opts = {
     debug: false,
-    index: "mstats2026"
+    index: "mstats"
 }
 
 op = OptionParser.new do |opts|

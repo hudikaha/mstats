@@ -1588,7 +1588,7 @@ age_sources = if $adjustment != 'none' || per_capita_selected
               end
 
 data0 = elastic_search(
-    :index => 'mstats2026',
+    :index => 'mstats',
     :filter => [
         {'terms' => {'year' => required_years}},
         {'term' => {'loc_code' => 'jpn'}},

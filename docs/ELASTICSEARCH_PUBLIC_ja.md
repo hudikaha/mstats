@@ -2,7 +2,7 @@
 
 [English](ELASTICSEARCH_PUBLIC.md) | 日本語
 
-`medicalfacts.info` は、4つのdatasetをHTTPSとnginx経由で読取専用公開します。
+`medicalfacts.info` は、5つのdatasetをHTTPSとnginx経由で読取専用公開します。
 Elasticsearch自体の認証は維持し、browserやAPI clientには認証情報を渡しません。
 
 server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
@@ -13,19 +13,19 @@ server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
 公開名  Elasticsearchでの接続先
 mstats  alias -> mstats20260719
 kcor    alias -> kcor2025
-vdeath  index vdeath
-vdeath  年齢補正後の接種後死亡data
-indiv  alias -> indiv20260721（週単位匿名化IND）
+vdeath   index vdeath（年齢補正後の接種後死亡data）
+indiv    alias -> indiv20260721（週単位匿名化IND）
+indivdth 死亡者のみの週単位匿名化個票（DTH-WKA）
 ```
 
 公開pathは次に限定します。
 
 ```text
-/elastic/{mstats,kcor,vdeath,indiv}/_search
-/elastic/{mstats,kcor,vdeath,indiv}/_count
-/elastic/{mstats,kcor,vdeath,indiv}/_mapping
-/elastic/{mstats,kcor,vdeath,indiv}/_field_caps
-/elastic/{mstats,kcor,vdeath,indiv}/_doc/{id}
+/elastic/{mstats,kcor,vdeath,indiv,indivdth}/_search
+/elastic/{mstats,kcor,vdeath,indiv,indivdth}/_count
+/elastic/{mstats,kcor,vdeath,indiv,indivdth}/_mapping
+/elastic/{mstats,kcor,vdeath,indiv,indivdth}/_field_caps
+/elastic/{mstats,kcor,vdeath,indiv,indivdth}/_doc/{id}
 ```
 
 `GET`、`POST`、CORS preflightの`OPTIONS`だけを受け付けます。`_doc/{id}`による
@@ -57,7 +57,7 @@ account:password
 3. 設定例から非公開Nginx設定を生成する。
 4. `nginx -t`を実行する。
 5. Nginxをreloadする。
-6. client認証なしで4つの公開名を検証する。
+6. client認証なしで5つの公開名を検証する。
 7. 書込みAPIと対象外indexが403、404、または405になることを確認する。
 
 内部listenerは`config/nginx/elasticsearch-internal.conf.example`を基に設定し、

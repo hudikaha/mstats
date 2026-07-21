@@ -177,7 +177,6 @@ end
 # Use the read-only Nginx API on loopback for public datasets.
 PUBLIC_ELASTIC_INDEXES = {
     'mstats' => 'mstats',
-    'mstats2026' => 'mstats',
     'kcor' => 'kcor',
     'kcor2025' => 'kcor',
     'vdeath' => 'vdeath',

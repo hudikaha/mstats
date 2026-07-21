@@ -714,7 +714,7 @@ death_codes = $causes.keys.map{|type| CauseCodes.fetch(type)}
 source_age_fields = $ages.keys.map{|age| AgeFields.fetch(age, "age_#{age}")}
 
 data0 = elastic_search(
-    :index => 'mstats2026',
+    :index => 'mstats',
     :filter => [
         { 'range' => {'date' => {'gte' => "#{$oldest}-01-01", 'lt' => $data_before } } },
         { 'term' => {'category' => 'death'} },
