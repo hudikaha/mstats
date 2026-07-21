@@ -14,17 +14,18 @@ server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
 mstats  alias -> mstats20260719
 kcor    alias -> kcor2025
 vdeath  index vdeath
-vdeath2026  index vdeath2026（年齢補正の比較用data）
+vdeath  alias -> vdeath2026（年齢補正後の公開data）
+indiv  alias -> indiv20260721（週単位匿名化IND）
 ```
 
 公開pathは次に限定します。
 
 ```text
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_search
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_count
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_mapping
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_field_caps
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_doc/{id}
+/elastic/{mstats,kcor,vdeath,indiv}/_search
+/elastic/{mstats,kcor,vdeath,indiv}/_count
+/elastic/{mstats,kcor,vdeath,indiv}/_mapping
+/elastic/{mstats,kcor,vdeath,indiv}/_field_caps
+/elastic/{mstats,kcor,vdeath,indiv}/_doc/{id}
 ```
 
 `GET`、`POST`、CORS preflightの`OPTIONS`だけを受け付けます。`_doc/{id}`による

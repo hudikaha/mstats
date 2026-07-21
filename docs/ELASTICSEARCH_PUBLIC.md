@@ -15,17 +15,18 @@ public name  Elasticsearch target
 mstats       alias -> mstats20260719
 kcor         alias -> kcor2025
 vdeath       index vdeath
-vdeath2026   index vdeath2026 (age-adjusted comparison data)
+vdeath        alias -> vdeath2026 (age-adjusted public data)
+indiv         alias -> indiv20260721 (weekly-anonymized IND)
 ```
 
 The public paths are limited to:
 
 ```text
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_search
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_count
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_mapping
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_field_caps
-/elastic/{mstats,kcor,vdeath,vdeath2026}/_doc/{id}
+/elastic/{mstats,kcor,vdeath,indiv}/_search
+/elastic/{mstats,kcor,vdeath,indiv}/_count
+/elastic/{mstats,kcor,vdeath,indiv}/_mapping
+/elastic/{mstats,kcor,vdeath,indiv}/_field_caps
+/elastic/{mstats,kcor,vdeath,indiv}/_doc/{id}
 ```
 
 Only `GET`, `POST`, and CORS preflight `OPTIONS` are accepted. Direct document
