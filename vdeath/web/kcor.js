@@ -47,6 +47,19 @@
     [...document.querySelectorAll(`input.${className}:checked`)].map(input => input.value)
   );
 
+  // 年齢階級を下限年齢順に並べ、開放階級は同じ下限の通常階級より後に置く。
+  // Sort age groups by lower bound, placing an open-ended group after its bounded peer.
+  const compareAges = (a, b) => {
+    const ageKey = age => {
+      if (age === 'all') return [Number.POSITIVE_INFINITY, 1];
+      const lower = Number.parseInt(age, 10);
+      return [Number.isNaN(lower) ? Number.POSITIVE_INFINITY : lower, age.endsWith('+') ? 1 : 0];
+    };
+    const aKey = ageKey(a);
+    const bKey = ageKey(b);
+    return aKey[0] - bKey[0] || aKey[1] - bKey[1] || a.localeCompare(b);
+  };
+
   const rebuildSliceControls = (data, previous = {}) => {
     const areaItems = data.areas.map(area => ({
       value: area[0],
@@ -75,7 +88,7 @@
           records.forEach(row => areaMap.set(row.areacode, [row.areacode, row.area, row.areaj]));
           const areas = [...areaMap.values()].sort((a, b) => a[0].localeCompare(b[0]));
           const dates = [...new Set(records.map(row => row.date))].sort();
-          const ages = [...new Set(records.map(row => row.age))].sort();
+          const ages = [...new Set(records.map(row => row.age))].sort(compareAges);
           const areaIndex = new Map(areas.map((area, index) => [area[0], index]));
           const dateIndex = new Map(dates.map((date, index) => [date, index]));
           const ageIndex = new Map(ages.map((age, index) => [age, index]));
