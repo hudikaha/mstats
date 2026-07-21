@@ -90,8 +90,7 @@ _source:
 |---|---|---|
 | `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc_code`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
 | `kcor` | cutoff別KCOR集計 | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths` |
-| `vdeath` | 年齢区分・接種回数ごとの接種後死亡分析 | `doc_id`, `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
-| `vdeath` | 年齢補正済み接種後死亡分析。実体は`vdeath2026` | `vdeath`と同じ |
+| `vdeath` | 年齢区分・接種回数ごとの年齢補正済み接種後死亡分析 | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | 週単位匿名化個票（IND-WKA） | `id`, `vbirthday`, `date_doseN`, `date_death` |
 
 ## 基本

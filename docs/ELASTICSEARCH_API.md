@@ -94,8 +94,7 @@ nonexistent ID returns HTTP 404 with `found` set to `false`.
 |---|---|---|
 | `mstats` | Mortality, causes of death, and population | `id`, `loc_code`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
 | `kcor` | KCOR results by cutoff | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths` |
-| `vdeath` | Post-vaccination death analyses by age group and dose | `doc_id`, `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
-| `vdeath` | Age-adjusted vaccination/death analysis; backed by `vdeath2026` | Same as `vdeath` |
+| `vdeath` | Age-adjusted post-vaccination death analyses by age group and dose | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | Weekly-anonymized individual records (IND-WKA) | `id`, `vbirthday`, `date_doseN`, `date_death` |
 
 ## Basics
