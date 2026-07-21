@@ -308,7 +308,7 @@ EOF
     print '        "values": '
 
 data0 = elastic_search(
-    :index => 'en-mortality',
+    :index => 'enmort',
     :filter => [],
     :should => [],
     :source => [],

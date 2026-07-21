@@ -482,9 +482,8 @@ print <<EOF
       "data": {
 EOF
 
-uri = URI.parse("http://localhost:9200/covid19/_search")
+uri = URI.parse("http://localhost:8080/elastic/covid19/_search")
 request = Net::HTTP::Get.new(uri)
-elastic_basic_auth(request)
 request.content_type = "application/json"
 request.body = <<EOF
 {
