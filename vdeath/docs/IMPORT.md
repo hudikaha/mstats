@@ -54,15 +54,15 @@ make FORCE=1      # regenerate existing outputs
 ```
 
 `*-IND-WKA.csv` and `*-DTH-WKA.csv` are anonymized individual records generated from
-private daily individual CSVs. They are published in Elasticsearch as [`indiv`](https://medicalfacts.info/elastic/indiv)
+private daily individual CSVs. They are published in Elasticsearch as `indiv`
 and `indivdth`, respectively. Because their dates are rounded to ISO weeks, these
 public datasets support reproducibility and validation but do not retain daily precision.
 
 The default view of [`vdeath.rb`](https://medicalfacts.info/vdeath.rb) is calculated from
 the private daily CSVs before anonymization and therefore has higher precision. The
 page's `src` option can also display a series recalculated from the public
-[`indiv`](https://medicalfacts.info/elastic/indiv) dataset. Death-only records use the
-same anonymization format in [`indivdth`](https://medicalfacts.info/elastic/indivdth).
+`indiv` dataset. Death-only records use the
+same anonymization format in `indivdth`.
 Comparing the two makes the aggregation differences caused by weekly anonymization
 visible.
 
