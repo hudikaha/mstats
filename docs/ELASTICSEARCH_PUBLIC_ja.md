@@ -14,7 +14,7 @@ server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
 mstats  alias -> mstats20260719
 kcor    alias -> kcor2025
 vdeath  index vdeath
-vdeath  alias -> vdeath2026（年齢補正後の公開data）
+vdeath  年齢補正後の接種後死亡data
 indiv  alias -> indiv20260721（週単位匿名化IND）
 ```
 

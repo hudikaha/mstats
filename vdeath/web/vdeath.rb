@@ -26,11 +26,11 @@ abort 'mstats.rb not found' unless mstats
 require mstats
 
 #
-# page名に対応するindexを選ぶ。vdeath.rbは従来index、vdeath2026.rbは年齢補正版を読む。
-# Select the matching index: vdeath.rb uses the legacy data and vdeath2026.rb the age-adjusted data.
+# page名に対応するindexを選ぶ。公開vdeath.rbは年齢補正版の公開aliasを読む。
+# Select the index for the page. Public vdeath.rb uses the age-adjusted public alias.
 page_name = File.basename(ENV.fetch('SCRIPT_NAME', $PROGRAM_NAME))
-# 公開vdeath.rbは年齢補正済みvdeath2026 indexを既定にする。
-# The public vdeath.rb page defaults to the age-adjusted vdeath2026 index.
+# 公開vdeath.rbは年齢補正済み公開aliasを既定にする。
+# The public vdeath.rb page defaults to the age-adjusted public alias.
 default_index = page_name == 'vdeath.rb' ? 'vdeath' : File.basename(page_name, '.rb')
 
 # Debug option

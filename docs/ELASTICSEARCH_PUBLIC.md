@@ -15,7 +15,7 @@ public name  Elasticsearch target
 mstats       alias -> mstats20260719
 kcor         alias -> kcor2025
 vdeath       index vdeath
-vdeath        alias -> vdeath2026 (age-adjusted public data)
+vdeath        age-adjusted vaccination/death data
 indiv         alias -> indiv20260721 (weekly-anonymized IND)
 ```
 
