@@ -105,8 +105,8 @@ Ages = {
 }
 
 Sources = {
-    'org' => { sel: nil, ja: '日単位の元データ', en: 'Daily source data' },
-    'anon' => { sel: nil, ja: '週単位匿名化データ', en: 'Weekly-anonymized data' }
+    'org' => { sel: nil, ja: '日単位の元データから計算', en: 'Calculated from daily source data' },
+    'anon' => { sel: nil, ja: '公開した週単位匿名化から計算', en: 'Calculated from published weekly anonymization' }
 }
 
 #
@@ -616,8 +616,8 @@ if $l == :ja
      <li> 死亡率は人年法により、接種回数別の接種後の週ごとに計算している
      <li> 全市民の年齢区分と回数ごとの接種日と死亡している場合は死亡日の情報を利用
      <li> 非接種の場合も非接種であるという情報と死亡している場合は死亡日の情報を利用
-     <li> 年齢区分はデータ開示時点のものであり誕生日を迎えての区分変更処理はされていない
-     <li> 死者の年齢もデータ開示時点の年齢となっているので死亡時の年齢より高くなっている
+     <li> 年齢はデータ開示時点の年齢または年齢区分から再現した仮想誕生日を基準に、各観察日の年齢として計算
+     <li> 死亡時の年齢も、同じ仮想誕生日を基準に死亡日で計算
      <li> 2021年2月〜2024年6月までの期間を対象とした
      <li> 期間内に転出した市民や接種歴に抜けがある市民は解析の対象から除外した
      <li> 解析人数は除外した後の人数
@@ -640,8 +640,8 @@ else
     <li> Mortality rates are calculated by the person-year method weekly-after-dose for each number of vaccine doses
     <li> Information on age group and vaccination date by dose for all residents was used, along with the date of death (for residents who had died)
     <li> For unvaccinated individuals, information indicating non-vaccination and the date of death (for residents who had died) was used
-    <li> Age categories are based on the data as of the time of disclosure and do not reflect changes due to individuals aging into a new category
-    <li> The deceased's age is based on the data disclosure date and is thus older than at the time of death
+    <li> Age is calculated for each observation date from a reproducible virtual birthday derived from the disclosed age or age band
+    <li> Age at death is calculated on the death date using the same virtual birthday
     <li> The analysis covers the period from February 2021 to June 2024
     <li> Residents who moved out during the period or had discontinuous vaccination records were excluded from the analysis
     <li> The number of analyzed individuals is after these exclusions
