@@ -120,3 +120,11 @@ Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrec
 - APIではElasticsearchの`_id`と、`_source`内の`id`または`doc_id`が併存するdatasetがあります。
 
 正確な現在のmappingはAPIの`_mapping`または`_field_caps`で確認できます。
+
+## 匿名化と検証系列
+
+`IND-WKA`は公開用の週単位匿名化個票です。`vdeathp.rb anonymize`は日付をISO週の日曜日へ丸め、実際の誕生日を公開せず、年齢または年齢区分と個票IDのhashから再現可能な`vbirthday`（仮想誕生日）を生成します。仮想誕生日は実在の誕生日ではなく、同じ入力とseedで再生成する内部基準日です。
+
+公開`vdeath`の通常系列（`1`、`3`、`6`、`all`、`week`）は`IND-WKA`を再入力して計算します。`org1`、`org3`、`org6`、`orgall`、`orgweek`は日単位の元個票から計算した検証用比較系列です。ページは通常系列を既定表示とし、検証時だけ`org`系列を選べます。
+
+`vdeathp.rb`は`personyear`、`afterdose`、`kcor`、`anonymize`、`excess`のsubcommandを持ち、`import/Makefile`で自治体ごとの`IND-WKA`、`PY`、`PY-WKD`、`CUMD-WK`を生成します。

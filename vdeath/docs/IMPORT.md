@@ -52,3 +52,5 @@ make              # all municipalities
 make jp132101     # Koganei only
 make FORCE=1      # regenerate existing outputs
 ```
+
+The public Elasticsearch `indiv` dataset is imported from generated `IND-WKA` files. The regular `vdeath` series is recalculated from those files, while `org*` series from daily source records are validation data for checking boundary differences introduced by weekly rounding.

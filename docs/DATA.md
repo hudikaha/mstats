@@ -129,3 +129,11 @@ from original records and results after re-import.
 - Some datasets contain both the Elasticsearch `_id` and an `id` or `doc_id` field in `_source`.
 
 Use the API `_mapping` or `_field_caps` endpoint to inspect the exact current mapping.
+
+## Anonymization and comparison series
+
+`IND-WKA` is the published weekly-anonymized individual dataset. `vdeathp.rb anonymize` rounds event dates to ISO-week Sundays and does not publish actual birthdays. It derives a reproducible `vbirthday` from the age or age-group range, source-ID hash, and seed version. This is a virtual birthday, not an actual birthday, and is an internal reference date reproducible from the same input and seed.
+
+The regular public `vdeath` series (`1`, `3`, `6`, `all`, and `week`) is calculated by re-importing `IND-WKA`. The validation series (`org1`, `org3`, `org6`, `orgall`, and `orgweek`) is calculated from daily source records. Pages default to the regular series and expose `org` only for comparison.
+
+`vdeathp.rb` provides `personyear`, `afterdose`, `kcor`, `anonymize`, and `excess` subcommands. `import/Makefile` generates municipality-level `IND-WKA`, `PY`, `PY-WKD`, and `CUMD-WK` outputs together.

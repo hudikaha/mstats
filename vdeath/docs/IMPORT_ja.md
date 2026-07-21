@@ -51,3 +51,5 @@ make              # 全自治体
 make jp132101     # 小金井市だけ
 make FORCE=1      # 既存出力も再生成
 ```
+
+公開ElasticSearchの`indiv`は生成済み`IND-WKA`を投入した個人単位datasetです。`vdeath`の通常系列はこのデータを再入力して計算し、日単位元個票からの`org*`系列は週丸めによる境界差を確認する検証用です。
