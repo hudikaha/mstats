@@ -31,7 +31,7 @@ require mstats
 page_name = File.basename(ENV.fetch('SCRIPT_NAME', $PROGRAM_NAME))
 # 公開vdeath.rbは年齢補正済みvdeath2026 indexを既定にする。
 # The public vdeath.rb page defaults to the age-adjusted vdeath2026 index.
-default_index = page_name == 'vdeath.rb' ? 'vdeath2026' : File.basename(page_name, '.rb')
+default_index = page_name == 'vdeath.rb' ? 'vdeath' : File.basename(page_name, '.rb')
 
 # Debug option
 #
@@ -114,7 +114,7 @@ Ages = {
 
 # 集計元の日付精度。通常stepは公開WKA、org stepは元の日単位個票から作る。
 # Event-date source: regular steps come from public WKA; org steps use daily source records.
-Sources = if default_index == 'vdeath2026'
+Sources = if default_index == 'vdeath'
               {
                   'org' => { sel: nil, ja: '日単位の元データから計算', en: 'Calculated from daily source data' },
                   'anon' => { sel: nil, ja: '公開した週単位匿名化から計算(月次単純集計なので月ごとは誤差大)', en: 'Calculated from published weekly anonymization (monthly simple aggregation has large month-to-month errors)' }
