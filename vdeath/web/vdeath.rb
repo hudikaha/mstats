@@ -65,7 +65,7 @@ Lang = {
     'en' => { sel: nil, ja: 'English', en: 'English',
               menu: 'menu_e.js', title: 'COVID-19 Vaxx Doses and Deaths/Mortality in Japan (All Causes, Person-year Analysis)'},
               'ja' => { sel: nil, ja: '日本語', en: '日本語',
-              menu: 'menu.js', title: '新型コロナワクチン接種回数と死亡数・死亡率(人年法、全死因による解析)'},
+              menu: 'menu.js', title: '新型コロナワクチン接種回数と死亡数・死亡率(全死因、人年法による解析)'},
 }
 
 #
