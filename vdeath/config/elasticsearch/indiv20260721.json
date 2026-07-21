@@ -1,0 +1,21 @@
+{
+  "settings": {"index.max_result_window": 1000000},
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "id":{"type":"keyword"},"areacode":{"type":"keyword"},"area":{"type":"keyword"},"areaj":{"type":"keyword"},
+      "age":{"type":"keyword"},"date_age":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"vbirthday":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},
+      "cweek_in":{"type":"keyword"},"date_in":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"cweek_out":{"type":"keyword"},"date_out":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},
+      "cweek_death":{"type":"keyword"},"date_death":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"dose_final":{"type":"integer"},
+      "cweek_dose1":{"type":"keyword"},"date_dose1":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose1":{"type":"keyword"},
+      "cweek_dose2":{"type":"keyword"},"date_dose2":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose2":{"type":"keyword"},
+      "cweek_dose3":{"type":"keyword"},"date_dose3":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose3":{"type":"keyword"},
+      "cweek_dose4":{"type":"keyword"},"date_dose4":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose4":{"type":"keyword"},
+      "cweek_dose5":{"type":"keyword"},"date_dose5":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose5":{"type":"keyword"},
+      "cweek_dose6":{"type":"keyword"},"date_dose6":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose6":{"type":"keyword"},
+      "cweek_dose7":{"type":"keyword"},"date_dose7":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose7":{"type":"keyword"},
+      "cweek_dose8":{"type":"keyword"},"date_dose8":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose8":{"type":"keyword"},
+      "cweek_dose9":{"type":"keyword"},"date_dose9":{"type":"date","format":"yyyy-MM-dd||strict_date_optional_time"},"pharma_dose9":{"type":"keyword"}
+    }
+  }
+}

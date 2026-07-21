@@ -6,12 +6,34 @@ OUT_DIR ?= ../outputs
 RUBY ?= ruby
 SCRIPT := ./vdeathp.rb
 RUN := $(RUBY) $(SCRIPT)
+INDIV_INDEX ?= indiv20260721
+INDIV_MAPPING := ../config/elasticsearch/$(INDIV_INDEX).json
+INDIV_FILES := $(wildcard $(OUT_DIR)/*_IND-WKA.csv)
+INDIV_PUBLIC_DIR ?= /home/magician/fujikawa/pub/kkcor
 AGES := 00-09,10-19,20-29,30-39,40-49,50-59,60-69,70-79,80-89,90-99,100+,80+,all
 CITIES := jp132101 jp141500 jp221309 jp222267 jp232068 jp232076 jp271004 jp442054
 comma := ,
 
-.PHONY: all $(CITIES)
+.PHONY: all indiv-check indiv $(CITIES)
 all: $(CITIES)
+
+# 日本語: 生成済みの週単位匿名化INDを検査し、ElasticSearch投入用の入力を固定する。
+# English: Validate the generated weekly-anonymized IND files used for Elasticsearch import.
+indiv-check:
+	@test -s "$(INDIV_MAPPING)"
+	@test $(words $(INDIV_FILES)) -eq 7
+	@for f in $(INDIV_FILES); do head -1 "$$f" | grep -q 'vbirthday' || { echo "missing vbirthday: $$f"; exit 1; }; done
+	@wc -l $(INDIV_FILES)
+
+# 日本語: 実行時に index を置換して公開 alias はサーバ側で indiv に向ける。
+# English: Replace the versioned index at import time; the server publishes it through alias indiv.
+indiv: indiv-check
+	$(RUBY) ./import_indiv.rb --index "$(INDIV_INDEX)" --mapping "$(INDIV_MAPPING)" --replace $(INDIV_FILES)
+
+# 日本語: 本番ではscpで再転送せず、公開済み圧縮CSVを展開してLogstashに読ませる。
+# English: Production imports expand the already-published compressed CSVs and feed them to Logstash.
+indiv-logstash-input:
+	@echo "Logstash input directory: $(INDIV_PUBLIC_DIR)"
 
 # 日本語: 自治体ごとの差だけをここで宣言し、生成手順は共通化する。
 # English: Declare only municipality-specific differences here and share the generation procedure.
