@@ -2,11 +2,13 @@
 
 English | [日本語](README_ja.md)
 
-`mstats` is the source repository for mortality, cause-of-death, population,
-vaccination, and related statistical visualizations published at
-[medicalfacts.info](https://medicalfacts.info/). It contains Ruby CGI pages,
-shared presentation code, data converters, Elasticsearch mappings, Logstash
-templates, and maintenance documentation.
+`mstats` is a repository for medical statistics. It retrieves and analyzes
+statistics published by governments and other organizations and, when needed,
+reprocesses them into consistent formats. The results are presented as graphs
+and other forms at [medicalfacts.info](https://medicalfacts.info/) and are also
+provided as a RESTful API through Elasticsearch. The repository contains Ruby
+CGI pages, shared presentation code, data converters, Elasticsearch mappings,
+Logstash templates, and maintenance documentation.
 
 Source datasets, generated cumulative CSV files, credentials, and local
 Logstash configurations are not stored in this repository. They remain outside

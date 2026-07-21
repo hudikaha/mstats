@@ -2,9 +2,12 @@
 
 [English](README.md) | 日本語
 
-`mstats` は、[medicalfacts.info](https://medicalfacts.info/) で公開する死亡、
-死因、人口、ワクチン接種および関連統計グラフのソースrepositoryです。Ruby CGI、
-共通表示処理、data変換、Elasticsearch mapping、Logstash template、保守文書を収録します。
+`mstats` は、医療に関わる統計情報（medical statistics）を扱うrepositoryです。
+政府やその他の組織が公表する統計情報を取得・解析し、必要に応じて形式を統一するために
+再加工したうえで、[medicalfacts.info](https://medicalfacts.info/) においてグラフなどの形で
+提供します。また、ElasticsearchによるRESTful APIとしてdataを提供します。
+Ruby CGI、共通表示処理、data変換、Elasticsearch mapping、Logstash template、
+保守文書を収録します。
 
 原data、生成した累積CSV、認証情報、ローカル固有のLogstash設定は収録しません。
 これらはGitの外に置き、ローカルpath、環境変数、symbolic linkで接続します。
