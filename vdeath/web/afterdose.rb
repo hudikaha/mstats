@@ -287,7 +287,7 @@ data0.each do |k, datum|
     datum2[:step] = 'week' if datum2[:step] == 'orgweek'
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
     # Convert numeric strings only in calculation fields from the legacy index.
-    %i[step deaths persondays mortality lives rr0 lb0 ub0].each do |field|
+    %i[deaths persondays mortality lives rr0 lb0 ub0].each do |field|
         value = datum2[field]
         next unless value.is_a?(String) && value.match?(/\A-?\d+(?:\.\d+)?\z/)
 

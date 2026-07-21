@@ -311,7 +311,7 @@ data0.each do |k, datum|
     datum2[:step] = datum2[:step].sub(/\Aorg/, '') if datum2[:step].is_a?(String)
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
     # Convert numeric strings only in calculation fields from the legacy index.
-    %i[step deaths persondays mortality lives rr0 lb0 ub0].each do |field|
+    %i[deaths persondays mortality lives rr0 lb0 ub0].each do |field|
         value = datum2[field]
         next unless value.is_a?(String) && value.match?(/\A-?\d+(?:\.\d+)?\z/)
 
@@ -328,7 +328,7 @@ data0.each do |k, datum|
         datum2[:area] = Cities[datum2[:areacode]][:en]
     end
     if Date.parse(datum2[:period] + '-01') < cutoff
-        if datum2[:step] == 6
+        if datum2[:step].to_s == '6'
             if datum2[:period][5..6].to_i < 6
                 #datum2[:period] = [ datum2[:period], "--06"]
                 datum2[:period] += " --06"
