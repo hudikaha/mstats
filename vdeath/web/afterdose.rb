@@ -284,6 +284,7 @@ data0 = elastic_search(
 $data = Hash.new
 data0.each do |k, datum|
     datum2 = datum.dup
+    k = k.sub(/_orgweek_/, '_week_')
     datum2[:step] = 'week' if datum2[:step] == 'orgweek'
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
     # Convert numeric strings only in calculation fields from the legacy index.

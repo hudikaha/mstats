@@ -308,6 +308,9 @@ $data = Hash.new
 cutoff = Date.parse('2024-07-01')
 data0.each do |k, datum|
     datum2 = datum.dup
+    # 比較系列は内部計算用にorg接頭辞を外し、既存の系列lookupと同じIDへ揃える。
+    # Remove the org prefix for internal lookups so comparison data shares the normal series keys.
+    k = k.sub(/_org(1|3|6|all)_/, '_\1_')
     datum2[:step] = datum2[:step].sub(/\Aorg/, '') if datum2[:step].is_a?(String)
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
     # Convert numeric strings only in calculation fields from the legacy index.
