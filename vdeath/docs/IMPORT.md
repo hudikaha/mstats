@@ -63,3 +63,8 @@ the private daily CSVs before anonymization and therefore has higher precision. 
 page's source option can also display a series recalculated from the public `indiv`
 dataset. Comparing the two makes the aggregation differences caused by weekly
 anonymization visible.
+
+The difference can sometimes be seen directly in the graph. It could be reduced
+somewhat by allocating records from weeks crossing a month boundary between the
+adjacent months according to the number of days, but that adjustment is not currently
+implemented.
