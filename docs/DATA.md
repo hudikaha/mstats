@@ -7,7 +7,7 @@ The data handled by this repository consists of `mstats`, `kcor`, `vdeath`, and
 generate and validate them. See [Using the Elasticsearch API](ELASTICSEARCH_API.md)
 for public query examples.
 
-## mstats
+## mstats (no public CSV)
 
 One `mstats` record represents values for a location, period, category, cause,
 sex, and series, with totals and available age groups. Monthly records contain
@@ -40,7 +40,7 @@ IDs normally join location, period, category, rate, cause, algorithm, type, and
 sex with `_`. For example, `jpn_2009w02_death__00000__both` is the source-value
 record for Japan, ISO week 2 of 2009, all causes, and both sexes.
 
-## kcor / CUMD-WK
+## kcor / CUMD-WK (public CSV: `*-CUMD-WK.csv.xz` in the [kkcor directory](https://fujikawa.org/pub/kkcor/))
 
 One `kcor` record contains cumulative deaths through a particular week for a
 cohort fixed by age group and dose count at the cutoff. Its source CSV suffix is
@@ -60,7 +60,7 @@ cohort fixed by age group and dose count at the cutoff. Its source CSV suffix is
 
 The web application queries `/elastic/kcor/_search` for the selected cutoff.
 
-## vdeath / PY
+## vdeath / PY (no public PY CSV; displayed through Elasticsearch)
 
 One `PY` record represents person-time and deaths for a municipality, aggregation
 period, age group, and dose count. It is the basic format used by `vdeath`.
@@ -90,13 +90,13 @@ weekly-anonymized `IND-WKA` CSV. `org1`, `org3`, `org6`, `orgall`, and `orgweek`
 are comparison calculations from daily source records. The pages use regular
 steps by default and select `org*` only for comparison.
 
-## afterdose / PY-WKD
+## afterdose / PY-WKD (no public CSV; displayed through Elasticsearch)
 
 `PY-WKD` uses the same fields as `PY`, with `step=week` and periods `W01` through
 `W99`. It records person-time and deaths by week since the beginning of each dose
 state. That state ends at the next dose, death, move out, or observation limit.
 
-## IND-WKA / DTH-WKA
+## IND-WKA / DTH-WKA (public CSV: [kkcor directory](https://fujikawa.org/pub/kkcor/); Japanese names are in the [Japanese directory](https://fujikawa.org/pub/kkcor/ja/))
 
 `IND-WKA` is an anonymized individual-record CSV. `DTH-WKA` is the suffix used
 when the source contains death records only. Original record IDs are not
