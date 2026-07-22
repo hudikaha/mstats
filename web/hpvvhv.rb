@@ -14,6 +14,7 @@ lang = cgi['l'] == 'en' ? 'en' : 'ja'
 age  = %w[20- 25- 30- 35- 40-].include?(cgi['age']) ? cgi['age'].delete('-') : '20'
 start = %w[2011 2022].include?(cgi['start']) ? cgi['start'] : '2011'
 deaths = cgi['deaths'] == '1' ? 'true' : 'false'
+denominator = cgi['denominator'] == 'population' ? 'population' : 'allcause'
 
 menu_out = StringIO.new
 $stdout = menu_out
@@ -28,6 +29,7 @@ html = <<~'HTMLDOC'
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title id="pageTitleTag"></title>
 <style>
 .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
@@ -42,6 +44,19 @@ body.lang-en [data-language-content="en"] { display:block; }
 body.lang-ja .note-list[data-language-content="ja"],
 body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .source-item { margin-bottom:10px; }
+#upperCharts { display:flex;gap:18px;align-items:stretch; }
+#chartAllPanel { flex:1 1 100%;min-width:0; }
+#comparePanel { flex:0 0 38%;min-width:310px;border:0.5px solid #e1e0d9;border-radius:8px;padding:12px;box-sizing:border-box; }
+#compareSummary { font-size:13px;color:#52514e;line-height:1.35;margin-top:8px; }
+#compareLegend { display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#52514e;margin-top:4px; }
+.compare-year { padding:7px 0;border-top:0.5px solid #e1e0d9; }
+.compare-year:first-child { border-top:none; }
+.compare-row { display:flex;justify-content:space-between;gap:10px; }
+.compare-row span:last-child { white-space:nowrap;font-variant-numeric:tabular-nums; }
+@media (max-width:760px) {
+  #upperCharts { flex-direction:column; }
+  #comparePanel { flex-basis:auto;min-width:0;width:100%; }
+}
 </style>
 </head>
 <body class="lang-__LANG__">
@@ -90,10 +105,28 @@ __MENU__
 
 <div id="chartAllHeading" style="font-size:16px;color:#52514e;margin:6px 0 2px"></div>
 <div id="chartAllSub" style="display:none"></div>
+<div id="upperCharts">
+<div id="chartAllPanel">
 <div style="position:relative;width:100%;height:280px">
 <canvas id="chartAll" role="img"></canvas>
 </div>
 <div id="legendAll" style="display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 6px"></div>
+</div>
+<aside id="comparePanel" hidden>
+<div id="compareHeading" style="font-size:15px;color:#52514e;margin-bottom:8px"></div>
+<div style="display:flex;justify-content:center;margin-bottom:8px">
+<div style="display:inline-flex;border:0.5px solid #c3c2b7;border-radius:8px;overflow:hidden">
+<button id="btnDenomAll" type="button" style="padding:5px 13px;font-size:14px;border:none;cursor:pointer;background:#2a78d6;color:#fff"></button>
+<button id="btnDenomPopulation" type="button" style="padding:5px 13px;font-size:14px;border:none;cursor:pointer;background:transparent;color:#52514e"></button>
+</div>
+</div>
+<div style="position:relative;width:100%;height:150px">
+<canvas id="chartCompare" role="img"></canvas>
+</div>
+<div id="compareLegend"></div>
+<div id="compareSummary"></div>
+</aside>
+</div>
 
 <div id="chartZoomHeading" style="font-size:16px;color:#52514e;margin:28px 0 2px;border-top:0.5px solid #e1e0d9;padding-top:20px"></div>
 <div id="chartZoomSub" style="display:none"></div>
@@ -106,12 +139,14 @@ __MENU__
 <div class="note-item"><span class="mark">※</span><span class="text">起点は、PMDAで最初のHPVワクチン健康被害認定が確認できる2011年7月と、受診者系列開始の2022年3月から選択できる。2018年12月14日より前など年齢が分からない認定者は、15歳以上20歳未満として扱っている</span></div>
 <div class="note-item"><span class="mark">※</span><span class="text">受診患者は厚労省のサーベイランス調査自体が2022年3月分から開始されており、それ以前のデータが存在しないため2022年3月起点からの累積となっている</span></div>
 <div class="note-item"><span class="mark">※</span><span class="text">年齢切替は健康被害認定者、子宮頸癌罹患者・死亡者、女性の自殺・全死因に適用され、年齢区分のない受診患者には適用されない。子宮頸癌は年次、自殺・全死因は月次データを累積している</span></div>
+<div class="note-item"><span class="mark">※</span><span class="text">右側の割合グラフは累積ではなく、2011年と2022年それぞれの年間人数を比較する。人口は各年10月1日現在の確定人口</span></div>
 </div>
 
 <div class="note-list" data-language-content="en" style="font-size:15px;color:#111;line-height:1.5;margin-top:18px">
 <div class="note-item"><span class="mark">*</span><span class="text">The starting point can be selected as July 2011, when the first PMDA HPV vaccine injury certification is confirmed, or March 2022, when the visit series begins. Certification recipients whose age is unknown, including those before December 14, 2018, are treated as ages 15–19.</span></div>
 <div class="note-item"><span class="mark">*</span><span class="text">Symptom-visit patient data starts from the MHLW surveillance survey's own start date of March 2022, as no data exists before that.</span></div>
 <div class="note-item"><span class="mark">*</span><span class="text">The age toggle applies to injury certifications, cervical cancer cases and deaths, and female suicide and all-cause deaths, but not to symptom-visit patients, which have no age breakdown. Cervical cancer uses annual data; suicide and all-cause deaths use monthly data.</span></div>
+<div class="note-item"><span class="mark">*</span><span class="text">The share chart on the right is not cumulative; it compares annual counts for 2011 and 2022. Population is the confirmed population as of October 1 in each year.</span></div>
 </div>
 
 <section data-language-content="ja" style="font-size:15px;color:#111;margin-top:18px;line-height:1.9;border-top:0.5px solid #e1e0d9;padding-top:14px">
@@ -138,8 +173,11 @@ __MENU__
 <a target="_blank" rel="noopener" href="https://www.mhlw.go.jp/content/10900000/001699794.pdf">https://www.mhlw.go.jp/content/10900000/001699794.pdf</a>
 </p>
 
-<p class="source-item">子宮頸癌罹患・死亡データ（2011～2015年罹患は全国がん罹患モニタリング集計、2016年以降罹患は全国がん登録、死亡は人口動態統計；国立がん研究センター「がん統計」）<br>
+<p class="source-item">子宮頸癌罹患・死亡データ（女性・子宮頸部C53・15歳以上）：2011～2015年の罹患は全国がん罹患モニタリング集計による公式推計、2016年以降の罹患は全国がん登録、死亡は人口動態統計。国立がん研究センター「がん統計」<br>
 <a target="_blank" rel="noopener" href="https://ganjoho.jp/reg_stat/statistics/data/dl/index.html">https://ganjoho.jp/reg_stat/statistics/data/dl/index.html</a>
+</p>
+<p class="source-item">女性人口：e-Stat「人口推計 各月1日現在人口 月次」（各年10月1日現在の確定人口）<br>
+<a target="_blank" rel="noopener" href="https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00200524&amp;tstat=000000090001&amp;cycle=1&amp;tclass1=000001011678&amp;cycle_facet=tclass1&amp;tclass2val=0">https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00200524&amp;tstat=000000090001&amp;cycle=1&amp;tclass1=000001011678&amp;cycle_facet=tclass1&amp;tclass2val=0</a>
 </p>
 <p class="source-item">女性の自殺・全死因（月次）: e-Stat「人口動態統計 月報（概数）」<br>
 <a target="_blank" rel="noopener" href="https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00450011&amp;tstat=000001028897&amp;cycle=1&amp;tclass1=000001053058&amp;tclass2=000001053060&amp;tclass3val=0">https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00450011&amp;tstat=000001028897&amp;cycle=1&amp;tclass1=000001053058&amp;tclass2=000001053060&amp;tclass3val=0</a>
@@ -168,8 +206,11 @@ __MENU__
 <p class="source-item">PMDA side, as of end of March 2025: 321<br>
 <a target="_blank" rel="noopener" href="https://www.mhlw.go.jp/content/10900000/001699794.pdf">https://www.mhlw.go.jp/content/10900000/001699794.pdf</a>
 </p>
-<p class="source-item">Cervical cancer incidence/mortality data (MCIJ for 2011–2015 incidence, National Cancer Registry from 2016, and Vital Statistics for mortality; Cancer Statistics, National Cancer Center Japan)<br>
+<p class="source-item">Cervical cancer incidence/mortality data (female, cervix uteri C53, ages 15 and over): 2011–2015 incidence is an official MCIJ estimate; incidence from 2016 is from the National Cancer Registry; mortality is from Vital Statistics. Cancer Statistics, National Cancer Center Japan<br>
 <a target="_blank" rel="noopener" href="https://ganjoho.jp/reg_stat/statistics/data/dl/index.html">https://ganjoho.jp/reg_stat/statistics/data/dl/index.html</a>
+</p>
+<p class="source-item">Female population: e-Stat, Population Estimates, monthly population as of the first day of each month (confirmed population as of October 1 in each year)<br>
+<a target="_blank" rel="noopener" href="https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00200524&amp;tstat=000000090001&amp;cycle=1&amp;tclass1=000001011678&amp;cycle_facet=tclass1&amp;tclass2val=0">https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00200524&amp;tstat=000000090001&amp;cycle=1&amp;tclass1=000001011678&amp;cycle_facet=tclass1&amp;tclass2val=0</a>
 </p>
 <p class="source-item">Monthly female suicide and all-cause deaths: e-Stat, Vital Statistics, Monthly Report (Preliminary)<br>
 <a target="_blank" rel="noopener" href="https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00450011&amp;tstat=000001028897&amp;cycle=1&amp;tclass1=000001053058&amp;tclass2=000001053060&amp;tclass3val=0">https://www.e-stat.go.jp/stat-search/files?page=1&amp;layout=datalist&amp;toukei=00450011&amp;tstat=000001028897&amp;cycle=1&amp;tclass1=000001053058&amp;tclass2=000001053060&amp;tclass3val=0</a>
@@ -210,6 +251,15 @@ var I18N = {
     legendShibo: function(age){ return '子宮頸癌死亡者・'+age+'歳未満(累積)'; },
     legendSuicide: function(age){ return '女性の自殺・'+age+'歳未満(月次・累積)'; },
     legendAllCause: function(age){ return '女性の全死因・'+age+'歳未満(月次・累積)'; },
+    compareHeading: function(age){ return '女性・15歳以上'+age+'歳未満の年間人数と割合'; },
+    denomAll: '全死因',
+    denomPopulation: '人口',
+    compareAllCause: '全死因死亡',
+    compareSuicide: '自殺死亡',
+    compareCervical: '子宮頸癌死亡',
+    compareOtherDeaths: 'その他の死亡',
+    compareOtherPopulation: '死亡以外の人口',
+    compareAria: '2011年と2022年について、女性の全死因死亡、自殺死亡、子宮頸癌死亡の年間人数と割合を比較する棒グラフ。',
     dsNintei: 'HPVワクチン健康被害認定者',
     dsRikan: function(age){ return '子宮頸癌罹患者('+age+'歳未満)'; },
     dsShibo: function(age){ return '子宮頸癌死亡者('+age+'歳未満)'; },
@@ -245,6 +295,15 @@ var I18N = {
     legendShibo: function(age){ return 'Cervical cancer deaths, under '+age+' (cumulative)'; },
     legendSuicide: function(age){ return 'Female suicide, under '+age+' (monthly, cumulative)'; },
     legendAllCause: function(age){ return 'Female all-cause deaths, under '+age+' (monthly, cumulative)'; },
+    compareHeading: function(age){ return 'Annual count and share: females ages 15 to under '+age; },
+    denomAll: 'All causes',
+    denomPopulation: 'Population',
+    compareAllCause: 'All-cause deaths',
+    compareSuicide: 'Suicide deaths',
+    compareCervical: 'Cervical cancer deaths',
+    compareOtherDeaths: 'Other deaths',
+    compareOtherPopulation: 'Population excluding deaths',
+    compareAria: 'Bar chart comparing annual counts and shares of female all-cause, suicide, and cervical cancer deaths in 2011 and 2022.',
     dsNintei: 'HPV vaccine injury certification recipients',
     dsRikan: function(age){ return 'Cervical cancer cases (under '+age+')'; },
     dsShibo: function(age){ return 'Cervical cancer deaths (under '+age+')'; },
@@ -258,6 +317,7 @@ var CURRENT_LANG = '__LANG__';
 var CURRENT_AGE = __AGE__;
 var CURRENT_START = __START__;
 var CURRENT_DEATHS = __DEATHS__;
+var CURRENT_DENOMINATOR = '__DENOMINATOR__';
 
 function updateUrl(){
   var p = new URLSearchParams(window.location.search);
@@ -265,6 +325,7 @@ function updateUrl(){
   p.set('age', CURRENT_AGE + '-');
   p.set('start', String(CURRENT_START));
   if(CURRENT_DEATHS) p.set('deaths', '1'); else p.delete('deaths');
+  if(CURRENT_DENOMINATOR==='population') p.set('denominator','population'); else p.delete('denominator');
   window.history.replaceState(null, '', window.location.pathname + '?' + p.toString());
 }
 
@@ -369,6 +430,30 @@ function monthlyDeathCumulative(causeIndex, age){
     out.push({x:row[0]+(row[1]-1)/12,y:total});
   });
   return out;
+}
+
+// 右側の比較は時系列・累積ではなく、2011年と2022年の年次実数だけを使う。
+// The right-hand comparison uses annual counts for 2011 and 2022, not a time series or cumulative values.
+var annualDeathsByAge = {
+  2011:{
+    20:{allCause:606,suicide:167},25:{allCause:1583,suicide:616},30:{allCause:2874,suicide:1175},
+    35:{allCause:4654,suicide:1727},40:{allCause:7641,suicide:2411}
+  },
+  2022:{
+    20:{allCause:488,suicide:279},25:{allCause:1233,suicide:688},30:{allCause:2039,suicide:1059},
+    35:{allCause:3061,suicide:1409},40:{allCause:4721,suicide:1802}
+  }
+};
+// 人口は各年10月1日現在の確定女性人口を、15歳から選択上限未満まで合計した値。
+// Population is confirmed female population on October 1, summed from age 15 to the selected upper bound.
+var annualPopulationByAge = {
+  2011:{20:2958000,25:6074000,30:9621000,35:13608000,40:18394000},
+  2022:{20:2682000,25:5729000,30:8847000,35:11993000,40:15537000}
+};
+function cervicalAnnual(year,age){
+  var source={20:shibo20Annual,25:shibo25Annual,30:shibo30Annual,35:shibo35Annual,40:shibo40Annual}[age];
+  var row=source.find(function(r){return r[0]===year;});
+  return row ? row[1] : 0;
 }
 
 var ninteiByAge={}, rikanByAge={}, shiboByAge={};
@@ -492,6 +577,89 @@ var chartZoom = new Chart(document.getElementById('chartZoom'), {
   }
 });
 
+var chartCompare = new Chart(document.getElementById('chartCompare'), {
+  type:'bar',
+  data:{
+    labels:['2011','2022'],
+    datasets:[
+      {label:'',data:[0,0],backgroundColor:'#444441',borderWidth:0},
+      {label:'',data:[0,0],backgroundColor:'#7a3db8',borderWidth:0},
+      {label:'',data:[0,0],backgroundColor:'#9abdb4',borderWidth:0},
+      {label:'',data:[0,0],backgroundColor:'#e1e0d9',borderWidth:0}
+    ]
+  },
+  options:{
+    indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    scales:{
+      x:{stacked:true,min:0,max:100,grid:{color:'#e1e0d9'},border:{color:'#c3c2b7'},ticks:{color:'#898781',callback:function(v){return v+'%';}}},
+      y:{stacked:true,grid:{display:false},border:{display:false},ticks:{color:'#52514e',font:{size:15}}}
+    },
+    plugins:{
+      legend:{display:false},
+      tooltip:{callbacks:{label:function(context){
+        var count=context.dataset.counts[context.dataIndex];
+        return context.dataset.label+': '+formatCount(count)+' ('+formatPercent(context.raw)+')';
+      }}}
+    }
+  }
+});
+
+function formatCount(value){ return Math.round(value).toLocaleString(CURRENT_LANG==='ja' ? 'ja-JP' : 'en-US'); }
+function formatPercent(value){
+  var digits=value>=10 ? 1 : (value>=1 ? 2 : (value>=0.01 ? 3 : 5));
+  return value.toFixed(digits)+'%';
+}
+function compareValues(year,age){
+  var deaths=annualDeathsByAge[year][age];
+  var cervical=cervicalAnnual(year,age);
+  return {population:annualPopulationByAge[year][age],allCause:deaths.allCause,suicide:deaths.suicide,cervical:cervical};
+}
+function updateCompareChart(age){
+  var t=I18N[CURRENT_LANG], years=[2011,2022];
+  var values=years.map(function(year){return compareValues(year,age);});
+  var denominators=values.map(function(v){return CURRENT_DENOMINATOR==='population' ? v.population : v.allCause;});
+  var counts=[
+    values.map(function(v){return v.cervical;}),
+    values.map(function(v){return v.suicide;}),
+    values.map(function(v){return Math.max(0,v.allCause-v.suicide-v.cervical);}),
+    values.map(function(v){return CURRENT_DENOMINATOR==='population' ? Math.max(0,v.population-v.allCause) : 0;})
+  ];
+  var labels=[t.compareCervical,t.compareSuicide,t.compareOtherDeaths,t.compareOtherPopulation];
+  chartCompare.data.datasets.forEach(function(ds,index){
+    ds.label=labels[index];
+    ds.counts=counts[index];
+    ds.data=counts[index].map(function(value,i){return value/denominators[i]*100;});
+  });
+  chartCompare.data.datasets[3].hidden=CURRENT_DENOMINATOR!=='population';
+  chartCompare.update();
+
+  var rows=values.map(function(v,index){
+    var denominator=denominators[index];
+    var entries=CURRENT_DENOMINATOR==='population'
+      ? [[t.denomPopulation,v.population],[t.compareAllCause,v.allCause],[t.compareSuicide,v.suicide],[t.compareCervical,v.cervical]]
+      : [[t.compareAllCause,v.allCause],[t.compareSuicide,v.suicide],[t.compareCervical,v.cervical]];
+    return '<div class="compare-year"><strong>'+years[index]+'</strong>'+
+      entries.map(function(entry){
+        var ratio=entry[1]/denominator*100;
+        return '<div class="compare-row"><span>'+entry[0]+'</span><span>'+formatCount(entry[1])+' '+(CURRENT_LANG==='ja'?'人':'')+' / '+formatPercent(ratio)+'</span></div>';
+      }).join('')+'</div>';
+  }).join('');
+  document.getElementById('compareSummary').innerHTML=rows;
+  var legendItems=[['#444441',t.compareCervical],['#7a3db8',t.compareSuicide],['#9abdb4',t.compareOtherDeaths]];
+  if(CURRENT_DENOMINATOR==='population') legendItems.push(['#e1e0d9',t.compareOtherPopulation]);
+  document.getElementById('compareLegend').innerHTML=legendItems.map(function(item){
+    return '<span><span style="display:inline-block;width:9px;height:9px;margin-right:4px;background:'+item[0]+'"></span>'+item[1]+'</span>';
+  }).join('');
+  document.getElementById('compareHeading').textContent=t.compareHeading(age);
+  document.getElementById('chartCompare').setAttribute('aria-label',t.compareAria);
+  ['All','Population'].forEach(function(name){
+    var mode=name==='Population' ? 'population' : 'allcause';
+    var button=document.getElementById('btnDenom'+name);
+    button.style.background=CURRENT_DENOMINATOR===mode ? '#2a78d6' : 'transparent';
+    button.style.color=CURRENT_DENOMINATOR===mode ? '#fff' : '#52514e';
+  });
+}
+
 function legendItem(color, dash, marker, label){
   var markerSvg = '';
   if(marker==='circle') markerSvg = '<circle cx="16" cy="8" r="4.5" fill="'+color+'"/>';
@@ -572,6 +740,8 @@ function setAge(age){
   chartZoom.options.scales.y.max = paddedAxisMax(ninteiMax);
   chartZoom.update();
 
+  updateCompareChart(age);
+
   renderLegends(age);
 
   [20,25,30,35,40].forEach(function(a){
@@ -587,11 +757,19 @@ function setAge(age){
 
 function setDeaths(visible){
   var button=document.getElementById('btnDeaths');
+  var panel=document.getElementById('comparePanel');
   CURRENT_DEATHS=visible;
+  panel.hidden=!CURRENT_DEATHS;
   button.setAttribute('aria-pressed',CURRENT_DEATHS ? 'true' : 'false');
   button.style.background=CURRENT_DEATHS ? '#2a78d6' : 'transparent';
   button.style.color=CURRENT_DEATHS ? '#fff' : '#52514e';
   setAge(CURRENT_AGE);
+  window.requestAnimationFrame(function(){ chartAll.resize(); chartCompare.resize(); });
+}
+
+function setDenominator(value){
+  CURRENT_DENOMINATOR=value;
+  updateCompareChart(CURRENT_AGE);
 }
 
 function setStart(value){
@@ -634,6 +812,8 @@ function setLang(lang){
   document.getElementById('btnStart2011').textContent = t.startOptions[2011];
   document.getElementById('btnStart2022').textContent = t.startOptions[2022];
   document.getElementById('btnDeaths').textContent = t.deathsButton;
+  document.getElementById('btnDenomAll').textContent = t.denomAll;
+  document.getElementById('btnDenomPopulation').textContent = t.denomPopulation;
   document.getElementById('seriesLabel').textContent = t.seriesLabel;
   document.getElementById('series0').textContent=t.legendShinryo;
   document.getElementById('series1').textContent=t.legendNintei(CURRENT_AGE);
@@ -668,6 +848,8 @@ document.getElementById('btn40').addEventListener('click', function(){ setAge(40
 document.getElementById('btnStart2011').addEventListener('click', function(){ setStart(2011); updateUrl(); });
 document.getElementById('btnStart2022').addEventListener('click', function(){ setStart(2022); updateUrl(); });
 document.getElementById('btnDeaths').addEventListener('click', function(){ setDeaths(!CURRENT_DEATHS); updateUrl(); });
+document.getElementById('btnDenomAll').addEventListener('click', function(){ setDenominator('allcause'); updateUrl(); });
+document.getElementById('btnDenomPopulation').addEventListener('click', function(){ setDenominator('population'); updateUrl(); });
 document.querySelectorAll('[data-series]').forEach(function(box){
   box.addEventListener('change',function(){setSeriesVisibility(parseInt(this.dataset.series,10),this.checked);});
 });
@@ -689,6 +871,7 @@ html = html.sub("var CURRENT_LANG = '__LANG__';", "var CURRENT_LANG = '#{lang}';
 html = html.sub("var CURRENT_AGE = __AGE__;", "var CURRENT_AGE = #{age};")
 html = html.sub("var CURRENT_START = __START__;", "var CURRENT_START = #{start};")
 html = html.sub("var CURRENT_DEATHS = __DEATHS__;", "var CURRENT_DEATHS = #{deaths};")
+html = html.sub("var CURRENT_DENOMINATOR = '__DENOMINATOR__';", "var CURRENT_DENOMINATOR = '#{denominator}';")
 html = html.sub('__MENU__', menu_html)
 
 puts html
