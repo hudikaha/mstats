@@ -103,13 +103,13 @@ __MENU__
 <div id="legendZoom" style="display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 6px"></div>
 
 <div class="note-list" data-language-content="ja" style="font-size:15px;color:#111;line-height:1.5;margin-top:18px">
-<div class="note-item"><span class="mark">※</span><span class="text">起点は、PMDAで最初のHPVワクチン健康被害認定が確認できる2011年7月と、受診者系列開始の2022年3月から選択できる。2018年12月14日より前など年齢が分からない認定者は、すべて20歳未満として扱っている</span></div>
+<div class="note-item"><span class="mark">※</span><span class="text">起点は、PMDAで最初のHPVワクチン健康被害認定が確認できる2011年7月と、受診者系列開始の2022年3月から選択できる。2018年12月14日より前など年齢が分からない認定者は、15歳以上20歳未満として扱っている</span></div>
 <div class="note-item"><span class="mark">※</span><span class="text">受診患者は厚労省のサーベイランス調査自体が2022年3月分から開始されており、それ以前のデータが存在しないため2022年3月起点からの累積となっている</span></div>
 <div class="note-item"><span class="mark">※</span><span class="text">年齢切替は健康被害認定者、子宮頸癌罹患者・死亡者、女性の自殺・全死因に適用され、年齢区分のない受診患者には適用されない。子宮頸癌は年次、自殺・全死因は月次データを累積している</span></div>
 </div>
 
 <div class="note-list" data-language-content="en" style="font-size:15px;color:#111;line-height:1.5;margin-top:18px">
-<div class="note-item"><span class="mark">*</span><span class="text">The starting point can be selected as July 2011, when the first PMDA HPV vaccine injury certification is confirmed, or March 2022, when the visit series begins. Certification recipients whose age is unknown, including those before December 14, 2018, are treated as under 20.</span></div>
+<div class="note-item"><span class="mark">*</span><span class="text">The starting point can be selected as July 2011, when the first PMDA HPV vaccine injury certification is confirmed, or March 2022, when the visit series begins. Certification recipients whose age is unknown, including those before December 14, 2018, are treated as ages 15–19.</span></div>
 <div class="note-item"><span class="mark">*</span><span class="text">Symptom-visit patient data starts from the MHLW surveillance survey's own start date of March 2022, as no data exists before that.</span></div>
 <div class="note-item"><span class="mark">*</span><span class="text">The age toggle applies to injury certifications, cervical cancer cases and deaths, and female suicide and all-cause deaths, but not to symptom-visit patients, which have no age breakdown. Cervical cancer uses annual data; suicide and all-cause deaths use monthly data.</span></div>
 </div>
@@ -185,8 +185,8 @@ var I18N = {
   ja: {
     title: "HPVワクチン接種後の体調不良新規受診者数の累積と健康被害認定・子宮頸癌患者・死者との比較",
     h1: "HPVワクチン接種後の体調不良新規受診者数の累積と<br>健康被害認定・子宮頸癌患者・死者との比較",
-    srDesc: "HPVワクチン健康被害認定者、子宮頸癌罹患者・死亡者、接種後の体調不良を主訴とする協力医療機関の新規受診者について、選択した起点からの累積値を比較する。年齢区分は20歳未満から40歳未満まで切り替えられ、自殺・全死因の月次累積値も上段グラフへ追加できる。",
-    ageGroupLabel: "年齢区分",
+    srDesc: "HPVワクチン健康被害認定者、子宮頸癌罹患者・死亡者、接種後の体調不良を主訴とする協力医療機関の新規受診者について、選択した起点からの累積値を比較する。年齢区分は15歳以上20歳未満から40歳未満まで切り替えられ、自殺・全死因の月次累積値も上段グラフへ追加できる。",
+    ageGroupLabel: "15歳以上",
     btn20: "20歳未満",
     btn25: "25歳未満",
     btn30: "30歳未満",
@@ -220,8 +220,8 @@ var I18N = {
   en: {
     title: "Cumulative Post-HPV-Vaccination Symptom New Hospital Visits Compared with Vaccine Injury Certifications and Cervical Cancer Cases/Deaths",
     h1: "Cumulative Post-HPV-Vaccination Symptom New Hospital Visits<br>Compared with Vaccine Injury Certifications and Cervical Cancer Cases/Deaths",
-    srDesc: "Cumulative values from the selected starting point for HPV vaccine injury certifications, cervical cancer cases and deaths, and new symptom-related visits to designated medical institutions. Monthly cumulative suicide and all-cause deaths can also be added to the upper chart.",
-    ageGroupLabel: "Age group",
+    srDesc: "Cumulative values from the selected starting point for HPV vaccine injury certifications, cervical cancer cases and deaths, and new symptom-related visits to designated medical institutions. Age ranges start at 15, and monthly cumulative suicide and all-cause deaths can also be added to the upper chart.",
+    ageGroupLabel: "Age 15 and over",
     btn20: "Under 20",
     btn25: "Under 25",
     btn30: "Under 30",
@@ -319,16 +319,20 @@ function detailedNinteiRaw(ageRaw){
   });
   return out;
 }
-var rikan20Annual = [[2011,8],[2012,0],[2013,7],[2014,2],[2015,3],[2016,1],[2017,3],[2018,2],[2019,0],[2020,1],[2021,1],[2022,1],[2023,3]];
-var rikan25Annual = [[2011,79],[2012,65],[2013,44],[2014,49],[2015,17],[2016,28],[2017,34],[2018,24],[2019,11],[2020,16],[2021,12],[2022,7],[2023,11]];
-var rikan30Annual = [[2011,526],[2012,488],[2013,380],[2014,343],[2015,250],[2016,221],[2017,221],[2018,181],[2019,171],[2020,173],[2021,144],[2022,134],[2023,131]];
-var rikan35Annual = [[2011,1501],[2012,1301],[2013,1140],[2014,1118],[2015,1030],[2016,935],[2017,881],[2018,798],[2019,705],[2020,664],[2021,620],[2022,611],[2023,589]];
-var rikan40Annual = [[2011,2828],[2012,2607],[2013,2292],[2014,2399],[2015,2068],[2016,2048],[2017,1967],[2018,1799],[2019,1700],[2020,1578],[2021,1562],[2022,1449],[2023,1431]];
-var shibo20Annual = [[2011,0],[2012,0],[2013,1],[2014,0],[2015,0],[2016,0],[2017,0],[2018,0],[2019,2],[2020,0],[2021,0],[2022,0],[2023,1],[2024,1]];
-var shibo25Annual = [[2011,0],[2012,3],[2013,3],[2014,2],[2015,1],[2016,2],[2017,1],[2018,1],[2019,2],[2020,0],[2021,0],[2022,1],[2023,1],[2024,1]];
-var shibo30Annual = [[2011,19],[2012,14],[2013,15],[2014,23],[2015,16],[2016,17],[2017,11],[2018,6],[2019,13],[2020,8],[2021,7],[2022,9],[2023,7],[2024,7]];
-var shibo35Annual = [[2011,87],[2012,65],[2013,68],[2014,82],[2015,72],[2016,65],[2017,61],[2018,49],[2019,70],[2020,44],[2021,33],[2022,40],[2023,42],[2024,29]];
-var shibo40Annual = [[2011,205],[2012,191],[2013,189],[2014,190],[2015,193],[2016,171],[2017,148],[2018,137],[2019,168],[2020,135],[2021,106],[2022,130],[2023,117],[2024,98]];
+// 罹患は2016年以降をC53女性の15歳以上で再集計し、2011～2015年は従来のMCIJ値を維持する。
+// Incidence uses female C53 ages 15+ from 2016; 2011–2015 retain the previous MCIJ values.
+var rikan20Annual = [[2011,8],[2012,0],[2013,7],[2014,2],[2015,3],[2016,1],[2017,3],[2018,2],[2019,0],[2020,0],[2021,1],[2022,0],[2023,3]];
+var rikan25Annual = [[2011,79],[2012,65],[2013,44],[2014,49],[2015,17],[2016,28],[2017,34],[2018,24],[2019,11],[2020,15],[2021,12],[2022,6],[2023,11]];
+var rikan30Annual = [[2011,526],[2012,488],[2013,380],[2014,343],[2015,250],[2016,221],[2017,221],[2018,181],[2019,171],[2020,172],[2021,144],[2022,133],[2023,131]];
+var rikan35Annual = [[2011,1501],[2012,1301],[2013,1140],[2014,1118],[2015,1030],[2016,935],[2017,881],[2018,798],[2019,705],[2020,663],[2021,620],[2022,610],[2023,589]];
+var rikan40Annual = [[2011,2828],[2012,2607],[2013,2292],[2014,2399],[2015,2068],[2016,2048],[2017,1967],[2018,1799],[2019,1700],[2020,1577],[2021,1562],[2022,1448],[2023,1431]];
+// 死亡は国立がん研究センターXLSのC53女性を15歳以上で直接再集計する。
+// Mortality is directly recalculated for female C53 ages 15+ from the National Cancer Center XLS.
+var shibo20Annual = [[2011,4],[2012,1],[2013,0],[2014,3],[2015,4],[2016,0],[2017,2],[2018,3],[2019,2],[2020,0],[2021,1],[2022,2],[2023,0],[2024,3]];
+var shibo25Annual = [[2011,10],[2012,8],[2013,1],[2014,6],[2015,10],[2016,4],[2017,5],[2018,7],[2019,6],[2020,3],[2021,6],[2022,7],[2023,3],[2024,10]];
+var shibo30Annual = [[2011,20],[2012,20],[2013,6],[2014,15],[2015,24],[2016,18],[2017,15],[2018,15],[2019,11],[2020,11],[2021,15],[2022,13],[2023,10],[2024,19]];
+var shibo35Annual = [[2011,40],[2012,47],[2013,28],[2014,41],[2015,52],[2016,40],[2017,35],[2018,36],[2019,35],[2020,23],[2021,37],[2022,45],[2023,29],[2024,35]];
+var shibo40Annual = [[2011,122],[2012,117],[2013,90],[2014,93],[2015,107],[2016,96],[2017,91],[2018,81],[2019,77],[2020,68],[2021,85],[2022,97],[2023,69],[2024,67]];
 
 var shinryoRaw = [
 [2022,3,5],[2022,4,11],[2022,5,17],[2022,6,26],[2022,7,39],[2022,8,54],[2022,9,69],[2022,10,87],[2022,11,103],[2022,12,112],
@@ -361,7 +365,7 @@ function monthlyDeathCumulative(causeIndex, age){
   var total=0, out=[{x:startX(),y:0}];
   monthlyDeathsRaw.forEach(function(row){
     if(row[0]*100+row[1]<cutoff) return;
-    total+=row[causeIndex].slice(0,fieldCount).reduce(function(sum,value){return sum+value;},0);
+    total+=row[causeIndex].slice(3,fieldCount).reduce(function(sum,value){return sum+value;},0);
     out.push({x:row[0]+(row[1]-1)/12,y:total});
   });
   return out;
