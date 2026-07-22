@@ -8,8 +8,8 @@
   ja: 新型コロナワクチン接種後週ごとの死亡数・死亡率
   en: Deaths and Mortality by Week After COVID-19 Vaccination
 - href: hpvvhv.rb
-  ja: HPVワクチン接種後の体調不良新規受診者数の推移と健康被害認定・子宮頸癌患者・死者との比較
-  en: Trends in Post-HPV-Vaccination Symptom New Hospital Visits Compared with Vaccine Injury Certifications and Cervical Cancer Cases/Deaths
+  ja: HPVワクチン接種後の体調不良新規受診者数の累積と健康被害認定・子宮頸癌患者・死者との比較
+  en: Cumulative Post-HPV-Vaccination Symptom New Hospital Visits Compared with Vaccine Injury Certifications and Cervical Cancer Cases/Deaths
 - href: cod.rb
   ja: 日本の月ごとの死因別死者数
   en: Deaths by Cause in Japan
