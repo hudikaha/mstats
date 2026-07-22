@@ -139,14 +139,14 @@ __MENU__
 <div class="note-item"><span class="mark">※</span><span class="text">起点は、PMDAで最初のHPVワクチン健康被害認定が確認できる2011年7月と、受診者系列開始の2022年3月から選択できる。2018年12月14日より前など年齢が分からない認定者は、15歳以上20歳未満として扱っている</span></div>
 <div class="note-item"><span class="mark">※</span><span class="text">受診患者は厚労省のサーベイランス調査自体が2022年3月分から開始されており、それ以前のデータが存在しないため2022年3月起点からの累積となっている</span></div>
 <div class="note-item"><span class="mark">※</span><span class="text">年齢切替は健康被害認定者、子宮頸癌罹患者・死亡者、女性の自殺・全死因に適用され、年齢区分のない受診患者には適用されない。子宮頸癌は年次、自殺・全死因は月次データを累積している</span></div>
-<div class="note-item"><span class="mark">※</span><span class="text">右側の割合グラフは累積ではなく、2011年と2022年それぞれの年間人数を比較する。人口は各年10月1日現在の確定人口</span></div>
+<div class="note-item"><span class="mark">※</span><span class="text">右側の割合グラフは累積ではなく、選択上限直下の5歳階級について2011年と2022年それぞれの年間人数を比較する。人口は各年10月1日現在の確定人口</span></div>
 </div>
 
 <div class="note-list" data-language-content="en" style="font-size:15px;color:#111;line-height:1.5;margin-top:18px">
 <div class="note-item"><span class="mark">*</span><span class="text">The starting point can be selected as July 2011, when the first PMDA HPV vaccine injury certification is confirmed, or March 2022, when the visit series begins. Certification recipients whose age is unknown, including those before December 14, 2018, are treated as ages 15–19.</span></div>
 <div class="note-item"><span class="mark">*</span><span class="text">Symptom-visit patient data starts from the MHLW surveillance survey's own start date of March 2022, as no data exists before that.</span></div>
 <div class="note-item"><span class="mark">*</span><span class="text">The age toggle applies to injury certifications, cervical cancer cases and deaths, and female suicide and all-cause deaths, but not to symptom-visit patients, which have no age breakdown. Cervical cancer uses annual data; suicide and all-cause deaths use monthly data.</span></div>
-<div class="note-item"><span class="mark">*</span><span class="text">The share chart on the right is not cumulative; it compares annual counts for 2011 and 2022. Population is the confirmed population as of October 1 in each year.</span></div>
+<div class="note-item"><span class="mark">*</span><span class="text">The share chart on the right is not cumulative; it compares annual counts for 2011 and 2022 in the five-year age band immediately below the selected limit. Population is the confirmed population as of October 1 in each year.</span></div>
 </div>
 
 <section data-language-content="ja" style="font-size:15px;color:#111;margin-top:18px;line-height:1.9;border-top:0.5px solid #e1e0d9;padding-top:14px">
@@ -251,7 +251,7 @@ var I18N = {
     legendShibo: function(age){ return '子宮頸癌死亡者・'+age+'歳未満(累積)'; },
     legendSuicide: function(age){ return '女性の自殺・'+age+'歳未満(月次・累積)'; },
     legendAllCause: function(age){ return '女性の全死因・'+age+'歳未満(月次・累積)'; },
-    compareHeading: function(age){ return '女性・15歳以上'+age+'歳未満の年間人数と割合'; },
+    compareHeading: function(age){ return '女性・'+(age-5)+'歳以上'+age+'歳未満の年間人数と割合'; },
     denomAll: '全死因',
     denomPopulation: '人口',
     compareAllCause: '全死因死亡',
@@ -295,7 +295,7 @@ var I18N = {
     legendShibo: function(age){ return 'Cervical cancer deaths, under '+age+' (cumulative)'; },
     legendSuicide: function(age){ return 'Female suicide, under '+age+' (monthly, cumulative)'; },
     legendAllCause: function(age){ return 'Female all-cause deaths, under '+age+' (monthly, cumulative)'; },
-    compareHeading: function(age){ return 'Annual count and share: females ages 15 to under '+age; },
+    compareHeading: function(age){ return 'Annual count and share: females ages '+(age-5)+' to under '+age; },
     denomAll: 'All causes',
     denomPopulation: 'Population',
     compareAllCause: 'All-cause deaths',
@@ -432,8 +432,8 @@ function monthlyDeathCumulative(causeIndex, age){
   return out;
 }
 
-// 右側の比較は時系列・累積ではなく、2011年と2022年の年次実数だけを使う。
-// The right-hand comparison uses annual counts for 2011 and 2022, not a time series or cumulative values.
+// 右側の比較は時系列・累積ではなく、2011年と2022年の年次実数から選択上限直下の5歳階級を求める。
+// The right-hand comparison derives the five-year age band below the selected limit from annual counts for 2011 and 2022.
 var annualDeathsByAge = {
   2011:{
     20:{allCause:606,suicide:167},25:{allCause:1583,suicide:616},30:{allCause:2874,suicide:1175},
@@ -453,7 +453,11 @@ var annualPopulationByAge = {
 function cervicalAnnual(year,age){
   var source={20:shibo20Annual,25:shibo25Annual,30:shibo30Annual,35:shibo35Annual,40:shibo40Annual}[age];
   var row=source.find(function(r){return r[0]===year;});
-  return row ? row[1] : 0;
+  var total=row ? row[1] : 0;
+  if(age===20) return total;
+  var priorSource={25:shibo20Annual,30:shibo25Annual,35:shibo30Annual,40:shibo35Annual}[age];
+  var priorRow=priorSource.find(function(r){return r[0]===year;});
+  return total-(priorRow ? priorRow[1] : 0);
 }
 
 var ninteiByAge={}, rikanByAge={}, shiboByAge={};
@@ -611,8 +615,15 @@ function formatPercent(value){
 }
 function compareValues(year,age){
   var deaths=annualDeathsByAge[year][age];
+  var priorDeaths=age===20 ? {allCause:0,suicide:0} : annualDeathsByAge[year][age-5];
+  var population=annualPopulationByAge[year][age]-(age===20 ? 0 : annualPopulationByAge[year][age-5]);
   var cervical=cervicalAnnual(year,age);
-  return {population:annualPopulationByAge[year][age],allCause:deaths.allCause,suicide:deaths.suicide,cervical:cervical};
+  return {
+    population:population,
+    allCause:deaths.allCause-priorDeaths.allCause,
+    suicide:deaths.suicide-priorDeaths.suicide,
+    cervical:cervical
+  };
 }
 function updateCompareChart(age){
   var t=I18N[CURRENT_LANG], years=[2011,2022];
