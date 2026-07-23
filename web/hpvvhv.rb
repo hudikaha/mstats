@@ -540,6 +540,20 @@ function fixWidth(axis){ axis.width = 60; }
 function paddedAxisMax(value){
   return Math.max(100,Math.ceil(value*1.1/100)*100);
 }
+function upperAxisMax(value){
+  var target=value*1.05;
+  var unit=target>=100000 ? 10000 : (target>=10000 ? 1000 : 100);
+  return Math.max(100,Math.ceil(target/unit)*unit);
+}
+function formatAxisNumber(value){
+  return Number(value).toLocaleString(CURRENT_LANG==='ja' ? 'ja-JP' : 'en-US');
+}
+function fitUpperAxis(axis){
+  var widest=axis.ticks.reduce(function(width,tick){
+    return Math.max(width,axis.ctx.measureText(formatAxisNumber(tick.value)).width);
+  },0);
+  axis.width=Math.max(60,Math.ceil(widest+18));
+}
 
 var vertLinePlugin = {
   id:'vertLine2022',
@@ -614,7 +628,7 @@ var chartAll = new Chart(document.getElementById('chartAll'), {
     responsive:true, maintainAspectRatio:false,
     scales:{
       x: makeXScale(),
-      y:{ min:0, max:800, afterFit:fixWidth, grid:{color:'#e1e0d9'}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:16}, stepSize:200} }
+      y:{ min:0, max:800, afterFit:fitUpperAxis, grid:{color:'#e1e0d9'}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:16}, stepSize:200, callback:formatAxisNumber} }
     },
     plugins:{ legend:{display:false}, tooltip:{mode:'leftCarry', intersect:true, titleFont:{size:15}, bodyFont:{size:15}, usePointStyle:true, boxWidth:10, boxHeight:10, callbacks:{ title: titleFromFirst, label: ninteiTooltipCallback } } },
     interaction:{ mode:'leftCarry', intersect:true }
@@ -787,7 +801,7 @@ function updateUpperAxisMax(){
     if(!chartAll.isDatasetVisible(index)) return;
     dataset.data.forEach(function(point){if(Number.isFinite(point.y)) values.push(point.y);});
   });
-  chartAll.options.scales.y.max=paddedAxisMax(values.length ? Math.max.apply(null,values) : 0);
+  chartAll.options.scales.y.max=upperAxisMax(values.length ? Math.max.apply(null,values) : 0);
   chartAll.options.scales.y.ticks.stepSize=undefined;
 }
 
