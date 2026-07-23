@@ -776,16 +776,19 @@ function updateDeathDatasets(age){
   chartAll.data.datasets[5].label=t.legendAllCause(age);
   chartAll.setDatasetVisibility(4,CURRENT_SUICIDE);
   chartAll.setDatasetVisibility(5,CURRENT_ALL_CAUSE);
-  if(CURRENT_ALL_CAUSE && allCause.length){
-    var maximum=Math.max.apply(null,allCause.map(function(point){return point.y;}));
-    chartAll.options.scales.y.max=paddedAxisMax(maximum);
-    chartAll.options.scales.y.ticks.stepSize=undefined;
-  }else{
-    var visibleMain=chartAll.data.datasets.slice(0,CURRENT_SUICIDE ? 5 : 4);
-    var mainMaximum=Math.max.apply(null,visibleMain.flatMap(function(dataset){return dataset.data.map(function(point){return point.y;});}));
-    chartAll.options.scales.y.max=paddedAxisMax(mainMaximum);
-    chartAll.options.scales.y.ticks.stepSize=undefined;
-  }
+  updateUpperAxisMax();
+}
+
+// 上段Y軸は現在表示中の系列だけから最大値を求める。
+// Set the upper Y-axis maximum from currently visible series only.
+function updateUpperAxisMax(){
+  var values=[];
+  chartAll.data.datasets.forEach(function(dataset,index){
+    if(!chartAll.isDatasetVisible(index)) return;
+    dataset.data.forEach(function(point){if(Number.isFinite(point.y)) values.push(point.y);});
+  });
+  chartAll.options.scales.y.max=paddedAxisMax(values.length ? Math.max.apply(null,values) : 0);
+  chartAll.options.scales.y.ticks.stepSize=undefined;
 }
 
 function setAge(age){
@@ -862,6 +865,7 @@ function setSeriesVisibility(index, visible){
   if(index>=4){setDeathSeries(index,visible);return;}
   chartAll.setDatasetVisibility(index,visible);
   chartZoom.setDatasetVisibility(index,visible);
+  updateUpperAxisMax();
   chartAll.update(); chartZoom.update();
   renderSeriesLegends(CURRENT_AGE);
 }
