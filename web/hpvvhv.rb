@@ -44,9 +44,9 @@ body.lang-en [data-language-content="en"] { display:block; }
 body.lang-ja .note-list[data-language-content="ja"],
 body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .source-item { margin-bottom:10px; }
-#upperCharts { display:flex;gap:18px;align-items:stretch; }
-#chartAllPanel { flex:1 1 100%;min-width:0; }
-#comparePanel { flex:0 0 38%;min-width:310px;border:0.5px solid #e1e0d9;border-radius:8px;padding:12px;box-sizing:border-box; }
+#chartWorkspace { display:grid;grid-template-columns:minmax(0,62fr) minmax(310px,38fr);gap:18px;align-items:stretch; }
+#trendCharts, #chartAllPanel { min-width:0; }
+#comparePanel { min-width:0;border:0.5px solid #e1e0d9;border-radius:8px;padding:12px;box-sizing:border-box; }
 #compareSummary { font-size:13px;color:#52514e;line-height:1.35;margin-top:8px; }
 #compareLegend { display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#52514e;margin-top:4px; }
 .compare-year { padding:7px 0;border-top:0.5px solid #e1e0d9; }
@@ -58,8 +58,8 @@ body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .age-buttons { display:flex;flex-wrap:wrap;border:0.5px solid #c3c2b7;border-radius:8px;overflow:hidden; }
 .age-buttons button { padding-left:8px !important;padding-right:8px !important; }
 @media (max-width:760px) {
-  #upperCharts { flex-direction:column; }
-  #comparePanel { flex-basis:auto;min-width:0;width:100%; }
+  #chartWorkspace { grid-template-columns:minmax(0,1fr); }
+  #comparePanel { min-width:0;width:100%; }
   .age-control { flex-basis:100%;width:100%; }
   .age-buttons { display:grid;grid-template-columns:repeat(5,1fr);width:100%; }
   .age-buttons button { padding:6px 4px !important;font-size:13px !important; }
@@ -117,14 +117,23 @@ __MENU__
 </div>
 </fieldset>
 
+<div id="chartWorkspace">
+<div id="trendCharts">
 <div id="chartAllHeading" style="font-size:16px;color:#52514e;margin:6px 0 2px"></div>
 <div id="chartAllSub" style="display:none"></div>
-<div id="upperCharts">
 <div id="chartAllPanel">
 <div style="position:relative;width:100%;height:280px">
 <canvas id="chartAll" role="img"></canvas>
 </div>
 <div id="legendAll" style="display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 6px"></div>
+</div>
+
+<div id="chartZoomHeading" style="font-size:16px;color:#52514e;margin:28px 0 2px;border-top:0.5px solid #e1e0d9;padding-top:20px"></div>
+<div id="chartZoomSub" style="display:none"></div>
+<div style="position:relative;width:100%;height:270px">
+<canvas id="chartZoom" role="img"></canvas>
+</div>
+<div id="legendZoom" style="display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 6px"></div>
 </div>
 <aside id="comparePanel" hidden>
 <div id="compareHeading" style="font-size:15px;color:#52514e;margin-bottom:8px"></div>
@@ -141,13 +150,6 @@ __MENU__
 <div id="compareSummary"></div>
 </aside>
 </div>
-
-<div id="chartZoomHeading" style="font-size:16px;color:#52514e;margin:28px 0 2px;border-top:0.5px solid #e1e0d9;padding-top:20px"></div>
-<div id="chartZoomSub" style="display:none"></div>
-<div style="position:relative;width:100%;height:270px">
-<canvas id="chartZoom" role="img"></canvas>
-</div>
-<div id="legendZoom" style="display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 6px"></div>
 
 <div class="note-list" data-language-content="ja" style="font-size:15px;color:#111;line-height:1.5;margin-top:18px">
 <div class="note-item"><span class="mark">※</span><span class="text">起点は、PMDAで最初のHPVワクチン健康被害認定が確認できる2011年7月と、受診者系列開始の2022年3月から選択できる。2018年12月14日より前など年齢が分からない認定者は、15歳以上20歳未満として扱っている</span></div>
