@@ -734,7 +734,7 @@ function updateCompareChart(age){
   });
 }
 
-function legendItem(color, dash, marker, label, textColor){
+function legendItem(color, dash, marker, label, textColor, selected){
   var markerSvg = '';
   if(marker==='circle') markerSvg = '<circle cx="16" cy="8" r="4.5" fill="'+color+'"/>';
   else if(marker==='rectRot') markerSvg = '<rect x="11.5" y="3.5" width="9" height="9" fill="'+color+'" transform="rotate(45 16 8)"/>';
@@ -742,7 +742,7 @@ function legendItem(color, dash, marker, label, textColor){
   else if(marker==='star') markerSvg = '<polygon points="16,2 17.7,7 23,7 18.7,10.2 20.3,15.2 16,12 11.7,15.2 13.3,10.2 9,7 14.3,7" fill="'+color+'"/>';
   var dashArr = dash.length ? dash.join(',') : '0';
   return '<span style="display:flex;align-items:center;gap:8px;font-size:16px;color:'+(textColor||'#52514e')+'">'
-    + '<svg width="32" height="16">'
+    + '<svg width="32" height="16"'+(selected ? ' style="background:#fff;border-radius:3px"' : '')+'>'
     + '<line x1="2" y1="8" x2="30" y2="8" stroke="'+color+'" stroke-width="2.5" stroke-dasharray="'+dashArr+'"/>'
     + markerSvg + '</svg>' + label + '</span>';
 }
@@ -760,9 +760,9 @@ function renderSeriesLegends(age){
   items.forEach(function(item,index){
     var checkbox=document.querySelector('[data-series="'+index+'"]');
     var selected=checkbox.checked, label=checkbox.closest('label');
-    label.style.background=selected ? item[0] : 'transparent';
-    label.style.borderColor=item[0];
-    document.getElementById('series'+index).innerHTML=legendItem(selected ? '#fff' : item[0],item[1],item[2],item[3],selected ? '#fff' : '#52514e');
+    label.style.background=selected ? '#2a78d6' : 'transparent';
+    label.style.borderColor=selected ? '#2a78d6' : item[0];
+    document.getElementById('series'+index).innerHTML=legendItem(item[0],item[1],item[2],item[3],selected ? '#fff' : '#52514e',selected);
   });
 }
 
