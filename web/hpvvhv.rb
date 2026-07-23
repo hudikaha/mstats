@@ -59,7 +59,9 @@ body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .age-control #ageGroupLabel { flex:0 0 auto;white-space:nowrap; }
 .age-buttons { display:flex;flex-wrap:wrap;border:0.5px solid #c3c2b7;border-radius:8px;overflow:hidden; }
 .age-buttons button { padding-left:8px !important;padding-right:8px !important; }
-#seriesChecks label { display:flex;align-items:center;gap:3px;border:0.5px solid #c3c2b7;border-radius:8px;padding:5px 9px;cursor:pointer;transition:background-color .12s,color .12s; }
+#seriesChecks .series-control { display:flex;align-items:center;gap:3px; }
+#seriesChecks .series-key { display:flex;align-items:center; }
+#seriesChecks label { display:flex;align-items:center;border:0.5px solid #c3c2b7;border-radius:8px;padding:5px 9px;cursor:pointer;transition:background-color .12s,color .12s; }
 #seriesChecks input { position:absolute;opacity:0;pointer-events:none; }
 #seriesChecks label:has(input:focus-visible) { outline:2px solid #2a78d6;outline-offset:2px; }
 @media (max-width:760px) {
@@ -114,12 +116,12 @@ __MENU__
 <fieldset style="border:0.5px solid #e1e0d9;border-radius:8px;padding:8px 12px;margin:0 0 14px">
 <legend id="seriesLabel" style="font-size:15px;color:#52514e;padding:0 5px"></legend>
 <div id="seriesChecks" style="display:flex;gap:10px 20px;flex-wrap:wrap;font-size:15px">
-<label><input type="checkbox" data-series="0" checked> <span id="series0"></span></label>
-<label><input type="checkbox" data-series="1" checked> <span id="series1"></span></label>
-<label><input type="checkbox" data-series="2" checked> <span id="series2"></span></label>
-<label><input type="checkbox" data-series="3" checked> <span id="series3"></span></label>
-<label><input type="checkbox" data-series="4"> <span id="series4"></span></label>
-<label><input type="checkbox" data-series="5"> <span id="series5"></span></label>
+<div class="series-control"><span class="series-key" id="seriesKey0"></span><label><input type="checkbox" data-series="0" checked><span id="series0"></span></label></div>
+<div class="series-control"><span class="series-key" id="seriesKey1"></span><label><input type="checkbox" data-series="1" checked><span id="series1"></span></label></div>
+<div class="series-control"><span class="series-key" id="seriesKey2"></span><label><input type="checkbox" data-series="2" checked><span id="series2"></span></label></div>
+<div class="series-control"><span class="series-key" id="seriesKey3"></span><label><input type="checkbox" data-series="3" checked><span id="series3"></span></label></div>
+<div class="series-control"><span class="series-key" id="seriesKey4"></span><label><input type="checkbox" data-series="4"><span id="series4"></span></label></div>
+<div class="series-control"><span class="series-key" id="seriesKey5"></span><label><input type="checkbox" data-series="5"><span id="series5"></span></label></div>
 </div>
 </fieldset>
 
@@ -734,15 +736,24 @@ function updateCompareChart(age){
   });
 }
 
+function legendKey(color,dash,marker){
+  var markerSvg='';
+  if(marker==='circle') markerSvg='<circle cx="16" cy="8" r="4.5" fill="'+color+'"/>';
+  else if(marker==='rectRot') markerSvg='<rect x="11.5" y="3.5" width="9" height="9" fill="'+color+'" transform="rotate(45 16 8)"/>';
+  else if(marker==='rect') markerSvg='<rect x="11.5" y="3.5" width="9" height="9" fill="'+color+'"/>';
+  else if(marker==='star') markerSvg='<polygon points="16,2 17.7,7 23,7 18.7,10.2 20.3,15.2 16,12 11.7,15.2 13.3,10.2 9,7 14.3,7" fill="'+color+'"/>';
+  return '<svg width="32" height="16" aria-hidden="true"><line x1="2" y1="8" x2="30" y2="8" stroke="'+color+'" stroke-width="2.5" stroke-dasharray="'+(dash.length ? dash.join(',') : '0')+'"/>'+markerSvg+'</svg>';
+}
+
 function renderSeriesLegends(age){
   var t = I18N[CURRENT_LANG];
   var items=[
-    ['#2a78d6',t.legendShinryo],
-    ['#e34948',t.legendNintei(age)],
-    ['#eda100',t.legendRikan(age)],
-    ['#444441',t.legendShibo(age)],
-    ['#7a3db8',t.legendSuicide(age)],
-    ['#16856b',t.legendAllCause(age)]
+    ['#2a78d6',[],'star',t.legendShinryo],
+    ['#e34948',[],'circle',t.legendNintei(age)],
+    ['#eda100',[6,3],'rectRot',t.legendRikan(age)],
+    ['#444441',[1,3],'rect',t.legendShibo(age)],
+    ['#7a3db8',[8,3],'',t.legendSuicide(age)],
+    ['#16856b',[],'circle',t.legendAllCause(age)]
   ];
   items.forEach(function(item,index){
     var checkbox=document.querySelector('[data-series="'+index+'"]');
@@ -750,7 +761,8 @@ function renderSeriesLegends(age){
     label.style.background=selected ? item[0] : 'transparent';
     label.style.borderColor=item[0];
     text.style.color=selected ? '#fff' : '#52514e';
-    text.textContent=item[1];
+    text.textContent=item[3];
+    document.getElementById('seriesKey'+index).innerHTML=legendKey(item[0],item[1],item[2]);
   });
 }
 
