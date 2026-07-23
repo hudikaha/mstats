@@ -13,7 +13,9 @@ cgi = CGI.new
 lang = cgi['l'] == 'en' ? 'en' : 'ja'
 age  = %w[20- 25- 30- 35- 40- 45- 50- 55- 60- 65-].include?(cgi['age']) ? cgi['age'].delete('-') : '20'
 start = %w[2011 2022].include?(cgi['start']) ? cgi['start'] : '2022'
-deaths = cgi['deaths'] == '1' ? 'true' : 'false'
+legacy_deaths = cgi['deaths'] == '1'
+suicide = legacy_deaths || cgi['suicide'] == '1' ? 'true' : 'false'
+all_cause = legacy_deaths || cgi['allcause'] == '1' ? 'true' : 'false'
 denominator = cgi['denominator'] == 'population' ? 'population' : 'allcause'
 
 menu_out = StringIO.new
@@ -57,6 +59,8 @@ body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .age-control #ageGroupLabel { flex:0 0 auto;white-space:nowrap; }
 .age-buttons { display:flex;flex-wrap:wrap;border:0.5px solid #c3c2b7;border-radius:8px;overflow:hidden; }
 .age-buttons button { padding-left:8px !important;padding-right:8px !important; }
+#seriesChecks label { display:flex;align-items:center;gap:3px; }
+#seriesChecks input { flex:0 0 auto; }
 @media (max-width:760px) {
   #chartWorkspace { grid-template-columns:minmax(0,1fr); }
   #comparePanel { min-width:0;width:100%; }
@@ -105,7 +109,6 @@ __MENU__
 <button id="btnStart2011" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:#2a78d6;color:#fff"></button>
 <button id="btnStart2022" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:transparent;color:#52514e"></button>
 </div>
-<button id="btnDeaths" type="button" aria-pressed="false" style="padding:6px 16px;font-size:15px;border:0.5px solid #c3c2b7;border-radius:8px;cursor:pointer;background:transparent;color:#52514e"></button>
 </div>
 <fieldset style="border:0.5px solid #e1e0d9;border-radius:8px;padding:8px 12px;margin:0 0 14px">
 <legend id="seriesLabel" style="font-size:15px;color:#52514e;padding:0 5px"></legend>
@@ -114,6 +117,8 @@ __MENU__
 <label><input type="checkbox" data-series="1" checked> <span id="series1"></span></label>
 <label><input type="checkbox" data-series="2" checked> <span id="series2"></span></label>
 <label><input type="checkbox" data-series="3" checked> <span id="series3"></span></label>
+<label><input type="checkbox" data-series="4"> <span id="series4"></span></label>
+<label><input type="checkbox" data-series="5"> <span id="series5"></span></label>
 </div>
 </fieldset>
 
@@ -125,7 +130,6 @@ __MENU__
 <div style="position:relative;width:100%;height:280px">
 <canvas id="chartAll" role="img"></canvas>
 </div>
-<div id="legendAll" style="display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 6px"></div>
 </div>
 
 <div id="chartZoomHeading" style="font-size:16px;color:#52514e;margin:28px 0 2px;border-top:0.5px solid #e1e0d9;padding-top:20px"></div>
@@ -133,7 +137,6 @@ __MENU__
 <div style="position:relative;width:100%;height:270px">
 <canvas id="chartZoom" role="img"></canvas>
 </div>
-<div id="legendZoom" style="display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 6px"></div>
 </div>
 <aside id="comparePanel" hidden>
 <div id="compareHeading" style="font-size:15px;color:#52514e;margin-bottom:8px"></div>
@@ -342,7 +345,8 @@ var I18N = {
 var CURRENT_LANG = '__LANG__';
 var CURRENT_AGE = __AGE__;
 var CURRENT_START = __START__;
-var CURRENT_DEATHS = __DEATHS__;
+var CURRENT_SUICIDE = __SUICIDE__;
+var CURRENT_ALL_CAUSE = __ALL_CAUSE__;
 var CURRENT_DENOMINATOR = '__DENOMINATOR__';
 
 function updateUrl(){
@@ -350,7 +354,9 @@ function updateUrl(){
   p.set('l', CURRENT_LANG);
   p.set('age', CURRENT_AGE + '-');
   p.set('start', String(CURRENT_START));
-  if(CURRENT_DEATHS) p.set('deaths', '1'); else p.delete('deaths');
+  p.delete('deaths');
+  if(CURRENT_SUICIDE) p.set('suicide','1'); else p.delete('suicide');
+  if(CURRENT_ALL_CAUSE) p.set('allcause','1'); else p.delete('allcause');
   if(CURRENT_DENOMINATOR==='population') p.set('denominator','population'); else p.delete('denominator');
   window.history.replaceState(null, '', window.location.pathname + '?' + p.toString());
 }
@@ -735,39 +741,36 @@ function legendItem(color, dash, marker, label){
     + markerSvg + '</svg>' + label + '</span>';
 }
 
-function renderLegends(age){
+function renderSeriesLegends(age){
   var t = I18N[CURRENT_LANG];
-  function item(index,html){ var b=document.querySelector('[data-series="'+index+'"]'); return !b || b.checked ? html : ''; }
-  document.getElementById('legendAll').innerHTML =
-    item(0,legendItem('#2a78d6', [], 'star', t.legendShinryo)) +
-    item(1,legendItem('#e34948', [], 'circle', t.legendNintei(age))) +
-    item(2,legendItem('#eda100', [6,3], 'rectRot', t.legendRikan(age))) +
-    item(3,legendItem('#444441', [1,3], 'rect', t.legendShibo(age))) +
-    (CURRENT_DEATHS ? legendItem('#7a3db8', [8,3], '', t.legendSuicide(age)) : '') +
-    (CURRENT_DEATHS ? legendItem('#16856b', [], 'circle', t.legendAllCause(age)) : '');
-  document.getElementById('legendZoom').innerHTML =
-    item(1,legendItem('#e34948', [], 'circle', t.legendNintei(age))) +
-    item(2,legendItem('#eda100', [6,3], 'rectRot', t.legendRikan(age))) +
-    item(3,legendItem('#444441', [1,3], 'rect', t.legendShibo(age))) +
-    item(0,legendItem('#2a78d6', [], 'star', t.legendShinryo));
+  var items=[
+    legendItem('#2a78d6', [], 'star', t.legendShinryo),
+    legendItem('#e34948', [], 'circle', t.legendNintei(age)),
+    legendItem('#eda100', [6,3], 'rectRot', t.legendRikan(age)),
+    legendItem('#444441', [1,3], 'rect', t.legendShibo(age)),
+    legendItem('#7a3db8', [8,3], '', t.legendSuicide(age)),
+    legendItem('#16856b', [], 'circle', t.legendAllCause(age))
+  ];
+  items.forEach(function(html,index){document.getElementById('series'+index).innerHTML=html;});
 }
 
 function updateDeathDatasets(age){
   var t=I18N[CURRENT_LANG];
-  var suicide=CURRENT_DEATHS ? monthlyDeathCumulative(2,age) : [];
-  var allCause=CURRENT_DEATHS ? monthlyDeathCumulative(3,age) : [];
+  var suicide=CURRENT_SUICIDE ? monthlyDeathCumulative(2,age) : [];
+  var allCause=CURRENT_ALL_CAUSE ? monthlyDeathCumulative(3,age) : [];
   chartAll.data.datasets[4].data=suicide;
   chartAll.data.datasets[4].label=t.legendSuicide(age);
   chartAll.data.datasets[5].data=allCause;
   chartAll.data.datasets[5].label=t.legendAllCause(age);
-  chartAll.setDatasetVisibility(4,CURRENT_DEATHS);
-  chartAll.setDatasetVisibility(5,CURRENT_DEATHS);
-  if(CURRENT_DEATHS && allCause.length){
+  chartAll.setDatasetVisibility(4,CURRENT_SUICIDE);
+  chartAll.setDatasetVisibility(5,CURRENT_ALL_CAUSE);
+  if(CURRENT_ALL_CAUSE && allCause.length){
     var maximum=Math.max.apply(null,allCause.map(function(point){return point.y;}));
     chartAll.options.scales.y.max=paddedAxisMax(maximum);
     chartAll.options.scales.y.ticks.stepSize=undefined;
   }else{
-    var mainMaximum=Math.max.apply(null,chartAll.data.datasets.slice(0,4).flatMap(function(dataset){return dataset.data.map(function(point){return point.y;});}));
+    var visibleMain=chartAll.data.datasets.slice(0,CURRENT_SUICIDE ? 5 : 4);
+    var mainMaximum=Math.max.apply(null,visibleMain.flatMap(function(dataset){return dataset.data.map(function(point){return point.y;});}));
     chartAll.options.scales.y.max=paddedAxisMax(mainMaximum);
     chartAll.options.scales.y.ticks.stepSize=undefined;
   }
@@ -805,27 +808,22 @@ function setAge(age){
 
   updateCompareChart(age);
 
-  renderLegends(age);
+  renderSeriesLegends(age);
 
   [20,25,30,35,40,45,50,55,60,65].forEach(function(a){
     var b=document.getElementById('btn'+a);
     b.style.background=age===a ? '#2a78d6' : 'transparent';
     b.style.color=age===a ? '#fff' : '#52514e';
   });
-  document.getElementById('series1').textContent=t.legendNintei(age);
-  document.getElementById('series2').textContent=t.legendRikan(age);
-  document.getElementById('series3').textContent=t.legendShibo(age);
   chartAll.update(); chartZoom.update();
 }
 
-function setDeaths(visible){
-  var button=document.getElementById('btnDeaths');
+function setDeathSeries(index,visible){
   var panel=document.getElementById('comparePanel');
-  CURRENT_DEATHS=visible;
-  panel.hidden=!CURRENT_DEATHS;
-  button.setAttribute('aria-pressed',CURRENT_DEATHS ? 'true' : 'false');
-  button.style.background=CURRENT_DEATHS ? '#2a78d6' : 'transparent';
-  button.style.color=CURRENT_DEATHS ? '#fff' : '#52514e';
+  if(index===4) CURRENT_SUICIDE=visible;
+  if(index===5) CURRENT_ALL_CAUSE=visible;
+  document.querySelector('[data-series="'+index+'"]').checked=visible;
+  panel.hidden=!CURRENT_ALL_CAUSE;
   setAge(CURRENT_AGE);
   window.requestAnimationFrame(function(){ chartAll.resize(); chartCompare.resize(); });
 }
@@ -849,10 +847,10 @@ function setStart(value){
 }
 
 function setSeriesVisibility(index, visible){
+  if(index>=4){setDeathSeries(index,visible);return;}
   chartAll.setDatasetVisibility(index,visible);
   chartZoom.setDatasetVisibility(index,visible);
   chartAll.update(); chartZoom.update();
-  renderLegends(CURRENT_AGE);
 }
 
 function setLang(lang){
@@ -879,14 +877,9 @@ function setLang(lang){
   document.getElementById('startLabel').textContent = t.startLabel;
   document.getElementById('btnStart2011').textContent = t.startOptions[2011];
   document.getElementById('btnStart2022').textContent = t.startOptions[2022];
-  document.getElementById('btnDeaths').textContent = t.deathsButton;
   document.getElementById('btnDenomAll').textContent = t.denomAll;
   document.getElementById('btnDenomPopulation').textContent = t.denomPopulation;
   document.getElementById('seriesLabel').textContent = t.seriesLabel;
-  document.getElementById('series0').textContent=t.legendShinryo;
-  document.getElementById('series1').textContent=t.legendNintei(CURRENT_AGE);
-  document.getElementById('series2').textContent=t.legendRikan(CURRENT_AGE);
-  document.getElementById('series3').textContent=t.legendShibo(CURRENT_AGE);
   document.getElementById('chartAllHeading').textContent = t.chartAllHeading;
   document.getElementById('chartAllSub').textContent = t.chartAllSub;
   document.getElementById('chartAll').setAttribute('aria-label', t.chartAllAria);
@@ -920,16 +913,16 @@ document.getElementById('btn60').addEventListener('click', function(){ setAge(60
 document.getElementById('btn65').addEventListener('click', function(){ setAge(65); updateUrl(); });
 document.getElementById('btnStart2011').addEventListener('click', function(){ setStart(2011); updateUrl(); });
 document.getElementById('btnStart2022').addEventListener('click', function(){ setStart(2022); updateUrl(); });
-document.getElementById('btnDeaths').addEventListener('click', function(){ setDeaths(!CURRENT_DEATHS); updateUrl(); });
 document.getElementById('btnDenomAll').addEventListener('click', function(){ setDenominator('allcause'); updateUrl(); });
 document.getElementById('btnDenomPopulation').addEventListener('click', function(){ setDenominator('population'); updateUrl(); });
 document.querySelectorAll('[data-series]').forEach(function(box){
-  box.addEventListener('change',function(){setSeriesVisibility(parseInt(this.dataset.series,10),this.checked);});
+  box.addEventListener('change',function(){setSeriesVisibility(parseInt(this.dataset.series,10),this.checked);updateUrl();});
 });
 
 setLang(CURRENT_LANG);
 setStart(CURRENT_START);
-setDeaths(CURRENT_DEATHS);
+setDeathSeries(4,CURRENT_SUICIDE);
+setDeathSeries(5,CURRENT_ALL_CAUSE);
 updateUrl();
 </script>
 
@@ -943,7 +936,8 @@ html = html.sub('lang-__LANG__', "lang-#{lang}")
 html = html.sub("var CURRENT_LANG = '__LANG__';", "var CURRENT_LANG = '#{lang}';")
 html = html.sub("var CURRENT_AGE = __AGE__;", "var CURRENT_AGE = #{age};")
 html = html.sub("var CURRENT_START = __START__;", "var CURRENT_START = #{start};")
-html = html.sub("var CURRENT_DEATHS = __DEATHS__;", "var CURRENT_DEATHS = #{deaths};")
+html = html.sub("var CURRENT_SUICIDE = __SUICIDE__;", "var CURRENT_SUICIDE = #{suicide};")
+html = html.sub("var CURRENT_ALL_CAUSE = __ALL_CAUSE__;", "var CURRENT_ALL_CAUSE = #{all_cause};")
 html = html.sub("var CURRENT_DENOMINATOR = '__DENOMINATOR__';", "var CURRENT_DENOMINATOR = '#{denominator}';")
 html = html.sub('__MENU__', menu_html)
 
