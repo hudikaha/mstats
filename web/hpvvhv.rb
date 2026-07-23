@@ -556,9 +556,12 @@ function ninteiTooltipCallback(context){
 }
 
 Chart.Interaction.modes.leftCarry = function(chart, e, options, useFinalPosition){
-  var position = Chart.helpers.getRelativePosition(e, chart);
-  var xScale = chart.scales.x;
-  var hoveredX = xScale.getValueForPixel(position.x);
+  // 実データ点に重なった場合だけ、そのX位置以前の各系列の直近確定値を集める。
+  // Only an actual data point triggers the tooltip; other series carry their latest confirmed value to that X position.
+  var triggerItems=Chart.Interaction.modes.point(chart,e,{intersect:true},useFinalPosition);
+  if(!triggerItems.length) return [];
+  var trigger=triggerItems[0];
+  var hoveredX=chart.data.datasets[trigger.datasetIndex].data[trigger.index].x;
   var items = [];
   chart.data.datasets.forEach(function(dataset, datasetIndex){
     var meta = chart.getDatasetMeta(datasetIndex);
@@ -602,8 +605,8 @@ var chartAll = new Chart(document.getElementById('chartAll'), {
       x: makeXScale(),
       y:{ min:0, max:800, afterFit:fixWidth, grid:{color:'#e1e0d9'}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:16}, stepSize:200} }
     },
-    plugins:{ legend:{display:false}, tooltip:{mode:'leftCarry', intersect:false, titleFont:{size:15}, bodyFont:{size:15}, usePointStyle:true, boxWidth:10, boxHeight:10, callbacks:{ title: titleFromFirst, label: ninteiTooltipCallback } } },
-    interaction:{ mode:'leftCarry', intersect:false }
+    plugins:{ legend:{display:false}, tooltip:{mode:'leftCarry', intersect:true, titleFont:{size:15}, bodyFont:{size:15}, usePointStyle:true, boxWidth:10, boxHeight:10, callbacks:{ title: titleFromFirst, label: ninteiTooltipCallback } } },
+    interaction:{ mode:'leftCarry', intersect:true }
   }
 });
 
@@ -622,8 +625,8 @@ var chartZoom = new Chart(document.getElementById('chartZoom'), {
       x: makeXScale(),
       y:{ min:0, max:80, afterFit:fixWidth, grid:{color:'#e1e0d9'}, border:{color:'#c3c2b7'}, ticks:{color:'#898781', font:{size:16}, precision:0} }
     },
-    plugins:{ legend:{display:false}, tooltip:{mode:'leftCarry', intersect:false, titleFont:{size:15}, bodyFont:{size:15}, usePointStyle:true, boxWidth:10, boxHeight:10, callbacks:{ title: titleFromFirst, label: ninteiTooltipCallback } } },
-    interaction:{ mode:'leftCarry', intersect:false }
+    plugins:{ legend:{display:false}, tooltip:{mode:'leftCarry', intersect:true, titleFont:{size:15}, bodyFont:{size:15}, usePointStyle:true, boxWidth:10, boxHeight:10, callbacks:{ title: titleFromFirst, label: ninteiTooltipCallback } } },
+    interaction:{ mode:'leftCarry', intersect:true }
   }
 });
 
