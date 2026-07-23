@@ -12,7 +12,7 @@ end
 cgi = CGI.new
 lang = cgi['l'] == 'en' ? 'en' : 'ja'
 age  = %w[20- 25- 30- 35- 40- 45- 50- 55- 60- 65-].include?(cgi['age']) ? cgi['age'].delete('-') : '20'
-start = %w[2011 2022].include?(cgi['start']) ? cgi['start'] : '2011'
+start = %w[2011 2022].include?(cgi['start']) ? cgi['start'] : '2022'
 deaths = cgi['deaths'] == '1' ? 'true' : 'false'
 denominator = cgi['denominator'] == 'population' ? 'population' : 'allcause'
 
