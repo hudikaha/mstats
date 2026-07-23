@@ -59,8 +59,9 @@ body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .age-control #ageGroupLabel { flex:0 0 auto;white-space:nowrap; }
 .age-buttons { display:flex;flex-wrap:wrap;border:0.5px solid #c3c2b7;border-radius:8px;overflow:hidden; }
 .age-buttons button { padding-left:8px !important;padding-right:8px !important; }
-#seriesChecks label { display:flex;align-items:center;gap:3px; }
-#seriesChecks input { flex:0 0 auto; }
+#seriesChecks label { display:flex;align-items:center;gap:3px;border:0.5px solid #c3c2b7;border-radius:8px;padding:5px 9px;cursor:pointer;transition:background-color .12s,color .12s; }
+#seriesChecks input { position:absolute;opacity:0;pointer-events:none; }
+#seriesChecks label:has(input:focus-visible) { outline:2px solid #2a78d6;outline-offset:2px; }
 @media (max-width:760px) {
   #chartWorkspace { grid-template-columns:minmax(0,1fr); }
   #comparePanel { min-width:0;width:100%; }
@@ -688,8 +689,8 @@ function updateCompareChart(age){
   var denominators=values.map(function(v){return CURRENT_DENOMINATOR==='population' ? v.population : v.allCause;});
   var counts=[
     values.map(function(v){return v.cervical;}),
-    values.map(function(v){return v.suicide;}),
-    values.map(function(v){return Math.max(0,v.allCause-v.suicide-v.cervical);}),
+    values.map(function(v){return CURRENT_SUICIDE ? v.suicide : 0;}),
+    values.map(function(v){return Math.max(0,v.allCause-(CURRENT_SUICIDE ? v.suicide : 0)-v.cervical);}),
     values.map(function(v){return CURRENT_DENOMINATOR==='population' ? Math.max(0,v.population-v.allCause) : 0;})
   ];
   var labels=[t.compareCervical,t.compareSuicide,t.compareOtherDeaths,t.compareOtherPopulation];
@@ -698,14 +699,17 @@ function updateCompareChart(age){
     ds.counts=counts[index];
     ds.data=counts[index].map(function(value,i){return value/denominators[i]*100;});
   });
+  chartCompare.data.datasets[1].hidden=!CURRENT_SUICIDE;
   chartCompare.data.datasets[3].hidden=CURRENT_DENOMINATOR!=='population';
   chartCompare.update();
 
   var rows=values.map(function(v,index){
     var denominator=denominators[index];
-    var entries=CURRENT_DENOMINATOR==='population'
-      ? [[t.denomPopulation,v.population],[t.compareAllCause,v.allCause],[t.compareSuicide,v.suicide],[t.compareCervical,v.cervical]]
-      : [[t.compareAllCause,v.allCause],[t.compareSuicide,v.suicide],[t.compareCervical,v.cervical]];
+    var entries=[];
+    if(CURRENT_DENOMINATOR==='population') entries.push([t.denomPopulation,v.population]);
+    entries.push([t.compareAllCause,v.allCause]);
+    if(CURRENT_SUICIDE) entries.push([t.compareSuicide,v.suicide]);
+    entries.push([t.compareCervical,v.cervical]);
     return '<div class="compare-year"><strong>'+years[index]+'</strong>'+
       entries.map(function(entry){
         var ratio=entry[1]/denominator*100;
@@ -713,7 +717,9 @@ function updateCompareChart(age){
       }).join('')+'</div>';
   }).join('');
   document.getElementById('compareSummary').innerHTML=rows;
-  var legendItems=[['#444441',t.compareCervical],['#7a3db8',t.compareSuicide],['#9abdb4',t.compareOtherDeaths]];
+  var legendItems=[['#444441',t.compareCervical]];
+  if(CURRENT_SUICIDE) legendItems.push(['#7a3db8',t.compareSuicide]);
+  legendItems.push(['#9abdb4',t.compareOtherDeaths]);
   if(CURRENT_DENOMINATOR==='population') legendItems.push(['#e1e0d9',t.compareOtherPopulation]);
   document.getElementById('compareLegend').innerHTML=legendItems.map(function(item){
     return '<span><span style="display:inline-block;width:9px;height:9px;margin-right:4px;background:'+item[0]+'"></span>'+item[1]+'</span>';
@@ -728,14 +734,14 @@ function updateCompareChart(age){
   });
 }
 
-function legendItem(color, dash, marker, label){
+function legendItem(color, dash, marker, label, textColor){
   var markerSvg = '';
   if(marker==='circle') markerSvg = '<circle cx="16" cy="8" r="4.5" fill="'+color+'"/>';
   else if(marker==='rectRot') markerSvg = '<rect x="11.5" y="3.5" width="9" height="9" fill="'+color+'" transform="rotate(45 16 8)"/>';
   else if(marker==='rect') markerSvg = '<rect x="11.5" y="3.5" width="9" height="9" fill="'+color+'"/>';
   else if(marker==='star') markerSvg = '<polygon points="16,2 17.7,7 23,7 18.7,10.2 20.3,15.2 16,12 11.7,15.2 13.3,10.2 9,7 14.3,7" fill="'+color+'"/>';
   var dashArr = dash.length ? dash.join(',') : '0';
-  return '<span style="display:flex;align-items:center;gap:8px;font-size:16px;color:#52514e">'
+  return '<span style="display:flex;align-items:center;gap:8px;font-size:16px;color:'+(textColor||'#52514e')+'">'
     + '<svg width="32" height="16">'
     + '<line x1="2" y1="8" x2="30" y2="8" stroke="'+color+'" stroke-width="2.5" stroke-dasharray="'+dashArr+'"/>'
     + markerSvg + '</svg>' + label + '</span>';
@@ -744,14 +750,20 @@ function legendItem(color, dash, marker, label){
 function renderSeriesLegends(age){
   var t = I18N[CURRENT_LANG];
   var items=[
-    legendItem('#2a78d6', [], 'star', t.legendShinryo),
-    legendItem('#e34948', [], 'circle', t.legendNintei(age)),
-    legendItem('#eda100', [6,3], 'rectRot', t.legendRikan(age)),
-    legendItem('#444441', [1,3], 'rect', t.legendShibo(age)),
-    legendItem('#7a3db8', [8,3], '', t.legendSuicide(age)),
-    legendItem('#16856b', [], 'circle', t.legendAllCause(age))
+    ['#2a78d6', [], 'star', t.legendShinryo],
+    ['#e34948', [], 'circle', t.legendNintei(age)],
+    ['#eda100', [6,3], 'rectRot', t.legendRikan(age)],
+    ['#444441', [1,3], 'rect', t.legendShibo(age)],
+    ['#7a3db8', [8,3], '', t.legendSuicide(age)],
+    ['#16856b', [], 'circle', t.legendAllCause(age)]
   ];
-  items.forEach(function(html,index){document.getElementById('series'+index).innerHTML=html;});
+  items.forEach(function(item,index){
+    var checkbox=document.querySelector('[data-series="'+index+'"]');
+    var selected=checkbox.checked, label=checkbox.closest('label');
+    label.style.background=selected ? item[0] : 'transparent';
+    label.style.borderColor=item[0];
+    document.getElementById('series'+index).innerHTML=legendItem(selected ? '#fff' : item[0],item[1],item[2],item[3],selected ? '#fff' : '#52514e');
+  });
 }
 
 function updateDeathDatasets(age){
@@ -851,6 +863,7 @@ function setSeriesVisibility(index, visible){
   chartAll.setDatasetVisibility(index,visible);
   chartZoom.setDatasetVisibility(index,visible);
   chartAll.update(); chartZoom.update();
+  renderSeriesLegends(CURRENT_AGE);
 }
 
 function setLang(lang){
