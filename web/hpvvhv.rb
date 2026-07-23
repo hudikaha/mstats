@@ -53,10 +53,14 @@ body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .compare-year:first-child { border-top:none; }
 .compare-row { display:flex;justify-content:space-between;gap:10px; }
 .compare-row span:last-child { white-space:nowrap;font-variant-numeric:tabular-nums; }
+.age-control { display:flex;align-items:center;gap:8px;flex:1 1 620px;min-width:0; }
+.age-control #ageGroupLabel { flex:0 0 auto;white-space:nowrap; }
 .age-buttons { display:flex;flex-wrap:wrap;border:0.5px solid #c3c2b7;border-radius:8px;overflow:hidden; }
+.age-buttons button { padding-left:8px !important;padding-right:8px !important; }
 @media (max-width:760px) {
   #upperCharts { flex-direction:column; }
   #comparePanel { flex-basis:auto;min-width:0;width:100%; }
+  .age-control { flex-basis:100%;width:100%; }
   .age-buttons { display:grid;grid-template-columns:repeat(5,1fr);width:100%; }
   .age-buttons button { padding:6px 4px !important;font-size:13px !important; }
 }
@@ -78,6 +82,7 @@ __MENU__
 <button id="btnJa" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:#2a78d6;color:#fff">日本語</button>
 <button id="btnEn" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:transparent;color:#52514e">English</button>
 </div>
+<div class="age-control">
 <span id="ageGroupLabel" style="font-size:15px;color:#52514e"></span>
 <div class="age-buttons">
 <button id="btn20" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:#2a78d6;color:#fff"></button>
@@ -90,6 +95,7 @@ __MENU__
 <button id="btn55" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:transparent;color:#52514e"></button>
 <button id="btn60" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:transparent;color:#52514e"></button>
 <button id="btn65" type="button" style="padding:6px 16px;font-size:15px;border:none;cursor:pointer;background:transparent;color:#52514e"></button>
+</div>
 </div>
 </div>
 
