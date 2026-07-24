@@ -555,8 +555,12 @@ function makeXScale(){
   };
 }
 function fixWidth(axis){ axis.width = 60; }
-function paddedAxisMax(value){
-  return Math.max(100,Math.ceil(value*1.1/100)*100);
+// 下段Y軸は認定者の最大値を1.05倍し、人数の桁に応じた単位で切り上げる。
+// Pad the lower Y-axis certification maximum by 1.05 and round up by magnitude.
+function certificationAxisMax(value){
+  var target=value*1.05;
+  var unit=value<10 ? 1 : (value<=100 ? 10 : (target>=100000 ? 10000 : (target>=10000 ? 1000 : 100)));
+  return Math.max(unit,Math.ceil(target/unit)*unit);
 }
 function upperAxisMax(value){
   var target=value*1.05;
@@ -850,7 +854,7 @@ function setAge(age){
   chartZoom.data.datasets[2].label = t.dsRikan(age);
   chartZoom.data.datasets[3].data = shiboData;
   chartZoom.data.datasets[3].label = t.dsShibo(age);
-  chartZoom.options.scales.y.max = paddedAxisMax(ninteiMax);
+  chartZoom.options.scales.y.max = certificationAxisMax(ninteiMax);
   chartZoom.update();
 
   updateCompareChart(age);
