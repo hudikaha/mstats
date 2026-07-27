@@ -485,11 +485,6 @@ print <<EOS
   }
   </script>
   <form id="myForm" onsubmit="submitForm(); return false;" style="text-align: left;">
-  <div style="margin:0 0 10px">
-   <label for="missingHistorySlider">#{{ja: '死亡者の接種歴欠落を仮定', en: 'Assumed missing vaccination histories among deaths'}[$l]}: <strong id="missingHistoryValue">#{$missing_rate}%</strong></label><br>
-   <input id="missingHistorySlider" type="range" min="0" max="4" step="1" value="#{MissingRates.index($missing_rate)}" data-rate="#{$missing_rate}" style="width:min(420px,100%)">
-   <div style="display:flex;justify-content:space-between;width:min(420px,100%);font-size:13px"><span>0%</span><span>1%</span><span>5%</span><span>10%</span><span>20%</span></div>
-  </div>
 EOS
 Cities.each do |k, v|
     print <<EOS
@@ -564,6 +559,11 @@ end
 print <<EOS
    <input type="submit" value="送信/Submit">
   </form>
+  <div style="margin:10px 0">
+   <label for="missingHistorySlider">#{{ja: '死亡者の接種歴欠落を仮定', en: 'Assumed missing vaccination histories among deaths'}[$l]}: <strong id="missingHistoryValue">#{$missing_rate}%</strong></label><br>
+   <input id="missingHistorySlider" type="range" min="0" max="4" step="1" value="#{MissingRates.index($missing_rate)}" data-rate="#{$missing_rate}" style="width:min(420px,100%)">
+   <div style="display:flex;justify-content:space-between;width:min(420px,100%);font-size:13px"><span>0%</span><span>1%</span><span>5%</span><span>10%</span><span>20%</span></div>
+  </div>
   <p class=c>
   <div id="vis"></div>
   <script>
