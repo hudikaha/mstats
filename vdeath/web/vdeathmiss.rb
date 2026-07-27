@@ -24,7 +24,12 @@ mstats = [
 ].find { |path| File.file?(path) }
 abort 'mstats.rb not found' unless mstats
 require mstats
-require_relative '../lib/missing_history'
+missing_history = [
+    File.expand_path('../lib/missing_history.rb', __dir__),
+    File.expand_path('lib/missing_history.rb', __dir__)
+].find { |path| File.file?(path) }
+abort 'missing_history.rb not found' unless missing_history
+require missing_history
 include MissingHistory
 
 #
