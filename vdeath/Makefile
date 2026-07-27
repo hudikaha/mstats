@@ -3,7 +3,7 @@ SHELL := /bin/zsh
 
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 WEB_DIR := $(ROOT)/web
-WEB_FILES := kcor.rb kcor.js kcor.css vdeath.rb afterdose.rb
+WEB_FILES := kcor.rb kcor.js kcor.css vdeath.rb vdeathmiss.rb afterdose.rb
 
 SERVER ?= fujikawa.org
 SERVER_WEB_DIR ?= fujikawa/covid19
@@ -23,6 +23,7 @@ help:
 check:
 	@ruby -c "$(WEB_DIR)/kcor.rb"
 	@ruby -c "$(WEB_DIR)/vdeath.rb"
+	@ruby -c "$(WEB_DIR)/vdeathmiss.rb"
 	@ruby -c "$(WEB_DIR)/afterdose.rb"
 	@node --check "$(WEB_DIR)/kcor.js"
 
