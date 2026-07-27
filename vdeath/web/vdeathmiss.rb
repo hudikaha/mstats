@@ -232,7 +232,7 @@ Consts.each do |k, v|
     end
 
     # 選択されたものが無ければ default 設定
-    if ! v[:hash].find{|k2, v2| v2[:sel] != nil}
+    if ! %w[stacks lines bars].include?(k) && ! v[:hash].find{|k2, v2| v2[:sel] != nil}
         v[:defaults].each do |key|
             begin
                 v[:hash][key][:sel] = v[:selected]
@@ -248,6 +248,18 @@ Consts.each do |k, v|
     if v[:keys]
         keys2 = v[:hash].select{|k, v| v[:sel]}.keys
         v[:keys] = keys2 if v[:keys].sort != keys2.sort
+    end
+end
+
+
+# 3種類のgraph指定がすべて空の初期状態だけ、標準表示を設定する。
+# Apply graph defaults only when all three graph-selection groups are empty.
+graph_params = %w[stacks lines bars]
+if graph_params.all?{|param| ! Consts[param][:hash].any?{|_key, value| value[:sel]}}
+    graph_params.each do |param|
+        Consts[param][:defaults].each do |key|
+            Consts[param][:hash][key][:sel] = Consts[param][:selected]
+        end
     end
 end
 
