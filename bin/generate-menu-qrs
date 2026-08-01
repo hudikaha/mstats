@@ -15,7 +15,9 @@ abort 'qrencode not found' unless system('command', '-v', 'qrencode', out: File:
 
 FileUtils.mkdir_p(OUTPUT_DIR)
 YAML.load_file(MENU).each do |item|
-  href = item.fetch('href').split('?', 2).first
+  # 区切りなどURLを持たないmenu項目はQR生成の対象外とする。 / Skip menu separators and other entries without URLs.
+  next unless item.is_a?(Hash) && item['href']
+  href = item['href'].split('?', 2).first
   next if href.match?(%r{\A(?:https?:)?//})
 
   filename = "#{href.tr('/', '_')}.svg"

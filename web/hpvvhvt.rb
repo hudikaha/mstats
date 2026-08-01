@@ -80,7 +80,7 @@ button { font-family:inherit; }
 <div id="wrapper">
 __MENU__
 <div class="right-column">
-<div class="site-title"><h1 id="heading" align="center"></h1></div>
+<div class="site-title"><h1 id="heading" align="center"></h1><a class="site-title-qr" href="https://medicalfacts.info/hpvvhvt.rb"><img id="pageQr" src="qr/hpvvhvt.rb.svg" alt=""></a></div>
 
 <div class="controls">
   <div class="segmented">
@@ -154,6 +154,7 @@ var I18N = {
     sourceHeading:'出典',
     sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第110回副反応検討部会 資料3-4、2026年2月4日）',
     sourcePage:function(n){return '出典資料 '+n+'ページ';},
+    qrAlt:'このページのQRコード',
     month:function(key){return key;}
   },
   en: {
@@ -168,6 +169,7 @@ var I18N = {
     sourceHeading:'Source',
     sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (110th Adverse Reaction Review Committee, Document 3-4, February 4, 2026)',
     sourcePage:function(n){return 'Source document, page '+n;},
+    qrAlt:'QR code for this page',
     month:function(key){return key;}
   }
 };
@@ -275,6 +277,8 @@ function render(){
   document.documentElement.lang=CURRENT_LANG;
   document.getElementById('pageTitle').textContent=t.title;
   document.getElementById('heading').innerHTML=t.heading;
+  document.getElementById('pageQr').alt=t.qrAlt;
+  document.getElementById('pageQr').title=t.qrAlt;
   document.getElementById('viewLabel').textContent=t.viewLabel;
   document.getElementById('btnOverlay').textContent=t.overlay;
   document.getElementById('btnStack').textContent=t.stack;
