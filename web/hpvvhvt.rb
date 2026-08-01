@@ -41,7 +41,7 @@ button { font-family:inherit; }
 .segmented button.active { background:#2a78d6;color:#fff; }
 #lagValue { min-width:7em;text-align:center;font-variant-numeric:tabular-nums; }
 #correlation { margin:2px 0 12px;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
-#apportionNote { margin:-4px 0 14px;font-size:16px;color:#52514e; }
+#apportionNote { margin:12px 0 14px;font-size:16px;color:#52514e; }
 .chart-panel { position:relative;width:100%;height:500px; }
 #stackCharts { display:none;grid-template-rows:1fr 1fr;gap:12px;height:620px; }
 .stack-panel { position:relative;min-height:0; }
@@ -88,12 +88,12 @@ __MENU__
 </div>
 
 <div id="correlation" aria-live="polite"></div>
-<div id="apportionNote"></div>
 <div id="overlayChart" class="chart-panel"><canvas id="chartOverlay" role="img"></canvas></div>
 <div id="stackCharts">
   <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
   <div class="stack-panel"><canvas id="chartShipments" role="img"></canvas></div>
 </div>
+<div id="apportionNote"></div>
 
 <section id="sourceSection">
   <h2 id="sourceHeading"></h2>
@@ -124,11 +124,11 @@ var I18N = {
     shipments:'HPVワクチン納入数', visits:'HPVワクチン接種後の体調不良新規受診患者数',
     shipmentsAxis:'納入数', visitsAxis:'新規受診者数', unit:'人',
     correlation:function(r){return '相関係数 r = '+r;},
-    apportionNote:'0.5か月単位の相関係数は、月次納入数を隣接する2か月へ均等按分して計算しています。折れ線は納入数を按分せず、表示位置だけを移動しています。',
+    apportionNote:'※ 0.5か月単位の相関係数は、月次納入数を隣接する2か月へ均等按分して計算しています。',
     sourceHeading:'出典',
     sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第110回副反応検討部会 資料3-4、2026年2月4日）',
     sourcePage:function(n){return '出典資料 '+n+'ページ';},
-    month:function(key){return key.slice(0,4)+'年'+Number(key.slice(5))+'月';}
+    month:function(key){return key;}
   },
   en: {
     title:'Monthly New Symptom-related Visits after HPV Vaccination and HPV Vaccine Shipments',
@@ -138,7 +138,7 @@ var I18N = {
     shipments:'HPV vaccine shipments', visits:'New symptom-related visits after HPV vaccination',
     shipmentsAxis:'Shipments', visitsAxis:'New visits', unit:'',
     correlation:function(r){return 'Correlation r = '+r;},
-    apportionNote:'For half-month correlations, monthly shipments are divided equally between the two adjacent months. The line keeps the original monthly values and only shifts its display position.',
+    apportionNote:'* For half-month correlations, monthly shipments are divided equally between the two adjacent months.',
     sourceHeading:'Source',
     sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (110th Adverse Reaction Review Committee, Document 3-4, February 4, 2026)',
     sourcePage:function(n){return 'Source document, page '+n;},
