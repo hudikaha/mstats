@@ -47,6 +47,7 @@ body.lang-ja .note-list[data-language-content="ja"],
 body.lang-en .note-list[data-language-content="en"] { display:flex; }
 .source-item { margin-bottom:10px; }
 #chartWorkspace { display:grid;grid-template-columns:minmax(0,62fr) minmax(310px,38fr);gap:18px;align-items:stretch; }
+#chartWorkspace.compare-hidden { grid-template-columns:minmax(0,1fr);gap:0; }
 #trendCharts, #chartAllPanel { min-width:0; }
 #comparePanel { min-width:0;border:0.5px solid #e1e0d9;border-radius:8px;padding:12px;box-sizing:border-box; }
 #compareSummary { font-size:13px;color:#52514e;line-height:1.35;margin-top:8px; }
@@ -871,12 +872,18 @@ function setAge(age){
 
 function setDeathSeries(index,visible){
   var panel=document.getElementById('comparePanel');
+  var workspace=document.getElementById('chartWorkspace');
   if(index===4) CURRENT_SUICIDE=visible;
   if(index===5) CURRENT_ALL_CAUSE=visible;
   document.querySelector('[data-series="'+index+'"]').checked=visible;
   panel.hidden=!CURRENT_ALL_CAUSE;
+  workspace.classList.toggle('compare-hidden',panel.hidden);
   setAge(CURRENT_AGE);
-  window.requestAnimationFrame(function(){ chartAll.resize(); chartCompare.resize(); });
+  window.requestAnimationFrame(function(){
+    chartAll.resize();
+    chartZoom.resize();
+    if(!panel.hidden) chartCompare.resize();
+  });
 }
 
 function setDenominator(value){
