@@ -287,7 +287,7 @@ function scatterTooltipOptions(){
   }};
 }
 function fixedLeftAxisWidth(scale){scale.width=92;}
-function fixedRightAxisWidth(scale){scale.width=58;}
+function fixedRightAxisWidth(scale){scale.width=92;}
 function rightAxisSpacer(){
   return {type:'linear',position:'right',min:0,max:1,afterFit:fixedRightAxisWidth,grid:{display:false,drawOnChartArea:false},border:{display:false},ticks:{display:false},title:{display:false}};
 }
@@ -296,8 +296,8 @@ Chart.defaults.font.size=16;
 var overlayChart=new Chart(document.getElementById('chartOverlay'),{
   type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{
     x:xScale(true),
-    yShipments:{type:'linear',position:'left',beginAtZero:true,afterFit:fixedLeftAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
-    yVisits:{type:'linear',position:'right',beginAtZero:true,afterFit:fixedRightAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}},grid:{drawOnChartArea:false}}
+    yVisits:{type:'linear',position:'left',beginAtZero:true,afterFit:fixedLeftAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}},
+    yShipments:{type:'linear',position:'right',beginAtZero:true,afterFit:fixedRightAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}},grid:{drawOnChartArea:false}}
   }}
 });
 var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
