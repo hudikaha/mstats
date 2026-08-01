@@ -85,8 +85,8 @@ __MENU__
 <div id="correlation" aria-live="polite"></div>
 <div id="overlayChart" class="chart-panel"><canvas id="chartOverlay" role="img"></canvas></div>
 <div id="stackCharts">
-  <div class="stack-panel"><canvas id="chartShipments" role="img"></canvas></div>
   <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
+  <div class="stack-panel"><canvas id="chartShipments" role="img"></canvas></div>
 </div>
 
 <section id="sourceSection">
@@ -218,10 +218,10 @@ var overlayChart=new Chart(document.getElementById('chartOverlay'),{
   }}
 });
 var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
-  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
+  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
 });
 var visitsChart=new Chart(document.getElementById('chartVisits'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
 });
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
