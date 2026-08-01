@@ -12,7 +12,7 @@ end
 cgi = CGI.new
 lang = cgi['l'] == 'en' ? 'en' : 'ja'
 view = cgi['view'] == 'stack' ? 'stack' : 'overlay'
-lag = [[cgi['lag'].to_i, -12].max, 12].min
+lag = [[(cgi['lag'].to_f * 2).round / 2.0, -12].max, 12].min
 
 menu_out = StringIO.new
 $stdout = menu_out
@@ -37,6 +37,7 @@ button { font-family:inherit; }
 .segmented button.active { background:#2a78d6;color:#fff; }
 #lagValue { min-width:7em;text-align:center;font-variant-numeric:tabular-nums; }
 #correlation { margin:2px 0 12px;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
+#apportionNote { margin:-4px 0 14px;font-size:16px;color:#52514e; }
 .chart-panel { position:relative;width:100%;height:500px; }
 #stackCharts { display:none;grid-template-rows:1fr 1fr;gap:12px;height:620px; }
 .stack-panel { position:relative;min-height:0; }
@@ -74,15 +75,16 @@ __MENU__
   <div class="control-group">
     <span id="lagLabel"></span>
     <div class="segmented">
-      <button id="btnLagMinus" type="button" aria-label="-1">−</button>
+      <button id="btnLagMinus" type="button" aria-label="-0.5">−</button>
       <button id="btnLagReset" type="button">0</button>
-      <button id="btnLagPlus" type="button" aria-label="+1">＋</button>
+      <button id="btnLagPlus" type="button" aria-label="+0.5">＋</button>
     </div>
     <span id="lagValue"></span>
   </div>
 </div>
 
 <div id="correlation" aria-live="polite"></div>
+<div id="apportionNote"></div>
 <div id="overlayChart" class="chart-panel"><canvas id="chartOverlay" role="img"></canvas></div>
 <div id="stackCharts">
   <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
@@ -118,6 +120,7 @@ var I18N = {
     shipments:'HPVワクチン納入数', visits:'HPVワクチン接種後の体調不良新規受診患者数',
     shipmentsAxis:'納入数', visitsAxis:'新規受診者数', unit:'人',
     correlation:function(r){return '相関係数 r = '+r;},
+    apportionNote:'0.5か月単位の相関係数は、月次納入数を隣接する2か月へ均等按分して計算しています。折れ線は納入数を按分せず、表示位置だけを移動しています。',
     sourceHeading:'出典',
     sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第110回副反応検討部会 資料3-4、2026年2月4日）',
     sourcePage:function(n){return '出典資料 '+n+'ページ';},
@@ -131,6 +134,7 @@ var I18N = {
     shipments:'HPV vaccine shipments', visits:'New symptom-related visits after HPV vaccination',
     shipmentsAxis:'Shipments', visitsAxis:'New visits', unit:'',
     correlation:function(r){return 'Correlation r = '+r;},
+    apportionNote:'For half-month correlations, monthly shipments are divided equally between the two adjacent months. The line keeps the original monthly values and only shifts its display position.',
     sourceHeading:'Source',
     sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (110th Adverse Reaction Review Committee, Document 3-4, February 4, 2026)',
     sourcePage:function(n){return 'Source document, page '+n;},
@@ -172,13 +176,21 @@ function updateUrl(){
   window.history.replaceState(null,'',window.location.pathname+'?'+p.toString());
 }
 function visibleData(){
-  var shipments=monthlyRaw.map(function(r){return {x:monthKey(monthIndex(r[0],r[1])+CURRENT_LAG),y:r[2]};});
-  var visits=monthlyRaw.map(function(r){return {x:monthKey(monthIndex(r[0],r[1])),y:r[3]};});
+  var shipments=monthlyRaw.map(function(r){return {x:monthIndex(r[0],r[1])+CURRENT_LAG,y:r[2]};});
+  var visits=monthlyRaw.map(function(r){return {x:monthIndex(r[0],r[1]),y:r[3]};});
   return {shipments:shipments,visits:visits};
 }
 function correlation(data){
   var byMonth={};
-  data.shipments.forEach(function(p){byMonth[p.x]=p.y;});
+  data.shipments.forEach(function(p){
+    var lower=Math.floor(p.x),upper=Math.ceil(p.x),upperWeight=p.x-lower;
+    if(lower===upper){
+      byMonth[lower]=(byMonth[lower]||0)+p.y;
+    }else{
+      byMonth[lower]=(byMonth[lower]||0)+p.y*(1-upperWeight);
+      byMonth[upper]=(byMonth[upper]||0)+p.y*upperWeight;
+    }
+  });
   var pairs=data.visits.filter(function(p){return byMonth[p.x]!==undefined;}).map(function(p){return [byMonth[p.x],p.y];});
   var n=pairs.length;
   var meanX=pairs.reduce(function(s,p){return s+p[0];},0)/n;
@@ -187,23 +199,24 @@ function correlation(data){
   pairs.forEach(function(p){var x=p[0]-meanX,y=p[1]-meanY;xy+=x*y;xx+=x*x;yy+=y*y;});
   return {r:xy/Math.sqrt(xx*yy),n:n};
 }
-function labelsFor(data){
-  return data.visits.map(function(p){return p.x;});
-}
 function chartData(data){
-  var t=I18N[CURRENT_LANG],visibleMonths={};
-  data.visits.forEach(function(p){visibleMonths[p.x]=true;});
-  var visibleShipments=data.shipments.filter(function(p){return visibleMonths[p.x];});
+  var t=I18N[CURRENT_LANG],minX=data.visits[0].x,maxX=data.visits[data.visits.length-1].x;
+  var visibleShipments=data.shipments.filter(function(p){return p.x>=minX && p.x<=maxX;});
   return [
     {type:'bar',label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'rgba(196,78,82,0.72)',yAxisID:'yVisits',borderWidth:1,order:2},
     {type:'line',label:t.shipments,data:visibleShipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',pointBackgroundColor:'#2a78d6',pointBorderColor:'#2a78d6',pointBorderWidth:0,yAxisID:'yShipments',tension:0.15,pointRadius:5,pointHoverRadius:7,borderWidth:3,order:1}
   ];
 }
 function xScale(showTicks){
-  return {type:'category',offset:false,ticks:{display:showTicks,maxRotation:0,autoSkip:true,maxTicksLimit:10,font:{size:16}},grid:{display:false}};
+  return {type:'linear',min:monthIndex(2022,3),max:monthIndex(2025,11),offset:false,ticks:{display:showTicks,stepSize:4,maxRotation:0,font:{size:16},callback:function(value){return Number.isInteger(value)?I18N[CURRENT_LANG].month(monthKey(value)):'';}},grid:{display:false}};
 }
 function tooltipOptions(){
-  return {titleFont:{size:17},bodyFont:{size:17},callbacks:{title:function(items){return items.length?I18N[CURRENT_LANG].month(items[0].label):'';},label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
+  return {titleFont:{size:17},bodyFont:{size:17},callbacks:{title:function(items){
+    if(!items.length) return '';
+    var x=items[0].parsed.x,lower=Math.floor(x);
+    if(Number.isInteger(x)) return I18N[CURRENT_LANG].month(monthKey(x));
+    return I18N[CURRENT_LANG].month(monthKey(lower))+'–'+I18N[CURRENT_LANG].month(monthKey(lower+1));
+  },label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
 }
 function legendOptions(){
   return {labels:{font:{size:18},sort:function(a,b){return a.datasetIndex-b.datasetIndex;}}};
@@ -226,7 +239,7 @@ var visitsChart=new Chart(document.getElementById('chartVisits'),{
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
 function render(){
-  var t=I18N[CURRENT_LANG],data=visibleData(),labels=labelsFor(data),corr=correlation(data);
+  var t=I18N[CURRENT_LANG],data=visibleData(),corr=correlation(data);
   document.documentElement.lang=CURRENT_LANG;
   document.getElementById('pageTitle').textContent=t.title;
   document.getElementById('heading').innerHTML=t.heading;
@@ -236,6 +249,7 @@ function render(){
   document.getElementById('lagLabel').textContent=t.lagLabel;
   document.getElementById('lagValue').textContent=CURRENT_LAG===0?t.lagZero:(CURRENT_LAG<0?t.lagBefore(-CURRENT_LAG):t.lagAfter(CURRENT_LAG));
   document.getElementById('correlation').textContent=t.correlation(corr.r.toFixed(3));
+  document.getElementById('apportionNote').textContent=t.apportionNote;
   document.getElementById('sourceHeading').textContent=t.sourceHeading;
   document.getElementById('sourceTitle').textContent=t.sourceTitle;
   document.querySelectorAll('.source-page').forEach(function(img,index){img.alt=t.sourcePage(index+1);});
@@ -246,20 +260,17 @@ function render(){
   document.getElementById('overlayChart').style.display=CURRENT_VIEW==='overlay'?'block':'none';
   document.getElementById('stackCharts').style.display=CURRENT_VIEW==='stack'?'grid':'none';
 
-  overlayChart.data.labels=labels;
   overlayChart.data.datasets=chartData(data);
   overlayChart.options.scales.yShipments.title.text=t.shipmentsAxis;
   overlayChart.options.scales.yVisits.title.text=t.visitsAxis;
   overlayChart.options.plugins.tooltip=tooltipOptions();
   overlayChart.update();
 
-  shipmentsChart.data.labels=labels;
   shipmentsChart.data.datasets=[chartData(data)[1]];
   shipmentsChart.data.datasets[0].yAxisID='y';
   shipmentsChart.options.scales.y.title.text=t.shipmentsAxis;
   shipmentsChart.options.plugins.tooltip=tooltipOptions();
   shipmentsChart.update();
-  visitsChart.data.labels=labels;
   visitsChart.data.datasets=[chartData(data)[0]];
   visitsChart.data.datasets[0].yAxisID='y';
   visitsChart.options.scales.y.title.text=t.visitsAxis;
@@ -272,8 +283,8 @@ document.getElementById('btnJa').onclick=function(){CURRENT_LANG='ja';render();}
 document.getElementById('btnEn').onclick=function(){CURRENT_LANG='en';render();};
 document.getElementById('btnOverlay').onclick=function(){CURRENT_VIEW='overlay';render();};
 document.getElementById('btnStack').onclick=function(){CURRENT_VIEW='stack';render();};
-document.getElementById('btnLagMinus').onclick=function(){if(CURRENT_LAG>-12){CURRENT_LAG--;render();}};
-document.getElementById('btnLagPlus').onclick=function(){if(CURRENT_LAG<12){CURRENT_LAG++;render();}};
+document.getElementById('btnLagMinus').onclick=function(){if(CURRENT_LAG>-12){CURRENT_LAG-=0.5;render();}};
+document.getElementById('btnLagPlus').onclick=function(){if(CURRENT_LAG<12){CURRENT_LAG+=0.5;render();}};
 document.getElementById('btnLagReset').onclick=function(){CURRENT_LAG=0;render();};
 render();
 </script>
