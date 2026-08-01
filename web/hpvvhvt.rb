@@ -11,7 +11,7 @@ end
 
 cgi = CGI.new
 lang = cgi['l'] == 'en' ? 'en' : 'ja'
-view = cgi['view'] == 'stack' ? 'stack' : 'overlay'
+view = %w[stack scatter].include?(cgi['view']) ? cgi['view'] : 'overlay'
 lag = if cgi['lag'].empty?
         0.0
       else
@@ -44,18 +44,23 @@ button { font-family:inherit; }
 #seriesLegend { display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap; }
 .legend-item { display:flex;align-items:center;gap:8px;font-size:18px; }
 .legend-bar { width:19px;height:14px;background:rgba(196,78,82,0.72);border:1px solid #c44e52;box-sizing:border-box; }
+.legend-bar.scatter-key { width:12px;height:12px;border-radius:50%; }
 .legend-line { position:relative;width:42px;height:16px; }
 .legend-line::before { content:'';position:absolute;left:0;right:0;top:7px;border-top:3px solid #2a78d6; }
 .legend-line::after { content:'';position:absolute;left:16px;top:3px;width:10px;height:10px;border-radius:50%;background:#2a78d6; }
+.legend-line.regression-key::after { display:none; }
 #correlation { margin:0;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
 #apportionNote { margin:12px 0 14px;font-size:16px;color:#52514e; }
 #chartStage { position:relative;width:100%;height:400px;transition:height 320ms ease;overflow:hidden; }
 #chartStage.stack-mode { height:612px; }
 .chart-panel { position:absolute;inset:0;width:100%;height:400px;opacity:1;transition:opacity 220ms ease; }
+.scatter-panel { position:absolute;inset:0;width:100%;height:400px;opacity:0;pointer-events:none;transition:opacity 220ms ease; }
 #stackCharts { position:absolute;inset:0;display:grid;grid-template-rows:400px 200px;gap:12px;height:612px;pointer-events:none; }
 .stack-panel { position:relative;min-height:0;opacity:0;transition:opacity 220ms ease,transform 320ms ease; }
 #stackCharts .stack-panel:last-child { transform:translateY(-412px); }
 #chartStage.stack-mode .chart-panel { opacity:0;pointer-events:none; }
+#chartStage.scatter-mode .chart-panel { opacity:0;pointer-events:none; }
+#chartStage.scatter-mode .scatter-panel { opacity:1;pointer-events:auto; }
 #chartStage.stack-mode #stackCharts { pointer-events:auto; }
 #chartStage.stack-mode .stack-panel { opacity:1; }
 #chartStage.stack-mode #stackCharts .stack-panel:last-child { transform:translateY(0); }
@@ -67,6 +72,7 @@ button { font-family:inherit; }
   #chartStage { height:344px; }
   #chartStage.stack-mode { height:600px; }
   .chart-panel { height:344px; }
+  .scatter-panel { height:344px; }
   #stackCharts { grid-template-rows:344px 244px;height:600px; }
   #stackCharts .stack-panel:last-child { transform:translateY(-356px); }
   #chartStage.stack-mode #stackCharts .stack-panel:last-child { transform:translateY(0); }
@@ -92,6 +98,7 @@ __MENU__
     <div class="segmented">
       <button id="btnOverlay" type="button"></button>
       <button id="btnStack" type="button"></button>
+      <button id="btnScatter" type="button"></button>
     </div>
   </div>
   <div class="control-group">
@@ -118,8 +125,10 @@ __MENU__
     <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
     <div class="stack-panel"><canvas id="chartShipments" role="img"></canvas></div>
   </div>
+  <div id="scatterPanel" class="scatter-panel"><canvas id="chartScatter" role="img"></canvas></div>
 </div>
 <div id="apportionNote"></div>
+<p id="acknowledgement" style="font-size:16px;line-height:1.6;margin:10px 0 18px"></p>
 
 <section id="sourceSection">
   <h2 id="sourceHeading"></h2>
@@ -145,12 +154,14 @@ var I18N = {
   ja: {
     title:'HPVワクチン接種後体調不良新規受診者数とHPVワクチン納入数の月次推移',
     heading:'HPVワクチン接種後体調不良新規受診者数と<br>HPVワクチン納入数の月次推移',
-    viewLabel:'表示', overlay:'重ねる', stack:'上下に並べる', lagLabel:'納入数の表示位置',
+    viewLabel:'表示', overlay:'重ねる', stack:'上下に並べる', scatter:'散布図', lagLabel:'納入数の表示位置',
     lagZero:'同じ月', lagBefore:function(n){return n+'か月前';}, lagAfter:function(n){return n+'か月後';},
     shipments:'HPVワクチン納入数', visits:'HPVワクチン接種後の体調不良新規受診患者数',
     shipmentsAxis:'納入数', visitsAxis:'新規受診者数', unit:'人',
     correlation:function(r){return '相関係数 r = '+r;},
     apportionNote:'※ 0.5か月単位の相関係数は、月次納入数を隣接する2か月へ均等按分して計算しています。',
+    acknowledgement:'隈本邦彦先生（元NHK記者・江戸川大学名誉教授）の講演資料によりデータの存在を知り、本グラフの着想を得ました。深く感謝いたします。',
+    scatterPoints:'月ごとの値', regressionLine:'回帰直線',
     sourceHeading:'出典',
     sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第110回副反応検討部会 資料3-4、2026年2月4日）',
     sourcePage:function(n){return '出典資料 '+n+'ページ';},
@@ -160,12 +171,14 @@ var I18N = {
   en: {
     title:'Monthly New Symptom-related Visits after HPV Vaccination and HPV Vaccine Shipments',
     heading:'Monthly New Symptom-related Visits after HPV Vaccination and<br>HPV Vaccine Shipments',
-    viewLabel:'View', overlay:'Overlay', stack:'Stacked', lagLabel:'Shipment position',
+    viewLabel:'View', overlay:'Overlay', stack:'Stacked', scatter:'Scatter plot', lagLabel:'Shipment position',
     lagZero:'Same month', lagBefore:function(n){return n+' month'+(n===1?'':'s')+' earlier';}, lagAfter:function(n){return n+' month'+(n===1?'':'s')+' later';},
     shipments:'HPV vaccine shipments', visits:'New symptom-related visits after HPV vaccination',
     shipmentsAxis:'Shipments', visitsAxis:'New visits', unit:'',
     correlation:function(r){return 'Correlation r = '+r;},
     apportionNote:'* For half-month correlations, monthly shipments are divided equally between the two adjacent months.',
+    acknowledgement:'I learned of these data and conceived this graph through lecture materials by Professor Kunihiko Kumamoto (former NHK reporter and Professor Emeritus at Edogawa University). I am deeply grateful.',
+    scatterPoints:'Monthly values', regressionLine:'Regression line',
     sourceHeading:'Source',
     sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (110th Adverse Reaction Review Committee, Document 3-4, February 4, 2026)',
     sourcePage:function(n){return 'Source document, page '+n;},
@@ -203,7 +216,7 @@ function monthKey(index){
 function updateUrl(){
   var p=new URLSearchParams(window.location.search);
   p.set('l',CURRENT_LANG);
-  if(CURRENT_VIEW==='stack') p.set('view','stack'); else p.delete('view');
+  if(CURRENT_VIEW==='overlay') p.delete('view'); else p.set('view',CURRENT_VIEW);
   if(CURRENT_LAG) p.set('lag',String(CURRENT_LAG)); else p.delete('lag');
   window.history.replaceState(null,'',window.location.pathname+'?'+p.toString());
 }
@@ -212,7 +225,7 @@ function visibleData(){
   var visits=monthlyRaw.map(function(r){return {x:monthIndex(r[0],r[1]),y:r[3]};});
   return {shipments:shipments,visits:visits};
 }
-function correlation(data){
+function correlationPairs(data){
   var byMonth={};
   data.shipments.forEach(function(p){
     var lower=Math.floor(p.x),upper=Math.ceil(p.x),upperWeight=p.x-lower;
@@ -223,13 +236,27 @@ function correlation(data){
       byMonth[upper]=(byMonth[upper]||0)+p.y*upperWeight;
     }
   });
-  var pairs=data.visits.filter(function(p){return byMonth[p.x]!==undefined;}).map(function(p){return [byMonth[p.x],p.y];});
+  return data.visits.filter(function(p){return byMonth[p.x]!==undefined;}).map(function(p){return {x:byMonth[p.x],y:p.y,month:p.x};});
+}
+function pairStats(pairs){
   var n=pairs.length;
-  var meanX=pairs.reduce(function(s,p){return s+p[0];},0)/n;
-  var meanY=pairs.reduce(function(s,p){return s+p[1];},0)/n;
+  var meanX=pairs.reduce(function(s,p){return s+p.x;},0)/n;
+  var meanY=pairs.reduce(function(s,p){return s+p.y;},0)/n;
   var xy=0,xx=0,yy=0;
-  pairs.forEach(function(p){var x=p[0]-meanX,y=p[1]-meanY;xy+=x*y;xx+=x*x;yy+=y*y;});
-  return {r:xy/Math.sqrt(xx*yy),n:n};
+  pairs.forEach(function(p){var x=p.x-meanX,y=p.y-meanY;xy+=x*y;xx+=x*x;yy+=y*y;});
+  return {r:xy/Math.sqrt(xx*yy),n:n,meanX:meanX,meanY:meanY,xy:xy,xx:xx};
+}
+function correlation(data){
+  return pairStats(correlationPairs(data));
+}
+function scatterDatasets(data){
+  var t=I18N[CURRENT_LANG],pairs=correlationPairs(data),stats=pairStats(pairs);
+  var slope=stats.xy/stats.xx,intercept=stats.meanY-slope*stats.meanX;
+  var xs=pairs.map(function(p){return p.x;}),minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs);
+  return [
+    {type:'scatter',label:t.scatterPoints,data:pairs,backgroundColor:'#c44e52',borderColor:'#c44e52',pointRadius:5,pointHoverRadius:7,order:1},
+    {type:'line',label:t.regressionLine,data:[{x:minX,y:intercept+slope*minX},{x:maxX,y:intercept+slope*maxX}],borderColor:'#2a78d6',backgroundColor:'#2a78d6',borderWidth:3,pointRadius:0,order:2}
+  ];
 }
 function chartData(data){
   var t=I18N[CURRENT_LANG],minX=data.visits[0].x,maxX=data.visits[data.visits.length-1].x;
@@ -249,6 +276,12 @@ function tooltipOptions(){
     if(Number.isInteger(x)) return I18N[CURRENT_LANG].month(monthKey(x));
     return I18N[CURRENT_LANG].month(monthKey(lower))+'–'+I18N[CURRENT_LANG].month(monthKey(lower+1));
   },label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
+}
+function scatterTooltipOptions(){
+  return {filter:function(item){return item.datasetIndex===0;},titleFont:{size:17},bodyFont:{size:17},callbacks:{
+    title:function(items){return items.length?I18N[CURRENT_LANG].month(monthKey(items[0].raw.month)):'';},
+    label:function(ctx){var t=I18N[CURRENT_LANG];return [t.shipments+': '+Math.round(ctx.parsed.x).toLocaleString()+(CURRENT_LANG==='ja'?'人':''),t.visits+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'')];}
+  }};
 }
 function fixedLeftAxisWidth(scale){scale.width=92;}
 function fixedRightAxisWidth(scale){scale.width=58;}
@@ -270,6 +303,13 @@ var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
 var visitsChart=new Chart(document.getElementById('chartVisits'),{
   type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,afterFit:fixedLeftAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}},ySpacer:rightAxisSpacer()}}
 });
+var scatterChart=new Chart(document.getElementById('chartScatter'),{
+  type:'scatter',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:scatterTooltipOptions()},scales:{
+    x:{type:'linear',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
+    y:{beginAtZero:true,afterFit:fixedLeftAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}},
+    ySpacer:rightAxisSpacer()
+  }}
+});
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
 function render(){
@@ -282,23 +322,32 @@ function render(){
   document.getElementById('viewLabel').textContent=t.viewLabel;
   document.getElementById('btnOverlay').textContent=t.overlay;
   document.getElementById('btnStack').textContent=t.stack;
+  document.getElementById('btnScatter').textContent=t.scatter;
   document.getElementById('lagLabel').textContent=t.lagLabel;
   document.getElementById('lagValue').textContent=CURRENT_LAG===0?t.lagZero:(CURRENT_LAG<0?t.lagBefore(-CURRENT_LAG):t.lagAfter(CURRENT_LAG));
   document.getElementById('legendVisits').textContent=t.visits;
   document.getElementById('legendShipments').textContent=t.shipments;
   document.getElementById('correlation').textContent=t.correlation(corr.r.toFixed(3));
   document.getElementById('apportionNote').textContent=t.apportionNote;
+  document.getElementById('acknowledgement').textContent=t.acknowledgement;
   document.getElementById('sourceHeading').textContent=t.sourceHeading;
   document.getElementById('sourceTitle').textContent=t.sourceTitle;
   document.querySelectorAll('.source-page').forEach(function(img,index){img.alt=t.sourcePage(index+1);});
   setActive('btnJa',CURRENT_LANG==='ja');setActive('btnEn',CURRENT_LANG==='en');
   setActive('btnOverlay',CURRENT_VIEW==='overlay');setActive('btnStack',CURRENT_VIEW==='stack');
+  setActive('btnScatter',CURRENT_VIEW==='scatter');
   document.getElementById('btnLagMinus').disabled=CURRENT_LAG<=-12;
   document.getElementById('btnLagPlus').disabled=CURRENT_LAG>=12;
-  var stackMode=CURRENT_VIEW==='stack';
+  var stackMode=CURRENT_VIEW==='stack',scatterMode=CURRENT_VIEW==='scatter';
   document.getElementById('chartStage').classList.toggle('stack-mode',stackMode);
-  document.getElementById('overlayChart').setAttribute('aria-hidden',stackMode?'true':'false');
+  document.getElementById('chartStage').classList.toggle('scatter-mode',scatterMode);
+  document.querySelector('.legend-bar').classList.toggle('scatter-key',scatterMode);
+  document.querySelector('.legend-line').classList.toggle('regression-key',scatterMode);
+  document.getElementById('legendVisits').textContent=scatterMode?t.scatterPoints:t.visits;
+  document.getElementById('legendShipments').textContent=scatterMode?t.regressionLine:t.shipments;
+  document.getElementById('overlayChart').setAttribute('aria-hidden',(stackMode||scatterMode)?'true':'false');
   document.getElementById('stackCharts').setAttribute('aria-hidden',stackMode?'false':'true');
+  document.getElementById('scatterPanel').setAttribute('aria-hidden',scatterMode?'false':'true');
 
   overlayChart.data.datasets=chartData(data);
   overlayChart.options.scales.yShipments.title.text=t.shipmentsAxis;
@@ -316,6 +365,11 @@ function render(){
   visitsChart.options.scales.y.title.text=t.visitsAxis;
   visitsChart.options.plugins.tooltip=tooltipOptions();
   visitsChart.update();
+  scatterChart.data.datasets=scatterDatasets(data);
+  scatterChart.options.scales.x.title.text=t.shipmentsAxis;
+  scatterChart.options.scales.y.title.text=t.visitsAxis;
+  scatterChart.options.plugins.tooltip=scatterTooltipOptions();
+  scatterChart.update();
   updateUrl();
 }
 
@@ -323,6 +377,7 @@ document.getElementById('btnJa').onclick=function(){CURRENT_LANG='ja';render();}
 document.getElementById('btnEn').onclick=function(){CURRENT_LANG='en';render();};
 document.getElementById('btnOverlay').onclick=function(){CURRENT_VIEW='overlay';render();};
 document.getElementById('btnStack').onclick=function(){CURRENT_VIEW='stack';render();};
+document.getElementById('btnScatter').onclick=function(){CURRENT_VIEW='scatter';render();};
 document.getElementById('btnLagMinus').onclick=function(){if(CURRENT_LAG>-12){CURRENT_LAG-=0.5;render();}};
 document.getElementById('btnLagPlus').onclick=function(){if(CURRENT_LAG<12){CURRENT_LAG+=0.5;render();}};
 document.getElementById('btnLagReset').onclick=function(){CURRENT_LAG=0;render();};
