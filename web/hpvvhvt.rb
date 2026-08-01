@@ -170,7 +170,7 @@ function chartData(data){
   var visibleShipments=data.shipments.filter(function(p){return visibleMonths[p.x];});
   return [
     {type:'bar',label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'rgba(196,78,82,0.72)',yAxisID:'yVisits',borderWidth:1,order:2},
-    {type:'line',label:t.shipments,data:visibleShipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',pointBackgroundColor:'#2a78d6',pointBorderColor:'#2a78d6',pointBorderWidth:0,yAxisID:'yShipments',tension:0.15,pointRadius:4,pointHoverRadius:6,borderWidth:3,order:1}
+    {type:'line',label:t.shipments,data:visibleShipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',pointBackgroundColor:'#2a78d6',pointBorderColor:'#2a78d6',pointBorderWidth:0,yAxisID:'yShipments',tension:0.15,pointRadius:5,pointHoverRadius:7,borderWidth:3,order:1}
   ];
 }
 function xScale(showTicks){
@@ -182,17 +182,17 @@ function tooltipOptions(){
 
 Chart.defaults.font.size=16;
 var overlayChart=new Chart(document.getElementById('chartOverlay'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18},usePointStyle:true}},tooltip:tooltipOptions()},scales:{
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18}}},tooltip:tooltipOptions()},scales:{
     x:xScale(true),
     yShipments:{type:'linear',position:'left',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
     yVisits:{type:'linear',position:'right',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}},grid:{drawOnChartArea:false}}
   }}
 });
 var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
-  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18},usePointStyle:true}},tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
+  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18}}},tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
 });
 var visitsChart=new Chart(document.getElementById('chartVisits'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18},usePointStyle:true}},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18}}},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
 });
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
