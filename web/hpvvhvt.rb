@@ -50,7 +50,7 @@ button { font-family:inherit; }
 .legend-line::after { content:'';position:absolute;left:16px;top:3px;width:10px;height:10px;border-radius:50%;background:#2a78d6; }
 .legend-line.regression-key::after { display:none; }
 #correlation { margin:0;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
-#apportionNote { margin:12px 0 14px;font-size:16px;color:#52514e; }
+#chartNotes { display:flex;flex-direction:column;gap:6px;margin:12px 0 18px;font-size:16px;line-height:1.6;color:#52514e; }
 #chartStage { position:relative;width:100%;height:400px;transition:height 320ms ease;overflow:hidden; }
 #chartStage.stack-mode { height:612px; }
 .chart-panel { position:absolute;inset:0;width:100%;height:400px;opacity:1;transition:opacity 220ms ease; }
@@ -127,8 +127,10 @@ __MENU__
   </div>
   <div id="scatterPanel" class="scatter-panel"><canvas id="chartScatter" role="img"></canvas></div>
 </div>
-<div id="apportionNote"></div>
-<p id="acknowledgement" style="font-size:16px;line-height:1.6;margin:10px 0 18px"></p>
+<div id="chartNotes">
+  <div id="apportionNote"></div>
+  <div id="acknowledgement"></div>
+</div>
 
 <section id="sourceSection">
   <h2 id="sourceHeading"></h2>
@@ -160,7 +162,7 @@ var I18N = {
     shipmentsAxis:'納入数', visitsAxis:'新規受診者数', unit:'人',
     correlation:function(r){return '相関係数 r = '+r;},
     apportionNote:'※ 0.5か月単位の相関係数は、月次納入数を隣接する2か月へ均等按分して計算しています。',
-    acknowledgement:'隈本邦彦先生（元NHK記者・江戸川大学名誉教授）の講演資料によりデータの存在を知り、本グラフの着想を得ました。深く感謝いたします。',
+    acknowledgement:'※ 隈本邦彦先生（元NHK記者・江戸川大学名誉教授）の講演資料によりデータの存在を知り、本グラフの着想を得ました。深く感謝いたします。',
     scatterPoints:'月ごとの値', regressionLine:'回帰直線',
     sourceHeading:'出典',
     sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第110回副反応検討部会 資料3-4、2026年2月4日）',
@@ -177,7 +179,7 @@ var I18N = {
     shipmentsAxis:'Shipments', visitsAxis:'New visits', unit:'',
     correlation:function(r){return 'Correlation r = '+r;},
     apportionNote:'* For half-month correlations, monthly shipments are divided equally between the two adjacent months.',
-    acknowledgement:'I learned of these data and conceived this graph through lecture materials by Professor Kunihiko Kumamoto (former NHK reporter and Professor Emeritus at Edogawa University). I am deeply grateful.',
+    acknowledgement:'* I learned of these data and conceived this graph through lecture materials by Professor Kunihiko Kumamoto (former NHK reporter and Professor Emeritus at Edogawa University). I am deeply grateful.',
     scatterPoints:'Monthly values', regressionLine:'Regression line',
     sourceHeading:'Source',
     sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (110th Adverse Reaction Review Committee, Document 3-4, February 4, 2026)',
