@@ -51,12 +51,13 @@ button { font-family:inherit; }
 .legend-line.regression-key::after { display:none; }
 #correlation { margin:0;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
 #chartNotes { display:flex;flex-direction:column;gap:6px;margin:12px 0 18px;font-size:16px;line-height:1.6;color:#52514e; }
-#chartStage { position:relative;width:100%;height:400px;transition:height 320ms ease;overflow:hidden; }
+#chartStage { position:relative;width:100%;min-width:0;height:400px;transition:height 320ms ease;overflow:hidden; }
 #chartStage.stack-mode { height:612px; }
-.chart-panel { position:absolute;inset:0;width:100%;height:400px;opacity:1;transition:opacity 220ms ease; }
-.scatter-panel { position:absolute;inset:0;width:100%;height:400px;opacity:0;pointer-events:none;transition:opacity 220ms ease; }
-#stackCharts { position:absolute;inset:0;display:grid;grid-template-rows:400px 200px;gap:12px;height:612px;pointer-events:none; }
-.stack-panel { position:relative;min-height:0;opacity:0;transition:opacity 220ms ease,transform 320ms ease; }
+.chart-panel { position:absolute;inset:0;width:100%;min-width:0;height:400px;opacity:1;transition:opacity 220ms ease; }
+.scatter-panel { position:absolute;inset:0;width:100%;min-width:0;height:400px;opacity:0;pointer-events:none;transition:opacity 220ms ease; }
+#stackCharts { position:absolute;inset:0;display:grid;grid-template-rows:400px 200px;gap:12px;width:100%;min-width:0;height:612px;pointer-events:none; }
+.stack-panel { position:relative;min-width:0;min-height:0;opacity:0;transition:opacity 220ms ease,transform 320ms ease; }
+#chartStage canvas { display:block;width:100% !important;max-width:100%; }
 #stackCharts .stack-panel:last-child { transform:translateY(-412px); }
 #chartStage.stack-mode .chart-panel { opacity:0;pointer-events:none; }
 #chartStage.scatter-mode .chart-panel { opacity:0;pointer-events:none; }
@@ -69,7 +70,7 @@ button { font-family:inherit; }
 #sourceSection p { line-height:1.6; }
 .source-page { display:block;width:95%;height:auto;margin:20px auto;border:0.5px solid #ddd; }
 @media (max-width:760px) {
-  .right-column { width:100%; }
+  .right-column { width:100%;min-width:0; }
   #chartStage { height:344px; }
   #chartStage.stack-mode { height:600px; }
   .chart-panel { height:344px; }
@@ -384,6 +385,16 @@ document.getElementById('btnScatter').onclick=function(){CURRENT_VIEW='scatter';
 document.getElementById('btnLagMinus').onclick=function(){if(CURRENT_LAG>-12){CURRENT_LAG-=0.5;render();}};
 document.getElementById('btnLagPlus').onclick=function(){if(CURRENT_LAG<12){CURRENT_LAG+=0.5;render();}};
 document.getElementById('btnLagReset').onclick=function(){CURRENT_LAG=0;render();};
+
+// 画面を狭める場合も、上下表示を含む全canvasを親要素の幅へ追従させる。
+// Keep every canvas, including the stacked charts, synchronized when the viewport narrows.
+var resizeFrame;
+window.addEventListener('resize',function(){
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame=requestAnimationFrame(function(){
+    [overlayChart,visitsChart,shipmentsChart,scatterChart].forEach(function(chart){chart.resize();});
+  });
+});
 render();
 </script>
 </body>
