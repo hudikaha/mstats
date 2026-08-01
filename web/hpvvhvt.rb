@@ -69,6 +69,7 @@ button { font-family:inherit; }
 #sourceSection p { line-height:1.6; }
 .source-page { display:block;width:95%;height:auto;margin:20px auto;border:0.5px solid #ddd; }
 @media (max-width:760px) {
+  .right-column { width:100%; }
   #chartStage { height:344px; }
   #chartStage.stack-mode { height:600px; }
   .chart-panel { height:344px; }
