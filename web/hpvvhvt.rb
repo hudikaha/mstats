@@ -40,6 +40,10 @@ button { font-family:inherit; }
 .chart-panel { position:relative;width:100%;height:500px; }
 #stackCharts { display:none;grid-template-rows:1fr 1fr;gap:12px;height:620px; }
 .stack-panel { position:relative;min-height:0; }
+#sourceSection { margin-top:28px;border-top:0.5px solid #e1e0d9;padding-top:16px;font-size:17px; }
+#sourceSection h2 { font-size:20px;font-weight:500;margin:0 0 8px; }
+#sourceSection p { line-height:1.6; }
+.source-page { display:block;width:95%;height:auto;margin:20px auto;border:0.5px solid #ddd; }
 @media (max-width:760px) {
   .chart-panel { height:430px; }
   #stackCharts { height:600px; }
@@ -84,6 +88,22 @@ __MENU__
   <div class="stack-panel"><canvas id="chartShipments" role="img"></canvas></div>
   <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
 </div>
+
+<section id="sourceSection">
+  <h2 id="sourceHeading"></h2>
+  <p><span id="sourceTitle"></span><br>
+  <a target="_blank" rel="noopener" href="https://www.mhlw.go.jp/content/11120000/001650654.pdf">https://www.mhlw.go.jp/content/11120000/001650654.pdf</a></p>
+  <div id="sourcePages">
+    <img class="source-page" src="hpvvhvt-source/page-1.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-source/page-2.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-source/page-3.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-source/page-4.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-source/page-5.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-source/page-6.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-source/page-7.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-source/page-8.jpg" alt="">
+  </div>
+</section>
 </div>
 </div>
 
@@ -91,23 +111,29 @@ __MENU__
 <script>
 var I18N = {
   ja: {
-    title:'HPVワクチン納入数と体調不良新規受診者数の月次推移',
-    heading:'HPVワクチン納入数と<br>体調不良新規受診者数の月次推移',
+    title:'HPVワクチン接種後体調不良新規受診者数とHPVワクチン納入数の月次推移',
+    heading:'HPVワクチン接種後体調不良新規受診者数と<br>HPVワクチン納入数の月次推移',
     viewLabel:'表示', overlay:'重ねる', stack:'上下に並べる', lagLabel:'納入数の表示位置',
     lagZero:'同じ月', lagBefore:function(n){return n+'か月前';}, lagAfter:function(n){return n+'か月後';},
     shipments:'HPVワクチン納入数', visits:'体調不良の新規受診患者数',
     shipmentsAxis:'納入数', visitsAxis:'新規受診者数', unit:'人',
-    correlation:function(r,n){return '相関係数 r = '+r+'（重なる月 '+n+'か月）';},
+    correlation:function(r){return '相関係数 r = '+r;},
+    sourceHeading:'出典',
+    sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第110回副反応検討部会 資料3-4、2026年2月4日）',
+    sourcePage:function(n){return '出典資料 '+n+'ページ';},
     month:function(key){return key.slice(0,4)+'年'+Number(key.slice(5))+'月';}
   },
   en: {
-    title:'Monthly HPV Vaccine Shipments and New Symptom-related Visits',
-    heading:'Monthly HPV Vaccine Shipments and<br>New Symptom-related Visits',
+    title:'Monthly New Symptom-related Visits after HPV Vaccination and HPV Vaccine Shipments',
+    heading:'Monthly New Symptom-related Visits after HPV Vaccination and<br>HPV Vaccine Shipments',
     viewLabel:'View', overlay:'Overlay', stack:'Stacked', lagLabel:'Shipment position',
     lagZero:'Same month', lagBefore:function(n){return n+' month'+(n===1?'':'s')+' earlier';}, lagAfter:function(n){return n+' month'+(n===1?'':'s')+' later';},
     shipments:'HPV vaccine shipments', visits:'New symptom-related visits',
     shipmentsAxis:'Shipments', visitsAxis:'New visits', unit:'',
-    correlation:function(r,n){return 'Correlation r = '+r+' ('+n+' overlapping months)';},
+    correlation:function(r){return 'Correlation r = '+r;},
+    sourceHeading:'Source',
+    sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (110th Adverse Reaction Review Committee, Document 3-4, February 4, 2026)',
+    sourcePage:function(n){return 'Source document, page '+n;},
     month:function(key){return key;}
   }
 };
@@ -179,20 +205,23 @@ function xScale(showTicks){
 function tooltipOptions(){
   return {titleFont:{size:17},bodyFont:{size:17},callbacks:{title:function(items){return items.length?I18N[CURRENT_LANG].month(items[0].label):'';},label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
 }
+function legendOptions(){
+  return {labels:{font:{size:18},sort:function(a,b){return a.datasetIndex-b.datasetIndex;}}};
+}
 
 Chart.defaults.font.size=16;
 var overlayChart=new Chart(document.getElementById('chartOverlay'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18}}},tooltip:tooltipOptions()},scales:{
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{
     x:xScale(true),
     yShipments:{type:'linear',position:'left',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
     yVisits:{type:'linear',position:'right',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}},grid:{drawOnChartArea:false}}
   }}
 });
 var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
-  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18}}},tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
+  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
 });
 var visitsChart=new Chart(document.getElementById('chartVisits'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18}}},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
 });
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
@@ -206,7 +235,10 @@ function render(){
   document.getElementById('btnStack').textContent=t.stack;
   document.getElementById('lagLabel').textContent=t.lagLabel;
   document.getElementById('lagValue').textContent=CURRENT_LAG===0?t.lagZero:(CURRENT_LAG<0?t.lagBefore(-CURRENT_LAG):t.lagAfter(CURRENT_LAG));
-  document.getElementById('correlation').textContent=t.correlation(corr.r.toFixed(3),corr.n);
+  document.getElementById('correlation').textContent=t.correlation(corr.r.toFixed(3));
+  document.getElementById('sourceHeading').textContent=t.sourceHeading;
+  document.getElementById('sourceTitle').textContent=t.sourceTitle;
+  document.querySelectorAll('.source-page').forEach(function(img,index){img.alt=t.sourcePage(index+1);});
   setActive('btnJa',CURRENT_LANG==='ja');setActive('btnEn',CURRENT_LANG==='en');
   setActive('btnOverlay',CURRENT_VIEW==='overlay');setActive('btnStack',CURRENT_VIEW==='stack');
   document.getElementById('btnLagMinus').disabled=CURRENT_LAG<=-12;
