@@ -49,16 +49,27 @@ button { font-family:inherit; }
 .legend-line::after { content:'';position:absolute;left:16px;top:3px;width:10px;height:10px;border-radius:50%;background:#2a78d6; }
 #correlation { margin:0;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
 #apportionNote { margin:12px 0 14px;font-size:16px;color:#52514e; }
-.chart-panel { position:relative;width:100%;height:400px; }
-#stackCharts { display:none;grid-template-rows:400px 200px;gap:12px;height:612px; }
-.stack-panel { position:relative;min-height:0; }
+#chartStage { position:relative;width:100%;height:400px;transition:height 320ms ease;overflow:hidden; }
+#chartStage.stack-mode { height:612px; }
+.chart-panel { position:absolute;inset:0;width:100%;height:400px;opacity:1;transition:opacity 220ms ease; }
+#stackCharts { position:absolute;inset:0;display:grid;grid-template-rows:400px 200px;gap:12px;height:612px;pointer-events:none; }
+.stack-panel { position:relative;min-height:0;opacity:0;transition:opacity 220ms ease,transform 320ms ease; }
+#stackCharts .stack-panel:last-child { transform:translateY(-412px); }
+#chartStage.stack-mode .chart-panel { opacity:0;pointer-events:none; }
+#chartStage.stack-mode #stackCharts { pointer-events:auto; }
+#chartStage.stack-mode .stack-panel { opacity:1; }
+#chartStage.stack-mode #stackCharts .stack-panel:last-child { transform:translateY(0); }
 #sourceSection { margin-top:28px;border-top:0.5px solid #e1e0d9;padding-top:16px;font-size:17px; }
 #sourceSection h2 { font-size:20px;font-weight:500;margin:0 0 8px; }
 #sourceSection p { line-height:1.6; }
 .source-page { display:block;width:95%;height:auto;margin:20px auto;border:0.5px solid #ddd; }
 @media (max-width:760px) {
+  #chartStage { height:344px; }
+  #chartStage.stack-mode { height:600px; }
   .chart-panel { height:344px; }
   #stackCharts { grid-template-rows:344px 244px;height:600px; }
+  #stackCharts .stack-panel:last-child { transform:translateY(-356px); }
+  #chartStage.stack-mode #stackCharts .stack-panel:last-child { transform:translateY(0); }
   .controls { gap:9px; }
   .control-group { flex-wrap:wrap; }
 }
@@ -101,10 +112,12 @@ __MENU__
   </div>
   <div id="correlation" aria-live="polite"></div>
 </div>
-<div id="overlayChart" class="chart-panel"><canvas id="chartOverlay" role="img"></canvas></div>
-<div id="stackCharts">
-  <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
-  <div class="stack-panel"><canvas id="chartShipments" role="img"></canvas></div>
+<div id="chartStage">
+  <div id="overlayChart" class="chart-panel"><canvas id="chartOverlay" role="img"></canvas></div>
+  <div id="stackCharts">
+    <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
+    <div class="stack-panel"><canvas id="chartShipments" role="img"></canvas></div>
+  </div>
 </div>
 <div id="apportionNote"></div>
 
@@ -274,8 +287,10 @@ function render(){
   setActive('btnOverlay',CURRENT_VIEW==='overlay');setActive('btnStack',CURRENT_VIEW==='stack');
   document.getElementById('btnLagMinus').disabled=CURRENT_LAG<=-12;
   document.getElementById('btnLagPlus').disabled=CURRENT_LAG>=12;
-  document.getElementById('overlayChart').style.display=CURRENT_VIEW==='overlay'?'block':'none';
-  document.getElementById('stackCharts').style.display=CURRENT_VIEW==='stack'?'grid':'none';
+  var stackMode=CURRENT_VIEW==='stack';
+  document.getElementById('chartStage').classList.toggle('stack-mode',stackMode);
+  document.getElementById('overlayChart').setAttribute('aria-hidden',stackMode?'true':'false');
+  document.getElementById('stackCharts').setAttribute('aria-hidden',stackMode?'false':'true');
 
   overlayChart.data.datasets=chartData(data);
   overlayChart.options.scales.yShipments.title.text=t.shipmentsAxis;
