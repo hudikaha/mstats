@@ -50,7 +50,7 @@ button { font-family:inherit; }
 #correlation { margin:0;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
 #apportionNote { margin:12px 0 14px;font-size:16px;color:#52514e; }
 .chart-panel { position:relative;width:100%;height:500px; }
-#stackCharts { display:none;grid-template-rows:500px 108px;gap:12px;height:620px; }
+#stackCharts { display:none;grid-template-rows:400px 208px;gap:12px;height:620px; }
 .stack-panel { position:relative;min-height:0; }
 #sourceSection { margin-top:28px;border-top:0.5px solid #e1e0d9;padding-top:16px;font-size:17px; }
 #sourceSection h2 { font-size:20px;font-weight:500;margin:0 0 8px; }
@@ -58,7 +58,7 @@ button { font-family:inherit; }
 .source-page { display:block;width:95%;height:auto;margin:20px auto;border:0.5px solid #ddd; }
 @media (max-width:760px) {
   .chart-panel { height:430px; }
-  #stackCharts { grid-template-rows:430px 158px;height:600px; }
+  #stackCharts { grid-template-rows:344px 244px;height:600px; }
   .controls { gap:9px; }
   .control-group { flex-wrap:wrap; }
 }
