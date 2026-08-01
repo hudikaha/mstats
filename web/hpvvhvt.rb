@@ -162,15 +162,15 @@ function correlation(data){
   return {r:xy/Math.sqrt(xx*yy),n:n};
 }
 function labelsFor(data){
-  var seen={};
-  data.shipments.concat(data.visits).forEach(function(p){seen[p.x]=true;});
-  return Object.keys(seen).sort();
+  return data.visits.map(function(p){return p.x;});
 }
 function chartData(data){
-  var t=I18N[CURRENT_LANG];
+  var t=I18N[CURRENT_LANG],visibleMonths={};
+  data.visits.forEach(function(p){visibleMonths[p.x]=true;});
+  var visibleShipments=data.shipments.filter(function(p){return visibleMonths[p.x];});
   return [
-    {type:'bar',label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'rgba(196,78,82,0.72)',yAxisID:'yVisits',borderWidth:1},
-    {type:'line',label:t.shipments,data:data.shipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',yAxisID:'yShipments',tension:0.15,pointRadius:6,pointHoverRadius:8,borderWidth:3}
+    {type:'bar',label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'rgba(196,78,82,0.72)',yAxisID:'yVisits',borderWidth:1,order:2},
+    {type:'line',label:t.shipments,data:visibleShipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',pointBackgroundColor:'#2a78d6',pointBorderColor:'#2a78d6',pointBorderWidth:0,yAxisID:'yShipments',tension:0.15,pointRadius:4,pointHoverRadius:6,borderWidth:3,order:1}
   ];
 }
 function xScale(showTicks){
