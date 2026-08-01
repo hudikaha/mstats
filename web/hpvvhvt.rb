@@ -49,15 +49,15 @@ button { font-family:inherit; }
 .legend-line::after { content:'';position:absolute;left:16px;top:3px;width:10px;height:10px;border-radius:50%;background:#2a78d6; }
 #correlation { margin:0;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
 #apportionNote { margin:12px 0 14px;font-size:16px;color:#52514e; }
-.chart-panel { position:relative;width:100%;height:500px; }
-#stackCharts { display:none;grid-template-rows:400px 208px;gap:12px;height:620px; }
+.chart-panel { position:relative;width:100%;height:400px; }
+#stackCharts { display:none;grid-template-rows:400px 200px;gap:12px;height:612px; }
 .stack-panel { position:relative;min-height:0; }
 #sourceSection { margin-top:28px;border-top:0.5px solid #e1e0d9;padding-top:16px;font-size:17px; }
 #sourceSection h2 { font-size:20px;font-weight:500;margin:0 0 8px; }
 #sourceSection p { line-height:1.6; }
 .source-page { display:block;width:95%;height:auto;margin:20px auto;border:0.5px solid #ddd; }
 @media (max-width:760px) {
-  .chart-panel { height:430px; }
+  .chart-panel { height:344px; }
   #stackCharts { grid-template-rows:344px 244px;height:600px; }
   .controls { gap:9px; }
   .control-group { flex-wrap:wrap; }
