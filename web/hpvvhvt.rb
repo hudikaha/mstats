@@ -248,21 +248,25 @@ function tooltipOptions(){
     return I18N[CURRENT_LANG].month(monthKey(lower))+'–'+I18N[CURRENT_LANG].month(monthKey(lower+1));
   },label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
 }
-function fixedStackAxisWidth(scale){scale.width=92;}
+function fixedLeftAxisWidth(scale){scale.width=92;}
+function fixedRightAxisWidth(scale){scale.width=58;}
+function rightAxisSpacer(){
+  return {type:'linear',position:'right',min:0,max:1,afterFit:fixedRightAxisWidth,grid:{display:false,drawOnChartArea:false},border:{display:false},ticks:{display:false},title:{display:false}};
+}
 
 Chart.defaults.font.size=16;
 var overlayChart=new Chart(document.getElementById('chartOverlay'),{
   type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{
     x:xScale(true),
-    yShipments:{type:'linear',position:'left',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
-    yVisits:{type:'linear',position:'right',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}},grid:{drawOnChartArea:false}}
+    yShipments:{type:'linear',position:'left',beginAtZero:true,afterFit:fixedLeftAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
+    yVisits:{type:'linear',position:'right',beginAtZero:true,afterFit:fixedRightAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}},grid:{drawOnChartArea:false}}
   }}
 });
 var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
-  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,afterFit:fixedStackAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
+  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,afterFit:fixedLeftAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},ySpacer:rightAxisSpacer()}}
 });
 var visitsChart=new Chart(document.getElementById('chartVisits'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,afterFit:fixedStackAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,afterFit:fixedLeftAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}},ySpacer:rightAxisSpacer()}}
 });
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
