@@ -40,10 +40,17 @@ button { font-family:inherit; }
 .segmented button { padding:7px 15px;font-size:18px;border:0;cursor:pointer;background:transparent;color:#52514e; }
 .segmented button.active { background:#2a78d6;color:#fff; }
 #lagValue { min-width:7em;text-align:center;font-variant-numeric:tabular-nums; }
-#correlation { margin:2px 0 12px;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
+#chartMeta { display:flex;align-items:center;justify-content:center;gap:10px 26px;flex-wrap:wrap;margin:2px 0 12px; }
+#seriesLegend { display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap; }
+.legend-item { display:flex;align-items:center;gap:8px;font-size:18px; }
+.legend-bar { width:19px;height:14px;background:rgba(196,78,82,0.72);border:1px solid #c44e52;box-sizing:border-box; }
+.legend-line { position:relative;width:42px;height:16px; }
+.legend-line::before { content:'';position:absolute;left:0;right:0;top:7px;border-top:3px solid #2a78d6; }
+.legend-line::after { content:'';position:absolute;left:16px;top:3px;width:10px;height:10px;border-radius:50%;background:#2a78d6; }
+#correlation { margin:0;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
 #apportionNote { margin:12px 0 14px;font-size:16px;color:#52514e; }
 .chart-panel { position:relative;width:100%;height:500px; }
-#stackCharts { display:none;grid-template-rows:1fr 1fr;gap:12px;height:620px; }
+#stackCharts { display:none;grid-template-rows:500px 108px;gap:12px;height:620px; }
 .stack-panel { position:relative;min-height:0; }
 #sourceSection { margin-top:28px;border-top:0.5px solid #e1e0d9;padding-top:16px;font-size:17px; }
 #sourceSection h2 { font-size:20px;font-weight:500;margin:0 0 8px; }
@@ -51,7 +58,7 @@ button { font-family:inherit; }
 .source-page { display:block;width:95%;height:auto;margin:20px auto;border:0.5px solid #ddd; }
 @media (max-width:760px) {
   .chart-panel { height:430px; }
-  #stackCharts { height:600px; }
+  #stackCharts { grid-template-rows:430px 158px;height:600px; }
   .controls { gap:9px; }
   .control-group { flex-wrap:wrap; }
 }
@@ -87,7 +94,13 @@ __MENU__
   </div>
 </div>
 
-<div id="correlation" aria-live="polite"></div>
+<div id="chartMeta">
+  <div id="seriesLegend">
+    <span class="legend-item"><span class="legend-bar"></span><span id="legendVisits"></span></span>
+    <span class="legend-item"><span class="legend-line"></span><span id="legendShipments"></span></span>
+  </div>
+  <div id="correlation" aria-live="polite"></div>
+</div>
 <div id="overlayChart" class="chart-panel"><canvas id="chartOverlay" role="img"></canvas></div>
 <div id="stackCharts">
   <div class="stack-panel"><canvas id="chartVisits" role="img"></canvas></div>
@@ -222,23 +235,21 @@ function tooltipOptions(){
     return I18N[CURRENT_LANG].month(monthKey(lower))+'–'+I18N[CURRENT_LANG].month(monthKey(lower+1));
   },label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
 }
-function legendOptions(){
-  return {labels:{font:{size:18},sort:function(a,b){return a.datasetIndex-b.datasetIndex;}}};
-}
+function fixedStackAxisWidth(scale){scale.width=92;}
 
 Chart.defaults.font.size=16;
 var overlayChart=new Chart(document.getElementById('chartOverlay'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{
     x:xScale(true),
     yShipments:{type:'linear',position:'left',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
     yVisits:{type:'linear',position:'right',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}},grid:{drawOnChartArea:false}}
   }}
 });
 var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
-  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
+  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,afterFit:fixedStackAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
 });
 var visitsChart=new Chart(document.getElementById('chartVisits'),{
-  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:legendOptions(),tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{display:false},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,afterFit:fixedStackAxisWidth,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
 });
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
@@ -252,6 +263,8 @@ function render(){
   document.getElementById('btnStack').textContent=t.stack;
   document.getElementById('lagLabel').textContent=t.lagLabel;
   document.getElementById('lagValue').textContent=CURRENT_LAG===0?t.lagZero:(CURRENT_LAG<0?t.lagBefore(-CURRENT_LAG):t.lagAfter(CURRENT_LAG));
+  document.getElementById('legendVisits').textContent=t.visits;
+  document.getElementById('legendShipments').textContent=t.shipments;
   document.getElementById('correlation').textContent=t.correlation(corr.r.toFixed(3));
   document.getElementById('apportionNote').textContent=t.apportionNote;
   document.getElementById('sourceHeading').textContent=t.sourceHeading;
