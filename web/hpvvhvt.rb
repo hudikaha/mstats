@@ -30,13 +30,13 @@ html = <<~'HTMLDOC'
 <title id="pageTitle"></title>
 <style>
 button { font-family:inherit; }
-.controls { display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;margin:0 0 14px; }
+.controls { display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;margin:0 0 14px;font-size:18px; }
 .control-group { display:flex;align-items:center;gap:7px; }
 .segmented { display:inline-flex;border:0.5px solid #c3c2b7;border-radius:8px;overflow:hidden; }
-.segmented button { padding:6px 14px;font-size:15px;border:0;cursor:pointer;background:transparent;color:#52514e; }
+.segmented button { padding:7px 15px;font-size:18px;border:0;cursor:pointer;background:transparent;color:#52514e; }
 .segmented button.active { background:#2a78d6;color:#fff; }
 #lagValue { min-width:7em;text-align:center;font-variant-numeric:tabular-nums; }
-#correlation { margin:2px 0 12px;font-size:17px;color:#222;font-variant-numeric:tabular-nums; }
+#correlation { margin:2px 0 12px;font-size:20px;color:#222;font-variant-numeric:tabular-nums; }
 .chart-panel { position:relative;width:100%;height:500px; }
 #stackCharts { display:none;grid-template-rows:1fr 1fr;gap:12px;height:620px; }
 .stack-panel { position:relative;min-height:0; }
@@ -169,29 +169,30 @@ function labelsFor(data){
 function chartData(data){
   var t=I18N[CURRENT_LANG];
   return [
-    {label:t.shipments,data:data.shipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',yAxisID:'yShipments',tension:0.15,pointRadius:3},
-    {label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'#c44e52',yAxisID:'yVisits',tension:0.15,pointRadius:3}
+    {type:'bar',label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'rgba(196,78,82,0.72)',yAxisID:'yVisits',borderWidth:1},
+    {type:'line',label:t.shipments,data:data.shipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',yAxisID:'yShipments',tension:0.15,pointRadius:6,pointHoverRadius:8,borderWidth:3}
   ];
 }
 function xScale(showTicks){
-  return {type:'category',offset:false,ticks:{display:showTicks,maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}};
+  return {type:'category',offset:false,ticks:{display:showTicks,maxRotation:0,autoSkip:true,maxTicksLimit:10,font:{size:16}},grid:{display:false}};
 }
 function tooltipOptions(){
-  return {callbacks:{title:function(items){return items.length?I18N[CURRENT_LANG].month(items[0].label):'';},label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
+  return {titleFont:{size:17},bodyFont:{size:17},callbacks:{title:function(items){return items.length?I18N[CURRENT_LANG].month(items[0].label):'';},label:function(ctx){return ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()+(CURRENT_LANG==='ja'?'人':'');}}};
 }
 
+Chart.defaults.font.size=16;
 var overlayChart=new Chart(document.getElementById('chartOverlay'),{
-  type:'line',data:{datasets:[]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{tooltip:tooltipOptions()},scales:{
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18},usePointStyle:true}},tooltip:tooltipOptions()},scales:{
     x:xScale(true),
-    yShipments:{type:'linear',position:'left',beginAtZero:true,title:{display:true,text:''},ticks:{callback:function(v){return Number(v).toLocaleString();}}},
-    yVisits:{type:'linear',position:'right',beginAtZero:true,title:{display:true,text:''},grid:{drawOnChartArea:false}}
+    yShipments:{type:'linear',position:'left',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}},
+    yVisits:{type:'linear',position:'right',beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}},grid:{drawOnChartArea:false}}
   }}
 });
 var shipmentsChart=new Chart(document.getElementById('chartShipments'),{
-  type:'line',data:{datasets:[]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:''},ticks:{callback:function(v){return Number(v).toLocaleString();}}}}}
+  type:'line',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18},usePointStyle:true}},tooltip:tooltipOptions()},scales:{x:xScale(false),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16},callback:function(v){return Number(v).toLocaleString();}}}}}
 });
 var visitsChart=new Chart(document.getElementById('chartVisits'),{
-  type:'line',data:{datasets:[]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:''}}}}
+  type:'bar',data:{datasets:[]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:true},plugins:{legend:{labels:{font:{size:18},usePointStyle:true}},tooltip:tooltipOptions()},scales:{x:xScale(true),y:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:16}}}}}
 });
 
 function setActive(id,active){document.getElementById(id).classList.toggle('active',active);}
@@ -221,13 +222,13 @@ function render(){
   overlayChart.update();
 
   shipmentsChart.data.labels=labels;
-  shipmentsChart.data.datasets=[chartData(data)[0]];
+  shipmentsChart.data.datasets=[chartData(data)[1]];
   shipmentsChart.data.datasets[0].yAxisID='y';
   shipmentsChart.options.scales.y.title.text=t.shipmentsAxis;
   shipmentsChart.options.plugins.tooltip=tooltipOptions();
   shipmentsChart.update();
   visitsChart.data.labels=labels;
-  visitsChart.data.datasets=[chartData(data)[1]];
+  visitsChart.data.datasets=[chartData(data)[0]];
   visitsChart.data.datasets[0].yAxisID='y';
   visitsChart.options.scales.y.title.text=t.visitsAxis;
   visitsChart.options.plugins.tooltip=tooltipOptions();
