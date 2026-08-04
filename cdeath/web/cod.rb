@@ -47,6 +47,14 @@ Ages = {
 }
 StandardAgeKeys = Ages.keys - ['all', 'unknown', 'elementary', 'junior']
 OldestAgeKeys = %w[85_89 90_94 95_99 100over]
+
+# 年齢階級keyをURL範囲の下限・上限へ変換する。
+# Convert an age-band key to lower and upper URL bounds.
+def age_key_bounds(key)
+    return [100, '100over'] if key == '100over'
+    match = key.match(/\A(\d{2})_(\d{2})\z/)
+    match ? [match[1].to_i, match[2].to_i] : nil
+end
 # 平成27年（2015年）モデル人口。死亡率計算では0〜4歳を結合し、
 # 95歳以上も一階級として扱う。
 # https://www.e-stat.go.jp/stat-search/file-download?fileKind=2&statInfId=000032172746
@@ -356,11 +364,13 @@ $legacy_regression = $cgi['graph_type'][/^yearly_reg_(2019|2020)$/, 1]
         if v[:keys] == 'years'
             keys = keys.flat_map{|key| key =~ /^(\d{4})-(\d{4})$/ ? ($1.to_i..$2.to_i).map(&:to_s) : key}
         elsif v[:keys] == 'ages'
-            age_order = Ages.keys.reject{|key| key == 'all'}
+            age_order = StandardAgeKeys
             keys = keys.flat_map do |key|
                 if key =~ /^(\d+)-(\d+|100over)$/
-                    first = age_order.index{|age| age.sub(/^0/,'').to_i == $1.to_i}
-                    last = $2 == '100over' ? age_order.index('100over') : age_order.index{|age| age.sub(/^0/,'').to_i == $2.to_i}
+                    lower = $1.to_i
+                    upper = $2 == '100over' ? '100over' : $2.to_i
+                    first = age_order.index{|age| age_key_bounds(age)&.first == lower}
+                    last = age_order.index{|age| age_key_bounds(age)&.last == upper}
                     first && last ? age_order[first..last] : key
                 else
                     key
@@ -653,18 +663,18 @@ end
 # Compress consecutive ages into the compact URL representation.
 def compact_ages(values)
     return 'all' if values.include?('all')
-    order = Ages.keys.reject{|v| v == 'all'}
-    indexes = values.map{|v| order.index(v)}.compact.sort.uniq
+    indexes = values.map{|v| StandardAgeKeys.index(v)}.compact.sort.uniq
     out = []
     i = 0
     while i < indexes.length
         j = i
         j += 1 while j + 1 < indexes.length && indexes[j + 1] == indexes[j] + 1
-        a = order[indexes[i]].sub(/^0+/, '').sub('_', '-')
-        b = order[indexes[j]].sub(/^0+/, '').sub('_', '-')
-        out << (j - i >= 1 ? "#{a}-#{b.sub(/^\d+$/, '&') }" : a)
+        first = age_key_bounds(StandardAgeKeys[indexes[i]])
+        last = age_key_bounds(StandardAgeKeys[indexes[j]])
+        out << "#{first.first}-#{last.last}"
         i = j + 1
     end
+    out.concat(values & %w[unknown elementary junior])
     out.join('~')
 end
 
@@ -991,11 +1001,20 @@ if ! $iframeflag
       const out = [];
       for (let i=0; i<nums.length; i++) {
         let j=i; while (j+1<nums.length && nums[j+1]===nums[j]+1) j++;
-        const a = ageMode ? order[nums[i]].replace(/^0/,'').replace('_','-') : String(nums[i]);
-        const b = ageMode ? order[nums[j]].replace(/^0/,'').replace('_','-') : String(nums[j]);
-        out.push(j-i >= 1 ? a + '-' + b : a);
+        if (ageMode) {
+          const first = order[nums[i]];
+          const last = order[nums[j]];
+          const lower = first == '100over' ? 100 : Number(first.slice(0, 2));
+          const upper = last == '100over' ? '100over' : Number(last.slice(3, 5));
+          out.push(lower + '-' + upper);
+        } else {
+          const a = String(nums[i]);
+          const b = String(nums[j]);
+          out.push(j-i >= 1 ? a + '-' + b : a);
+        }
         i=j;
       }
+      if (ageMode) out.push(...values.filter(v => !order.includes(v) && v != 'all'));
       return out.join('~');
     }
     return window.location.pathname + '?l=' + l
