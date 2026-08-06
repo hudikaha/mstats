@@ -245,6 +245,12 @@ end
 if Cities['cze'][:sel]
     Cities.each { |key, value| value[:sel] = nil unless key == 'cze' }
     Consts['c'][:keys] = ['cze']
+
+    # チェコは公開週単位dataだけなので、元data指定を匿名化dataへ正規化する。
+    # Czech data exists only in the published weekly source, so normalize the source to anon.
+    Sources.each_value { |value| value[:sel] = nil }
+    Sources['anon'][:sel] = Consts['src'][:selected]
+    Consts['src'][:keys] = ['anon']
 end
 
 # 3種類のgraph指定がすべて空の初期状態だけ、標準表示を設定する。
@@ -518,6 +524,10 @@ print <<EOS
         other.checked = false;
       }
     });
+    if (checkbox.value === 'cze') {
+      const anonSource = document.querySelector('input[name="src"][value="anon"]');
+      if (anonSource) anonSource.checked = true;
+    }
   }
   </script>
   <form id="myForm" onsubmit="submitForm(); return false;" style="text-align: left;">
