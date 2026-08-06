@@ -146,12 +146,12 @@ groups.each do |key, rows|
     row[:observed_hazard] = cumulative_hazard
     row[:time] = index + 1
   end
-  quiet_points = rows.filter_map do |row|
+  quiet_points = rows.map do |row|
     date = Date.parse(row['date'])
     next if row[:invalid_hazard] || date < options[:quiet_start] || date > options[:quiet_end]
 
     [row[:time], row[:observed_hazard]]
-  end
+  end.compact
   if quiet_points.length < options[:min_points]
     skipped[:too_few_points] += 1
     next

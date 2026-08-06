@@ -34,6 +34,7 @@ id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths
 
 `dose`と`deaths`は整数、`cutoff`と`date`は日付、それ以外はkeywordです。
 Elasticsearchの`_id`にはCSVの`id`を使用し、`id` fieldも`_source`に残します。
+`kcor.rb`は日本の自治体に加えて、`areacode=cze`のチェコ全国系列も同じ形式で表示します。
 
 ## Gamma-frailty用週次risk set
 

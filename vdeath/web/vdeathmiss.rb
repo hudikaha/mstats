@@ -97,6 +97,7 @@ Cities = {
     'jp232076' => {sel: nil, ja: '愛知県豊川市',    en: 'Toyokawa/Aichi'},
     'jp232068' => {sel: nil, ja: '愛知県春日井市',  en: 'Kasugai/Aichi'},
     'jp442054' => {sel: nil, ja: '大分県佐伯市',    en: 'Saiki/Oita'},
+    'cze'      => {sel: nil, ja: 'チェコ',          en: 'Czech Republic'},
 
 #    'jp222038' => {sel: nil, ja: '静岡県沼津市',    en: 'Numazu/Shizuoka'},
 #    'jp222097' => {sel: nil, ja: '静岡県島田市',    en: 'Shimada/Shizuoka'},

@@ -35,6 +35,8 @@ id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths
 `dose` and `deaths` are integers; `cutoff` and `date` are dates; all other
 fields are keywords. The CSV `id` is used as the Elasticsearch `_id` and is
 also retained in `_source`.
+In addition to Japanese municipalities, `kcor.rb` displays the Czech national series
+in the same format with `areacode=cze`.
 
 ## Weekly risk sets for gamma frailty
 

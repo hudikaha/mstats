@@ -78,7 +78,7 @@ print <<~HTML
   #{if $l == :ja
       <<~JA
         <ul>
-          <li><a href="https://fujikawa.org/pub/kkcor/" target="_blank">各自治体の完全データから作成したKCOR用データセット</a></li>
+          <li><a href="https://fujikawa.org/pub/kkcor/" target="_blank">日本の自治体およびチェコ全国のデータから作成したKCOR用データセット</a></li>
           <li>CUMD-WK：cutoffごとに週単位で累積した死亡数。各行は1週に対応し、値は減少しません。</li>
           <li>IND-WKA：プライバシー保護のため、個人の日付をISO週の最終日（日曜日）に置換したデータ。</li>
           <li>DTH-WKA：死亡記録のある人だけを含むIND-WKA形式のデータ。</li>
@@ -92,7 +92,7 @@ print <<~HTML
             が考案した、固定コホート間の累積アウトカムを比較するmethodです。
           </p>
           <p>
-            このページは、日本の自治体から取得した個票dataを固定コホートに分け、
+            このページは、日本の自治体およびチェコ全国の個票dataを固定コホートに分け、
             週次累積死亡数とその比を対話的に可視化します。
             現在のSteve KirschのKCOR methodに含まれるgamma-frailty adjustmentは、
             このページでは適用していません。
@@ -106,7 +106,7 @@ print <<~HTML
     else
       <<~EN
         <ul>
-          <li><a href="https://fujikawa.org/pub/kkcor/" target="_blank">Datasets derived from complete municipal datasets (Kenji's data format for KCOR)</a></li>
+          <li><a href="https://fujikawa.org/pub/kkcor/" target="_blank">Datasets derived from Japanese municipal and Czech national records (Kenji's data format for KCOR)</a></li>
           <li>CUMD-WK: Weekly cumulative deaths calculated separately for each cutoff; values do not decrease.</li>
           <li>IND-WKA: Individual records with dates replaced by the final day (Sunday) of each ISO week for privacy.</li>
           <li>DTH-WKA: IND-WKA records limited to people with a recorded death.</li>
@@ -120,7 +120,7 @@ print <<~HTML
             for comparing cumulative outcomes between fixed cohorts.
           </p>
           <p>
-            This page divides Japanese municipal record-level data into fixed
+            This page divides Japanese municipal and Czech national record-level data into fixed
             cohorts and provides an interactive visualization of weekly
             cumulative deaths and their ratios. It does not apply the
             gamma-frailty adjustment included in Steve Kirsch's current

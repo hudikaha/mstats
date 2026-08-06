@@ -30,7 +30,8 @@ CZECH_RISK := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK-G.csv
 CZECH_GAMMA_PARAMS := $(OUT_DIR)/$(CZECH_NAME)_GAMMA-CONSTANT-PARAMS.csv
 CZECH_GAMMA_SERIES := $(OUT_DIR)/$(CZECH_NAME)_GAMMA-CONSTANT-SERIES.csv
 CZECH_WEEKLY_DATE_SEED ?= v1
-CZECH_POPULATION_ROWS := 10325589
+CZECH_SOURCE_ROWS := 12597668
+CZECH_POPULATION_ROWS := 10314685
 WEEKLY_DATE_SEED ?= v1
 comma := ,
 
@@ -49,6 +50,7 @@ $(CZECH_IND): $(CZECH_INPUT) $(CZECH_HEADER) $(SCRIPT) Makefile
 	@mkdir -p "$(OUT_DIR)"
 	$(RUN) anonymize --headers "$(CZECH_HEADER)" --skip-source-header --first-infection-only --iso-week-dates \
 	  --areacode cze --area "Czech Republic" --areaj "チェコ" --age-reference 2024-09-02 \
+	  --progress-total $(CZECH_SOURCE_ROWS) \
 	  --report "$(OUT_DIR)/$(CZECH_NAME)_IMPORT-REPORT.json" \
 	  --output "$@" "$(CZECH_INPUT)"
 
@@ -68,6 +70,7 @@ cze-kcor: $(CZECH_IND)
 	@if [[ ! -s "$(CZECH_CUMD)" || ! -s "$(CZECH_RISK)" || "$(CZECH_IND)" -nt "$(CZECH_RISK)" || "$(SCRIPT)" -nt "$(CZECH_RISK)" ]]; then \
 	  $(RUN) kcor --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
 	    --age-reference 2024-09-02 \
+	    --progress-total $(CZECH_POPULATION_ROWS) \
 	    --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
 	    --risk-output "$(CZECH_RISK)" --output "$(CZECH_CUMD)" "$(CZECH_IND)"; \
 	fi
@@ -82,7 +85,7 @@ cze-gamma: cze-kcor
 # English: Validate the generated weekly-anonymized IND files used for Elasticsearch import.
 indiv-check:
 	@test -s "$(INDIV_MAPPING)"
-	@test $(words $(INDIV_FILES)) -eq 7
+	@test $(words $(INDIV_FILES)) -eq 8
 	@for f in $(INDIV_FILES); do head -1 "$$f" | grep -q 'vbirthday' || { echo "missing vbirthday: $$f"; exit 1; }; done
 	@wc -l $(INDIV_FILES)
 

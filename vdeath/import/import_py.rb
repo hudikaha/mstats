@@ -13,7 +13,8 @@ options = {
   credentials: File.expand_path('~/.config/mstats/espass.txt'),
   mapping: File.expand_path('../config/elasticsearch/vdeath2026.json', __dir__),
   batch_size: 1_000,
-  replace: false
+  replace: false,
+  add_doc_id: true
 }
 
 OptionParser.new do |parser|
@@ -24,6 +25,7 @@ OptionParser.new do |parser|
   parser.on('--mapping FILE', 'Index mapping JSON') { |v| options[:mapping] = v }
   parser.on('--batch-size N', Integer, 'Documents per bulk request') { |v| options[:batch_size] = v }
   parser.on('--replace', 'Delete and recreate the destination index') { options[:replace] = true }
+  parser.on('--no-doc-id', 'Do not add the vdeath-only doc_id field') { options[:add_doc_id] = false }
 end.parse!
 abort 'CSV file is required' if ARGV.empty?
 
@@ -82,7 +84,7 @@ flush = lambda do
   response = es_request(base_uri, account, password, Net::HTTP::Post, '/_bulk', body, 'application/x-ndjson')
   result = JSON.parse(response.body)
   if result['errors']
-    failure = result.fetch('items').filter_map { |item| item.fetch('index')['error'] }.first
+    failure = result.fetch('items').map { |item| item.fetch('index')['error'] }.compact.first
     abort "Bulk import failed: #{failure.to_json}"
   end
   batch.clear
@@ -92,8 +94,8 @@ ARGV.each do |path|
   CSV.foreach(path, headers: true) do |row|
     source = row.to_h
     id = source.fetch('id')
-    source['doc_id'] = id
-    integer_fields.each { |field| source[field] = source[field].to_i }
+    source['doc_id'] = id if options[:add_doc_id]
+    integer_fields.each { |field| source[field] = source[field].to_i if source.key?(field) }
     float_fields.each do |field|
       value = source[field]
       value.nil? || value.empty? || value == '-' ? source.delete(field) : source[field] = value.to_f
