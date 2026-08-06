@@ -203,7 +203,7 @@ $missing_rate = MissingRates.include?($cgi['miss'].to_i) ? $cgi['miss'].to_i : 0
 Consts = {
     'l'       => { hash: Lang,    defaults: ['en'],        selected: 'checked'},
     'i'       => { hash: IFrame,  defaults: ['false'],     selected: 'checked'},
-    'c'       => { hash: Cities,  defaults: Cities.keys,   selected: 'checked', keys: [] },
+    'c'       => { hash: Cities,  defaults: Cities.keys - ['cze'], selected: 'checked', keys: [] },
     'ages'    => { hash: Ages,    defaults:   ['all'],     selected: 'checked', keys: [] },
     'src'     => { hash: Sources, defaults: ['org'],       selected: 'checked', keys: [] },
     'stacks'  => { hash: Stacks,  defaults: ['deaths'],    selected: 'checked', keys: [] },
@@ -250,6 +250,13 @@ Consts.each do |k, v|
         keys2 = v[:hash].select{|k, v| v[:sel]}.keys
         v[:keys] = keys2 if v[:keys].sort != keys2.sort
     end
+end
+
+# チェコ全国と日本の自治体は同時選択・合算しない。
+# Do not select or aggregate Czech national data with Japanese municipalities.
+if Cities['cze'][:sel]
+    Cities.each { |key, value| value[:sel] = nil unless key == 'cze' }
+    Consts['c'][:keys] = ['cze']
 end
 
 
@@ -484,12 +491,22 @@ print <<EOS
     ;
     window.location.href = queryString;
   }
+  function selectExclusiveArea(checkbox) {
+    if (!checkbox.checked) return;
+    document.querySelectorAll('input[name="c"]').forEach(function(other) {
+      if (checkbox.value === 'cze') {
+        if (other.value !== 'cze') other.checked = false;
+      } else if (other.value === 'cze') {
+        other.checked = false;
+      }
+    });
+  }
   </script>
   <form id="myForm" onsubmit="submitForm(); return false;" style="text-align: left;">
 EOS
 Cities.each do |k, v|
     print <<EOS
-   <span><input type="checkbox" name="c" value="#{k}" #{v[:sel]}> #{v[$l]}</span>
+   <span><input type="checkbox" name="c" value="#{k}" #{v[:sel]} onchange="selectExclusiveArea(this)"> #{v[$l]}</span>
 EOS
 end
 print <<EOS
