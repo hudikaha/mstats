@@ -2,10 +2,12 @@ SHELL := /bin/zsh
 .SHELLFLAGS := -eu -c
 
 SRC_DIR ?= /Users/magician/icloud/vdeath/src
+CZECH_SRC_DIR ?= /Users/magician/work/vdeath-src/Czech
 OUT_DIR ?= ../outputs
 RUBY ?= ruby
 SCRIPT := ./vdeathp.rb
 RUN := $(RUBY) $(SCRIPT)
+GAMMA_SCRIPT := ./kcor_gamma.rb
 INDIV_INDEX ?= indiv20260721
 INDIV_MAPPING := ../config/elasticsearch/$(INDIV_INDEX).json
 INDIV_FILES := $(wildcard $(OUT_DIR)/*_IND-WKA.csv)
@@ -17,10 +19,55 @@ INDIVDTH_INDEX ?= indivdth20260721
 INDIVDTH_FILE := $(OUT_DIR)/jp271004_Osaka-Osaka-JP_DTH-WKA.csv
 AGES := 00-09,10-19,20-29,30-39,40-49,50-59,60-69,70-79,80-89,90-99,100+,80+,all
 CITIES := jp132101 jp141500 jp221309 jp222267 jp232068 jp232076 jp271004 jp442054
+CZECH_INPUT := $(CZECH_SRC_DIR)/Otevrena-data-NR-26-30-COVID-19-prehled-populace-2024-01.csv
+CZECH_HEADER := ./headers/czech-2024-01.csv
+CZECH_NAME := cze_Czech-Republic_CZ
+CZECH_IND := $(OUT_DIR)/$(CZECH_NAME)_IND-WKA.csv
+CZECH_PY := $(OUT_DIR)/$(CZECH_NAME)_PY.csv
+CZECH_AFTERDOSE := $(OUT_DIR)/$(CZECH_NAME)_PY-WKD.csv
+CZECH_CUMD := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK.csv
+CZECH_RISK := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK-G.csv
+CZECH_GAMMA_PARAMS := $(OUT_DIR)/$(CZECH_NAME)_GAMMA-CONSTANT-PARAMS.csv
+CZECH_GAMMA_SERIES := $(OUT_DIR)/$(CZECH_NAME)_GAMMA-CONSTANT-SERIES.csv
 comma := ,
 
-.PHONY: all indiv-check indiv indivdth publish-kkcor $(CITIES)
+.PHONY: all cze cze-all cze-ind cze-py cze-afterdose cze-kcor cze-gamma indiv-check indiv indivdth publish-kkcor $(CITIES)
 all: $(CITIES)
+
+# 日本語: チェコ公式週次個票を一度共通INDへ正規化し、vdeathとKCORを同じ入力から生成する。
+# English: Normalize Czech official weekly records once, then generate vdeath and KCOR from the same IND input.
+cze: cze-py cze-kcor cze-gamma
+cze-all: cze cze-afterdose
+cze-ind: $(CZECH_IND)
+cze-py: $(CZECH_PY)
+cze-afterdose: $(CZECH_AFTERDOSE)
+
+$(CZECH_IND): $(CZECH_INPUT) $(CZECH_HEADER) $(SCRIPT) Makefile
+	@mkdir -p "$(OUT_DIR)"
+	$(RUN) anonymize --headers "$(CZECH_HEADER)" --skip-source-header --first-infection-only --iso-week-dates \
+	  --areacode cze --area "Czech Republic" --areaj "チェコ" --age-reference 2024-09-02 \
+	  --report "$(OUT_DIR)/$(CZECH_NAME)_IMPORT-REPORT.json" \
+	  --output "$@" "$(CZECH_INPUT)"
+
+$(CZECH_PY): $(CZECH_IND) $(SCRIPT) Makefile
+	$(RUN) personyear --steps 1,3,6,all --ages "$(AGES)" --start 2021-02-01 --until 2024-09-02 \
+	  --output "$@" "$(CZECH_IND)"
+
+$(CZECH_AFTERDOSE): $(CZECH_IND) $(SCRIPT) Makefile
+	$(RUN) afterdose --weeks 1-99 --ages 80+,all --until 2024-09-02 \
+	  --output "$@" "$(CZECH_IND)"
+
+cze-kcor: $(CZECH_IND)
+	@if [[ ! -s "$(CZECH_CUMD)" || ! -s "$(CZECH_RISK)" || "$(CZECH_IND)" -nt "$(CZECH_RISK)" || "$(SCRIPT)" -nt "$(CZECH_RISK)" ]]; then \
+	  $(RUN) kcor --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
+	    --risk-output "$(CZECH_RISK)" --output "$(CZECH_CUMD)" "$(CZECH_IND)"; \
+	fi
+
+cze-gamma: cze-kcor
+	@if [[ ! -s "$(CZECH_GAMMA_PARAMS)" || ! -s "$(CZECH_GAMMA_SERIES)" || "$(CZECH_RISK)" -nt "$(CZECH_GAMMA_PARAMS)" || "$(GAMMA_SCRIPT)" -nt "$(CZECH_GAMMA_PARAMS)" ]]; then \
+	$(RUBY) $(GAMMA_SCRIPT) --quiet-start 2022-W24 --quiet-end 2024-W16 \
+	  --output "$(CZECH_GAMMA_PARAMS)" --series-output "$(CZECH_GAMMA_SERIES)" "$(CZECH_RISK)"; \
+	fi
 
 # 日本語: 生成済みの週単位匿名化INDを検査し、ElasticSearch投入用の入力を固定する。
 # English: Validate the generated weekly-anonymized IND files used for Elasticsearch import.
@@ -84,6 +131,9 @@ $(1):
 	fi; \
 	if needs "$(OUT_DIR)/$(2)_CUMD-WK.csv"; then \
 	  $(RUN) kcor --headers "$$$$headers" $$$$opts --output "$(OUT_DIR)/$(2)_CUMD-WK.csv" $$$$inputs || exit $$$$?; \
+	fi; \
+	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_CUMD-WK-G.csv"; then \
+	  $(RUN) kcor --risk-output "$(OUT_DIR)/$(2)_CUMD-WK-G.csv" "$$$$anon" || exit $$$$?; \
 	fi; \
 	elapsed=$$$$(( $$$$(date +%s) - start )); \
 	printf '%s\t%s\n' '$(1)' "$$$$elapsed" | tee "$(OUT_DIR)/timings/$(1).tsv"

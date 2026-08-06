@@ -35,6 +35,56 @@ id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths
 `dose`と`deaths`は整数、`cutoff`と`date`は日付、それ以外はkeywordです。
 Elasticsearchの`_id`にはCSVの`id`を使用し、`id` fieldも`_source`に残します。
 
+## Gamma-frailty用週次risk set
+
+`CUMD-WK-G`は特定のKCOR versionによる補正結果ではなく、gamma-frailtyを含むKCOR解析で
+共通利用する補正前の週次基礎形式である。`vdeathp.rb kcor --risk-output FILE`は従来の
+`CUMD-WK`と同じcohort走査から次のfieldを出力する。
+
+```text
+id, areacode, area, areaj, cutoff, cweek, date, age, dose,
+cohort_size, at_risk, deaths_week, deaths, censored_week
+```
+
+- `cohort_size`: cutoff時点の固定cohort人数
+- `at_risk`: 対象週開始時の観察中生存人数
+- `deaths_week`: 対象週の死亡数
+- `deaths`: cutoff後の累積死亡数
+- `censored_week`: 対象週に転出などで観察終了した人数
+
+`theta`、quiet window、補正後hazard、KCOR値は解析versionに依存するため保存しない。
+完全な個票または`IND-WKA`から生成できるが、死亡者だけの`DTH-WKA`からはrisk setを作れない。
+`--output`を省略して`--risk-output`だけを指定すれば、従来の`CUMD-WK`を変更せずrisk setだけを生成できる。
+
+## 単純gamma-frailty fitting
+
+`import/kcor_gamma.rb`は`CUMD-WK-G`を読み、area・cutoff・age・doseごとに
+constant-baseline gamma-frailty modelをquiet windowへ非線形最小二乗fittingする。
+
+```text
+MR(t)   = deaths_week(t) / at_risk(t)
+h(t)    = -log(1 - MR(t))
+Hobs(t) = sum h(t)
+Hobs(t) = log(1 + theta * k * t) / theta
+H0(t)   = (exp(theta * Hobs(t)) - 1) / theta
+```
+
+`theta=0`では`Hobs(t)=k*t`、`H0(t)=Hobs(t)`の極限を用いる。例えば次のように実行する。
+
+```sh
+ruby import/kcor_gamma.rb \
+  --quiet-start 2022-W24 --quiet-end 2024-W16 \
+  --output ../outputs/cze_Czech-Republic_CZ_GAMMA-CONSTANT-PARAMS.csv \
+  --series-output ../outputs/cze_Czech-Republic_CZ_GAMMA-CONSTANT-SERIES.csv \
+  ../outputs/cze_Czech-Republic_CZ_CUMD-WK-G.csv
+```
+
+parameter出力には`theta`、週単位の`k`、quiet point数、RMSE、境界解を示す`fit_status`を保存する。series出力は
+各週の観測hazard、観測累積hazard、gamma inversion後の累積hazardを保存する。
+これはconstant baselineを仮定する単純modelであり、Gompertz baselineやquiet pointの
+反復選択を使う新しいKCOR versionとは区別する。したがってraw形式名はversion番号を持たない
+`CUMD-WK-G`とし、解析結果にはmethodと条件を明示する。
+
 ## 公開データ
 
 Elasticsearchを正本とし、`kcor.js`は公開API `/elastic/kcor/_search`を直接検索します。

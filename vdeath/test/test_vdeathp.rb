@@ -8,6 +8,7 @@ require 'tmpdir'
 
 class VdeathpTest < Minitest::Test
   SCRIPT = File.expand_path('../import/vdeathp.rb', __dir__)
+  GAMMA_SCRIPT = File.expand_path('../import/kcor_gamma.rb', __dir__)
   HEADER = 'id,age,sex,death,dose1,pharma1,lot1,dose2,pharma2,lot2,in,out,reason_out,age_death'
   DATA = <<~CSV
     number,age,sex,death,dose1,pharma1,lot1,dose2,pharma2,lot2,in,out,reason,age_at_death
@@ -99,5 +100,97 @@ class VdeathpTest < Minitest::Test
 
     afterdose, = run_command('afterdose', '--weeks', '1-2', '--step-prefix', 'org', '--ages', 'all')
     assert_equal ['orgweek'], afterdose.map { |row| row['step'] }.uniq
+  end
+
+  def test_birth_year_band_iso_weeks_and_first_infection_filter
+    input = File.join(@dir, 'czech.csv')
+    output = File.join(@dir, 'czech-anonymized.csv')
+    CSV.open(input, 'w') do |csv|
+      csv << %w[id infection birth_year sex death dose1 pharma1 dose2]
+      csv << %w[10 0 1940-1944 female 2024-20 2021-19 CO01 2021-25]
+      csv << %w[11 1 1970-1974 male _ 2024-30 CO24]
+      csv << %w[12 2 1970-1974 male 2023-10]
+      csv << %w[13 0 2022-2024 female]
+    end
+    stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'anonymize', '--output', output,
+      '--first-infection-only', '--iso-week-dates',
+      '--areacode', 'cze', '--area', 'Czech Republic', '--areaj', 'チェコ',
+      '--age-reference', '2024-09-02', input
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    rows = CSV.read(output, headers: true)
+    assert_equal 3, rows.length
+    birthday = Date.parse(rows[0]['vbirthday'])
+    assert_operator birthday, :>=, Date.new(1940, 1, 1)
+    assert_operator birthday, :<=, Date.new(1944, 12, 31)
+    assert_equal '2021-W19', rows[0]['cweek_dose1']
+    assert_equal Date.commercial(2021, 19, 7).to_s, rows[0]['date_dose1']
+    assert_equal 'pfizer', rows[0]['pharma_dose1']
+    assert_equal 'pfizer', rows[1]['pharma_dose1']
+    assert_equal '2024-W20', rows[0]['cweek_death']
+    assert_includes stderr, 'rows=3'
+
+    cumulative = File.join(@dir, 'czech-kcor.csv')
+    risk = File.join(@dir, 'czech-kcor-risk.csv')
+    stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'kcor', '--output', cumulative, '--risk-output', risk,
+      '--cutoff-start', '2021-06-01', '--cutoff-until', '2021-06-01', '--ages', 'all', output
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    risk_rows = CSV.read(risk, headers: true)
+    first_risk = risk_rows.find { |row| row['dose'] == '1' }
+    assert_equal '1', first_risk['cohort_size']
+    assert_equal '1', first_risk['at_risk']
+    death_risk = risk_rows.find { |row| row['dose'] == '1' && row['deaths_week'] == '1' }
+    refute_nil death_risk
+    assert_equal '1', death_risk['deaths']
+    cumulative_rows = CSV.read(cumulative, headers: true)
+    matching = cumulative_rows.find { |row| row['id'] == death_risk['id'] }
+    assert_equal death_risk['deaths'], matching['deaths']
+    assert_equal 2, risk_rows.select { |row| row['cweek'] == risk_rows.first['cweek'] }.sum { |row| row['cohort_size'].to_i }
+
+    risk_only = File.join(@dir, 'czech-risk-only.csv')
+    stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'kcor', '--risk-output', risk_only,
+      '--cutoff-start', '2021-06-01', '--cutoff-until', '2021-06-01', '--ages', 'all', output
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    assert_equal risk_rows.map(&:to_h), CSV.read(risk_only, headers: true).map(&:to_h)
+  end
+
+  def test_gamma_fit_recovers_synthetic_frailty
+    input = File.join(@dir, 'gamma-risk.csv')
+    params = File.join(@dir, 'gamma-params.csv')
+    series = File.join(@dir, 'gamma-series.csv')
+    theta = 2.0
+    k = 0.001
+    alive = 100_000_000
+    cumulative_deaths = 0
+    previous_hazard = 0.0
+    start = Date.new(2021, 1, 3)
+    CSV.open(input, 'w') do |csv|
+      csv << %w[id areacode area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
+      80.times do |index|
+        date = start + 7 * (index + 1)
+        cumulative_hazard = Math.log(1.0 + theta * k * (index + 1)) / theta
+        weekly_hazard = cumulative_hazard - previous_hazard
+        deaths = (alive * (1.0 - Math.exp(-weekly_hazard))).round
+        cumulative_deaths += deaths
+        csv << ["test_#{index}", 'test', 'Test', '試験', start, format('%04d-W%02d', date.cwyear, date.cweek),
+                date, 'all', 0, 100_000_000, alive, deaths, cumulative_deaths, 0]
+        alive -= deaths
+        previous_hazard = cumulative_hazard
+      end
+    end
+    stdout, stderr, status = Open3.capture3(
+      'ruby', GAMMA_SCRIPT, '--quiet-start', (start + 7).to_s, '--quiet-end', (start + 7 * 80).to_s,
+      '--output', params, '--series-output', series, input
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    fit = CSV.read(params, headers: true).first
+    assert_in_delta theta, fit['theta'].to_f, 0.01
+    assert_in_delta k, fit['k'].to_f, 0.00001
+    assert_equal 80, CSV.read(series, headers: true).length
   end
 end

@@ -12,11 +12,24 @@ COMMANDS = %w[personyear afterdose kcor anonymize excess].freeze
 DEFAULT_AGES = %w[00-09 10-19 20-29 30-39 40-49 50-59 60-69 70-79 80-89 90-99 100+ 80+ all].freeze
 OUTPUT_HEADER = %w[id areacode area areaj step period age dose lives persondays deaths lb0 ub0 rr0 lbm ubm mortality].freeze
 
-def parse_date(value)
+def parse_date(value, iso_week: false)
   return nil if value.nil? || value.to_s.strip.empty? || value.to_s.match?(/^(NA|#N\/A|NULL|0)$/i)
-  Date.parse(value.to_s)
+  text = value.to_s.strip
+  match = text.match(/\A(\d{4})-(\d{1,2})\z/) if iso_week
+  return Date.commercial(match[1].to_i, match[2].to_i, 7) if match
+  Date.parse(text)
 rescue ArgumentError
   nil
+end
+
+# 出生年区分をvirtual birthday生成用の年範囲へ変換する。
+# Convert a birth-year band into the year range used for virtual birthdays.
+def birth_year_range(value)
+  match = value.to_s.strip.match(/\A(\d{4})-(\d{4})\z/)
+  return nil unless match
+  first = match[1].to_i
+  last = match[2].to_i
+  first <= last ? [first, last] : nil
 end
 
 def safe_ago(date, years)
@@ -63,6 +76,11 @@ end
 def normalize_pharma(value)
   text = value.to_s.downcase
   return '' if text.empty?
+  return 'pfizer' if %w[co01 co08 co09 co16 co20 co21 co23 co24].include?(text)
+  return 'moderna' if %w[co02 co15 co19].include?(text)
+  return 'astrazeneca' if text == 'co03'
+  return 'janssen' if text == 'co04'
+  return 'novavax' if %w[co07 co22].include?(text)
   return 'pfizer' if text.match?(/pfizer|ファイザー|コミナティ/)
   return 'moderna' if text.match?(/moderna|モデルナ|スパイクバックス/)
   return 'astrazeneca' if text.match?(/astrazeneca|アストラゼネカ/)
@@ -93,12 +111,27 @@ class Dataset
     seen = Hash.new(0)
     @stats.clear
     each_raw_row do |row, file_index, row_number, file|
-      range = age_range(row['age'], @opts[:open_age_max])
-      next unless range
+      if @opts[:first_infection_only] && row['infection'].to_s.to_i > 1
+        @stats[:repeat_infections] += 1
+        next
+      end
+      years = birth_year_range(row['birth_year'])
+      range = if years
+                [age_on(Date.new(years[1], 12, 31), @age_reference),
+                 age_on(Date.new(years[0], 1, 1), @age_reference)]
+              else
+                age_range(row['age'], @opts[:open_age_max])
+              end
+      unless range
+        @stats[:missing_age] += 1
+        next
+      end
       raw_id = row['id'].to_s.strip
       if row.headers.include?('id')
-        next if raw_id.empty?
-        next if !row.headers.include?('vbirthday') && !raw_id.match?(/^\d+$/)
+        if raw_id.empty? || (!row.headers.include?('vbirthday') && !raw_id.match?(/^\d+$/))
+          @stats[:invalid_id] += 1
+          next
+        end
       end
       identity = raw_id.empty? ? "#{file_index}:#{row_number}" : raw_id
       seen[identity] += 1
@@ -107,8 +140,10 @@ class Dataset
       end
       @stats[:duplicate_ids] += 1 if seen[identity] > 1
       key = seen[identity] == 1 ? identity : "#{identity}:#{seen[identity]}"
-      person = build_person(row, key, identity, range)
+      person = build_person(row, key, identity, range, years)
       @stats[:rows] += 1
+      @stats[:deaths] += 1 if person[:death]
+      person[:doses].each_key { |dose| @stats["dose#{dose}".to_sym] += 1 }
       @stats[:invalid_dose_sequence] += 1 unless person[:valid_doses]
       yield person
     end
@@ -117,6 +152,12 @@ class Dataset
   private
 
   def parse_area(file)
+    if @opts.values_at(:areacode, :area, :areaj).all? { |value| !value.to_s.empty? }
+      @areacode = @opts[:areacode]
+      @area = @opts[:area]
+      @areaj = @opts[:areaj]
+      return
+    end
     match = File.basename(file).match(/^(jp\d+)_([^_]+)_(?:all|lives)/)
     if match
       @areacode = match[1]
@@ -142,6 +183,7 @@ class Dataset
       row_number = 0
       CSV.foreach(file, headers: names, row_sep: :auto) do |row|
         row_number += 1
+        next if @opts[:skip_source_header] && row_number == 1
         yield row, file_index, row_number, file
       end
     end
@@ -157,10 +199,10 @@ class Dataset
     @max_death = nil
     @max_dose = 0
     each_raw_row do |row, _file_index, _row_number, _file|
-      death = parse_date(row['death']) || parse_date(row['date_death'])
-      death ||= parse_date(row['out']) if row['reason_out'].to_s.include?('死')
+      death = parse_input_date(row['death']) || parse_input_date(row['date_death'])
+      death ||= parse_input_date(row['out']) if row['reason_out'].to_s.include?('死')
       @max_death = death if death && (!@max_death || @max_death < death)
-      date_age = parse_date(row['date_age'])
+      date_age = parse_input_date(row['date_age'])
       if date_age
         if @source_age_reference && @source_age_reference != date_age
           raise "date_ageが一致しません: #{@source_age_reference} / #{date_age}"
@@ -168,19 +210,25 @@ class Dataset
         @source_age_reference = date_age
       end
       (1..9).each do |dose|
-        date = parse_date(row["dose#{dose}"]) || parse_date(row["date_dose#{dose}"])
+        date = parse_input_date(row["dose#{dose}"]) || parse_input_date(row["date_dose#{dose}"])
         @max_dose = dose if date && @max_dose < dose
       end
     end
   end
 
-  def build_person(row, key, identity, range)
-    death = parse_date(row['death']) || parse_date(row['date_death'])
+  # 週単位原dataだけYYYY-WWをISO週の日曜日として読む。
+  # Read YYYY-WW as the ISO-week Sunday only for weekly source data.
+  def parse_input_date(value)
+    parse_date(value, iso_week: @opts[:iso_week_dates])
+  end
+
+  def build_person(row, key, identity, range, birth_years = nil)
+    death = parse_input_date(row['death']) || parse_input_date(row['date_death'])
     reason_out = row['reason_out'].to_s
-    out = parse_date(row['out']) || parse_date(row['date_out'])
+    out = parse_input_date(row['out']) || parse_input_date(row['date_out'])
     death ||= out if reason_out.include?('死')
-    in_dates = (['in', 'date_in'] + (2..5).map { |index| "in#{index}" }).map { |field| parse_date(row[field]) }.compact
-    out_dates = (['out', 'date_out'] + (2..5).map { |index| "out#{index}" }).map { |field| parse_date(row[field]) }.compact
+    in_dates = (['in', 'date_in'] + (2..5).map { |index| "in#{index}" }).map { |field| parse_input_date(row[field]) }.compact
+    out_dates = (['out', 'date_out'] + (2..5).map { |index| "out#{index}" }).map { |field| parse_input_date(row[field]) }.compact
     in_dates << out if reason_out.include?('転入') && out
     date_in = in_dates.min
     date_out = if reason_out.include?('死') || reason_out.include?('転入')
@@ -191,7 +239,7 @@ class Dataset
     date_out = nil if @opts[:prohibit_reason_in] && reason_out == '転入'
     doses = {}
     (1..9).each do |dose|
-      date = parse_date(row["dose#{dose}"]) || parse_date(row["date_dose#{dose}"])
+      date = parse_input_date(row["dose#{dose}"]) || parse_input_date(row["date_dose#{dose}"])
       next unless date
       pharma = row["pharma#{dose}"] || row["pharma_dose#{dose}"]
       doses[dose] = { date: date, pharma: normalize_pharma(pharma), lot: row["lot#{dose}"].to_s }
@@ -209,15 +257,21 @@ class Dataset
       return person
     end
     min_age, max_age = range
-    earliest = safe_ago(@age_reference, max_age + 1) + 1
-    latest = safe_ago(@age_reference, min_age)
+    if birth_years
+      earliest = Date.new(birth_years[0], 1, 1)
+      latest = Date.new(birth_years[1], 12, 31)
+    else
+      earliest = safe_ago(@age_reference, max_age + 1) + 1
+      latest = safe_ago(@age_reference, min_age)
+    end
     if death && person[:age_death]
       dmin, dmax = person[:age_death]
       earliest = [earliest, safe_ago(death, dmax + 1) + 1].max
       latest = [latest, safe_ago(death, dmin)].min
       @stats[:age_constraint_conflicts] += 1 if earliest > latest
     end
-    seed = [@opts[:age_seed_version], @areacode, key, person[:age_source]].join(':')
+    age_source = birth_years ? row['birth_year'].to_s : person[:age_source]
+    seed = [@opts[:age_seed_version], @areacode, key, age_source].join(':')
     person[:birthday] = earliest <= latest ?
       earliest + Digest::SHA256.hexdigest(seed)[0, 16].to_i(16) % ((latest - earliest).to_i + 1) :
       birthday_for(@age_reference, min_age, max_age, seed)
@@ -455,6 +509,76 @@ def run_kcor(dataset, opts)
   end
 end
 
+# 固定cohortの週初risk setとeventを、解析versionに依存しない形で出力する。
+# Emit weekly risk sets and events for fixed cohorts independently of analysis version.
+def run_kcor_risk(dataset, opts)
+  cutoffs = []
+  month = opts[:cutoff_start]
+  while month <= opts[:cutoff_until]
+    cutoffs << Date.commercial(month.cwyear, month.cweek, 7)
+    month = month.next_month
+  end
+  groups_by_cutoff = cutoffs.to_h do |cutoff|
+    [cutoff, Hash.new { |hash, key| hash[key] = {cohort_size: 0, deaths: Hash.new(0), censored: Hash.new(0)} }]
+  end
+  age_label_cache = Hash.new { |hash, age| hash[age] = age_labels(age, opts[:ages]) }
+  dataset.each_person do |person|
+    next unless person[:valid_doses]
+    cutoffs.each do |cutoff|
+      next if cutoff < person[:birthday]
+      next if person[:death] && person[:death] <= cutoff
+      next if person[:date_in] && cutoff < person[:date_in]
+      next if person[:date_out] && person[:date_out] <= cutoff
+      dose = dose_at(person, cutoff)
+      age_label_cache[age_on(person[:birthday], cutoff)].each do |age|
+        group = groups_by_cutoff[cutoff][[age, dose]]
+        group[:cohort_size] += 1
+        death = person[:death]
+        if death && cutoff < death && (!person[:date_out] || death <= person[:date_out])
+          sunday = Date.commercial(death.cwyear, death.cweek, 7)
+          group[:deaths][sunday] += 1
+        elsif person[:date_out] && cutoff < person[:date_out]
+          sunday = Date.commercial(person[:date_out].cwyear, person[:date_out].cweek, 7)
+          group[:censored][sunday] += 1
+        end
+      end
+    end
+  end
+
+  last = dataset.max_death && Date.commercial(dataset.max_death.cwyear, dataset.max_death.cweek, 7)
+  cumulative_csv = opts[:output] && CSV.open(opts[:output], 'w')
+  cumulative_csv&.then { |csv| csv << %w[id areacode area areaj cutoff cweek date age dose deaths] }
+  begin
+    CSV.open(opts[:risk_output], 'w') do |risk_csv|
+      risk_csv << %w[id areacode area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
+      cutoffs.each do |cutoff|
+        groups_by_cutoff[cutoff].each do |(age, dose), group|
+          at_risk = group[:cohort_size]
+          cumulative = 0
+          date = cutoff + 7
+          while last && date <= last
+            weekly_deaths = group[:deaths][date]
+            weekly_censored = group[:censored][date]
+            cumulative += weekly_deaths
+            cweek = format('%04d-W%02d', date.cwyear, date.cweek)
+            id = [dataset.areacode, cutoff, cweek, age, dose].join('_')
+            risk_csv << [id, dataset.areacode, dataset.area, dataset.areaj, cutoff, cweek, date, age, dose,
+                         group[:cohort_size], at_risk, weekly_deaths, cumulative, weekly_censored]
+            if cumulative_csv && cumulative.positive?
+              cumulative_csv << [id, dataset.areacode, dataset.area, dataset.areaj, cutoff, cweek, date,
+                                 age, dose, cumulative]
+            end
+            at_risk -= weekly_deaths + weekly_censored
+            date += 7
+          end
+        end
+      end
+    end
+  ensure
+    cumulative_csv&.close
+  end
+end
+
 def run_anonymize(dataset, opts)
   CSV.open(opts[:output], 'w') do |csv|
     header = %w[id areacode area areaj age date_age vbirthday cweek_in date_in cweek_out date_out cweek_death date_death dose_final]
@@ -548,13 +672,16 @@ opts = {
   cutoff_start: Date.new(2021, 6, 1), cutoff_until: Date.new(2024, 5, 1),
   start_year: 2010, until_year: 2025, standard_year: 2025,
   age_reference: nil, age_seed_version: 'v1', open_age_max: 124,
-  step_prefix: '', allow_dup_id: false, prohibit_reason_in: false, debug: false, report: nil
+  step_prefix: '', allow_dup_id: false, prohibit_reason_in: false, debug: false, report: nil,
+  first_infection_only: false, iso_week_dates: false, skip_source_header: false, risk_output: nil,
+  areacode: nil, area: nil, areaj: nil
 }
 
 parser = OptionParser.new do |option|
   option.banner = "Usage: #{File.basename($PROGRAM_NAME)} #{command} [options] INPUT.csv [INPUT2.csv]"
   option.on('--headers FILES', Array) { |value| opts[:headers] = value }
   option.on('-o', '--output FILE') { |value| opts[:output] = value }
+  option.on('--risk-output FILE') { |value| opts[:risk_output] = value }
   option.on('--start DATE') { |value| opts[:start] = Date.parse(value) }
   option.on('--until DATE') { |value| opts[:until] = Date.parse(value) }
   option.on('--steps LIST', Array) { |value| opts[:steps] = value }
@@ -571,18 +698,24 @@ parser = OptionParser.new do |option|
   option.on('--step-prefix PREFIX') { |value| opts[:step_prefix] = value }
   option.on('--allow-dup-id') { opts[:allow_dup_id] = true }
   option.on('--prohibit-reason-in') { opts[:prohibit_reason_in] = true }
+  option.on('--first-infection-only') { opts[:first_infection_only] = true }
+  option.on('--iso-week-dates') { opts[:iso_week_dates] = true }
+  option.on('--skip-source-header') { opts[:skip_source_header] = true }
+  option.on('--areacode CODE') { |value| opts[:areacode] = value }
+  option.on('--area NAME') { |value| opts[:area] = value }
+  option.on('--areaj NAME') { |value| opts[:areaj] = value }
   option.on('--debug') { opts[:debug] = true; Log.level = Logger::DEBUG }
   option.on('--report FILE') { |value| opts[:report] = value }
 end
 parser.parse!
 
-abort parser.to_s if ARGV.empty? || !opts[:output]
+abort parser.to_s if ARGV.empty? || (!opts[:output] && !opts[:risk_output])
 dataset = Dataset.new(ARGV, opts[:headers], opts)
 
 case command
 when 'personyear' then run_personyear(dataset, opts)
 when 'afterdose' then run_afterdose(dataset, opts)
-when 'kcor' then run_kcor(dataset, opts)
+when 'kcor' then opts[:risk_output] ? run_kcor_risk(dataset, opts) : run_kcor(dataset, opts)
 when 'anonymize' then run_anonymize(dataset, opts)
 when 'excess' then run_excess(dataset, opts)
 end

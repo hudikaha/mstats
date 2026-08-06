@@ -25,10 +25,16 @@ vdeathp.rb excess    [options] INPUT...
 
 共通optionは`--headers FILE[,FILE...]`、`--output FILE`、`--age-reference DATE`、
 `--age-seed-version VERSION`、`--open-age-max AGE`、`--allow-dup-id`、
-`--prohibit-reason-in`、`--report FILE`である。`--age-reference`を省略すると、全入力中の最終死亡日の翌日を年齢基準日にする。
+`--prohibit-reason-in`、`--report FILE`である。週番号を日付として持つ入力では
+`--iso-week-dates`、再感染で同一人物の行が増える入力では`--first-infection-only`を使う。
+元CSVにもheaderがあり、別の対応headerを`--headers`で与える場合は`--skip-source-header`を使う。
+入力に地域fieldがない場合は`--areacode`、`--area`、`--areaj`で指定できる。
+`--age-reference`を省略すると、全入力中の最終死亡日の翌日を年齢基準日にする。
 元のheaderを含まない自治体CSVには`--headers`が必要である。`anonymize`出力のように先頭行にheaderを持つCSVは、`--headers`なしで再入力できる。
 
-1歳年齢または年齢区分から可能な生年月日範囲を求め、自治体code、個票ID、元年齢、seed versionのSHA-256から再現可能な仮想誕生日を決める。`anonymize`は実際の誕生日ではないこの日付を`vbirthday`として出力する。`vbirthday`を持つCSVを再入力した場合は、それを誕生日として使い、再生成しない。`personyear`では誕生日を跨ぐperson-daysを前後の年齢群へ分割し、死亡は死亡日の年齢群へ入れる。
+1歳年齢、年齢区分、または`birth_year` fieldの出生年区分から可能な生年月日範囲を求め、
+地域code、個票ID、元年齢または出生年区分、seed versionのSHA-256から再現可能な仮想誕生日を決める。
+`anonymize`は実際の誕生日ではないこの日付を`vbirthday`として出力する。`vbirthday`を持つCSVを再入力した場合は、それを誕生日として使い、再生成しない。`personyear`では誕生日を跨ぐperson-daysを前後の年齢群へ分割し、死亡は死亡日の年齢群へ入れる。
 
 例:
 
@@ -50,7 +56,13 @@ cd vdeath/import
 make              # 全自治体
 make jp132101     # 小金井市だけ
 make FORCE=1      # 既存出力も再生成
+make cze          # チェコ公式週次個票からvdeathとKCORを生成
 ```
+
+チェコ公式CSVはrepository外の`~/work/vdeath-src/Czech`に置き、53 fieldの対応は
+`import/headers/czech-2024-01.csv`で指定し、元CSVのheader行は読み飛ばす。`Infekce`が2以上の再感染行を除外し、
+`RokNarozeni`の5年出生年区分からvirtual birthdayを生成する。元dataがすでに週単位なので、
+チェコでは日単位の`org*`比較系列を作らない。
 
 `*-IND-WKA.csv`と`*-DTH-WKA.csv`は、非公開の日単位個票CSVから生成した匿名化個票です。これらはそれぞれElasticSearchの`indiv`と`indivdth`として公開します。公開個票は日付を週単位へ丸めているため、内部処理の再現・検証に使えますが、日単位の精度は失われています。
 

@@ -26,10 +26,17 @@ source records with `--step-prefix org` creates comparison steps such as
 
 Common options are `--headers FILE[,FILE...]`, `--output FILE`, `--age-reference DATE`,
 `--age-seed-version VERSION`, `--open-age-max AGE`, `--allow-dup-id`,
-`--prohibit-reason-in`, and `--report FILE`. When `--age-reference` is omitted, the day after the latest death in all inputs is used.
+`--prohibit-reason-in`, and `--report FILE`. Use `--iso-week-dates` for source dates
+stored as week numbers and `--first-infection-only` when reinfections add rows for the
+same person. `--areacode`, `--area`, and `--areaj` supply area metadata when the source
+has no corresponding fields. Use `--skip-source-header` when `--headers` remaps a CSV
+that also contains its own header row. When `--age-reference` is omitted, the day after the latest death in all inputs is used.
 Municipal CSV files without an embedded header require `--headers`. A CSV with its own header row, including `anonymize` output, can be read again without `--headers`.
 
-The program derives a possible birth-date interval from an exact age or age band. It chooses a reproducible virtual birthday using a SHA-256 digest of the municipality code, record ID, source age, and seed version. `anonymize` writes this non-real date as `vbirthday`. When a CSV containing `vbirthday` is read again, that value is used as the birthday and is not regenerated. `personyear` splits person-days at birthdays and assigns deaths to age on the date of death.
+The program derives a possible birth-date interval from an exact age, age band, or a
+birth-year band in the `birth_year` field. It chooses a reproducible virtual birthday
+using a SHA-256 digest of the area code, record ID, source age or birth-year band, and
+seed version. `anonymize` writes this non-real date as `vbirthday`. When a CSV containing `vbirthday` is read again, that value is used as the birthday and is not regenerated. `personyear` splits person-days at birthdays and assigns deaths to age on the date of death.
 
 Example:
 
@@ -51,7 +58,14 @@ cd vdeath/import
 make              # all municipalities
 make jp132101     # Koganei only
 make FORCE=1      # regenerate existing outputs
+make cze          # generate vdeath and KCOR from Czech official weekly records
 ```
+
+The Czech official CSV remains outside Git under `~/work/vdeath-src/Czech`. Its 53
+fields are mapped by `import/headers/czech-2024-01.csv`, and the source header row is skipped. Rows for second and later
+infections are excluded, and five-year `RokNarozeni` birth-year bands produce virtual
+birthdays. Because the source is already weekly, Czech output has no daily-precision
+`org*` comparison series.
 
 `*-IND-WKA.csv` and `*-DTH-WKA.csv` are anonymized individual records generated from
 private daily individual CSVs. They are published in Elasticsearch as `indiv`
