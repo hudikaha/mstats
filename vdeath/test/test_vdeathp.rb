@@ -102,22 +102,26 @@ class VdeathpTest < Minitest::Test
     assert_equal '1', CSV.read(output, headers: true).find { |row| row['age'] == '83-83' && row['dose'] == '0' }['persondays']
   end
 
-  def test_future_virtual_birthday_is_read_and_observation_starts_at_birth
+  def test_future_virtual_birthday_is_excluded_from_distributed_population
     input = File.join(@dir, 'future-birthday.csv')
     CSV.open(input, 'w') do |csv|
       csv << %w[id age vbirthday]
-      csv << %w[10 -10--1 2024-01-15]
+      csv << %w[10 -10--1 2024-03-15]
     end
     output = File.join(@dir, 'future-py.csv')
+    report = File.join(@dir, 'future-report.json')
     stdout, stderr, status = Open3.capture3(
-      'ruby', SCRIPT, 'personyear', '--output', output, '--start', '2024-01-01', '--until', '2024-02-01',
+      'ruby', SCRIPT, 'personyear', '--output', output, '--report', report,
+      '--start', '2024-01-01', '--until', '2024-02-01',
       '--age-reference', '2024-02-01', '--steps', 'all', '--ages', '00-09,all',
       '--areacode', 'test', '--area', 'Test', '--areaj', '試験', input
     )
     assert status.success?, "#{stdout}\n#{stderr}"
     all = CSV.read(output, headers: true).find { |row| row['age'] == 'all' && row['dose'] == '0' }
-    assert_equal '17', all['persondays']
-    assert_equal '1', all['lives']
+    assert_equal '0', all['persondays']
+    assert_equal '0', all['lives']
+    assert_includes stderr, 'rows=0'
+    assert_equal 1, JSON.parse(File.read(report)).dig('stats', 'future_birthday')
   end
 
   def test_grouped_age_imputation_is_deterministic

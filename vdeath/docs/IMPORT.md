@@ -46,6 +46,10 @@ The program derives a possible birth-date interval from an exact age, age band, 
 birth-year band in the `birth_year` field. It chooses a reproducible virtual birthday
 using a SHA-256 digest of the area code, record ID, source age or birth-year band, and
 seed version. `anonymize` writes this non-real date as `vbirthday`. When a CSV containing `vbirthday` is read again, that value is used as the birthday and is not regenerated. `personyear` splits person-days at birthdays and assigns deaths to age on the date of death.
+People whose virtual birthday falls after the age-reference date are excluded from the
+distributed population at that reference date, and the report records their count as
+`future_birthday`. Changes to source coverage or the virtual-birthday seed can therefore
+change both this exclusion count and the distributed population size.
 
 Example:
 

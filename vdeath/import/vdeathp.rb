@@ -159,6 +159,10 @@ class Dataset
       @stats[:duplicate_ids] += 1 if seen[identity] > 1
       key = seen[identity] == 1 ? identity : "#{identity}:#{seen[identity]}"
       person = build_person(row, key, identity, range, years)
+      if person[:birthday] > @age_reference
+        @stats[:future_birthday] += 1
+        next
+      end
       @max_death = person[:death] if person[:death] && (!@max_death || @max_death < person[:death])
       person[:doses].each_key { |dose| @max_dose = dose if @max_dose < dose }
       @stats[:rows] += 1

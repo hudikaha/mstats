@@ -38,6 +38,7 @@ vdeathp.rb excess    [options] INPUT...
 1歳年齢、年齢区分、または`birth_year` fieldの出生年区分から可能な生年月日範囲を求め、
 地域code、個票ID、元年齢または出生年区分、seed versionのSHA-256から再現可能な仮想誕生日を決める。
 `anonymize`は実際の誕生日ではないこの日付を`vbirthday`として出力する。`vbirthday`を持つCSVを再入力した場合は、それを誕生日として使い、再生成しない。`personyear`では誕生日を跨ぐperson-daysを前後の年齢群へ分割し、死亡は死亡日の年齢群へ入れる。
+年齢基準日より後のvirtual birthdayになった人物は、基準日時点の配布人口に含めず、reportの`future_birthday`へ除外数を記録する。元データの範囲やvirtual birthdayのseedが変わると、この除外数と配布人数も変化し得る。
 
 例:
 
