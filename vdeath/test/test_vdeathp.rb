@@ -2,6 +2,7 @@
 
 require 'csv'
 require 'fileutils'
+require 'json'
 require 'minitest/autorun'
 require 'open3'
 require 'tmpdir'
@@ -44,6 +45,79 @@ class VdeathpTest < Minitest::Test
     assert_includes stderr, 'age_reference=2024-07-01'
     death = rows.find { |row| row['age'] == '70-79' && row['dose'] == '2' }
     assert_equal '1', death['deaths']
+  end
+
+  def test_fast_personyear_matches_legacy_output
+    options = %w[--start 2021-02-01 --until 2024-07-01 --steps 1,3,6,all --ages 00-09,50-59,70-79,80-89,80+,all]
+    fast, = run_command('personyear', *options)
+    legacy, = run_command('personyear', '--legacy-personyear', *options)
+    assert_equal legacy.map(&:to_h), fast.map(&:to_h)
+  end
+
+  def test_spread_weekly_dates_is_deterministic_and_rejects_two_doses_in_one_week
+    input = File.join(@dir, 'weekly.csv')
+    output = File.join(@dir, 'weekly-py.csv')
+    report = File.join(@dir, 'weekly-report.json')
+    CSV.open(input, 'w') do |csv|
+      csv << %w[id age vbirthday date_death date_in date_out date_dose1 date_dose2]
+      csv << %w[10 80 1940-01-01 2023-06-18 2021-05-23 _ 2023-06-18 _]
+      csv << %w[11 80 1940-01-01 _ 2021-05-23 2024-01-07 2022-01-02 2022-01-02]
+    end
+    stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'personyear', '--output', output, '--report', report,
+      '--spread-weekly-dates', 'v1', '--start', '2023-01-01', '--until', '2024-02-01',
+      '--steps', 'all', '--ages', 'all', '--areacode', 'test', '--area', 'Test', '--areaj', '試験', input
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    rows = CSV.read(output, headers: true)
+    assert_equal '1', rows.find { |row| row['dose'] == '1' }['deaths']
+    assert_equal 1, JSON.parse(File.read(report)).dig('stats', 'same_week_doses')
+
+    second = File.join(@dir, 'weekly-py-second.csv')
+    _stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'personyear', '--output', second, '--spread-weekly-dates', 'v1',
+      '--start', '2023-01-01', '--until', '2024-02-01', '--steps', 'all', '--ages', 'all',
+      '--areacode', 'test', '--area', 'Test', '--areaj', '試験', input
+    )
+    assert status.success?, stderr
+    assert_equal File.read(output), File.read(second)
+  end
+
+  def test_february_29_birthday_changes_age_on_march_1_in_non_leap_year
+    input = File.join(@dir, 'leap-birthday.csv')
+    CSV.open(input, 'w') do |csv|
+      csv << %w[id age vbirthday]
+      csv << %w[10 82 1940-02-29]
+    end
+    output = File.join(@dir, 'leap-py.csv')
+    stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'personyear', '--output', output, '--start', '2023-02-28', '--until', '2023-03-02',
+      '--age-reference', '2023-03-02',
+      '--steps', 'all', '--ages', '82-82,83-83,all', '--areacode', 'test', '--area', 'Test', '--areaj', '試験', input
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    all = CSV.read(output, headers: true).find { |row| row['age'] == 'all' && row['dose'] == '0' }
+    assert_equal '2', all['persondays']
+    assert_equal '1', CSV.read(output, headers: true).find { |row| row['age'] == '82-82' && row['dose'] == '0' }['persondays']
+    assert_equal '1', CSV.read(output, headers: true).find { |row| row['age'] == '83-83' && row['dose'] == '0' }['persondays']
+  end
+
+  def test_future_virtual_birthday_is_read_and_observation_starts_at_birth
+    input = File.join(@dir, 'future-birthday.csv')
+    CSV.open(input, 'w') do |csv|
+      csv << %w[id age vbirthday]
+      csv << %w[10 -10--1 2024-01-15]
+    end
+    output = File.join(@dir, 'future-py.csv')
+    stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'personyear', '--output', output, '--start', '2024-01-01', '--until', '2024-02-01',
+      '--age-reference', '2024-02-01', '--steps', 'all', '--ages', '00-09,all',
+      '--areacode', 'test', '--area', 'Test', '--areaj', '試験', input
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    all = CSV.read(output, headers: true).find { |row| row['age'] == 'all' && row['dose'] == '0' }
+    assert_equal '17', all['persondays']
+    assert_equal '1', all['lives']
   end
 
   def test_grouped_age_imputation_is_deterministic

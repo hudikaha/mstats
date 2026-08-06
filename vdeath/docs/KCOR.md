@@ -79,9 +79,9 @@ At `theta=0`, the limiting values `Hobs(t)=k*t` and `H0(t)=Hobs(t)` are used. Fo
 ```sh
 ruby import/kcor_gamma.rb \
   --quiet-start 2022-W24 --quiet-end 2024-W16 \
-  --output ../outputs/cze_Czech-Republic_CZ_GAMMA-CONSTANT-PARAMS.csv \
-  --series-output ../outputs/cze_Czech-Republic_CZ_GAMMA-CONSTANT-SERIES.csv \
-  ../outputs/cze_Czech-Republic_CZ_CUMD-WK-G.csv
+  --output ../outputs/cze_Czech-Republic_GAMMA-CONSTANT-PARAMS.csv \
+  --series-output ../outputs/cze_Czech-Republic_GAMMA-CONSTANT-SERIES.csv \
+  ../outputs/cze_Czech-Republic_CUMD-WK-G.csv
 ```
 
 The parameter output stores theta, weekly k, the number of quiet points, RMSE, and a

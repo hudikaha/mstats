@@ -21,7 +21,7 @@ AGES := 00-09,10-19,20-29,30-39,40-49,50-59,60-69,70-79,80-89,90-99,100+,80+,all
 CITIES := jp132101 jp141500 jp221309 jp222267 jp232068 jp232076 jp271004 jp442054
 CZECH_INPUT := $(CZECH_SRC_DIR)/Otevrena-data-NR-26-30-COVID-19-prehled-populace-2024-01.csv
 CZECH_HEADER := ./headers/czech-2024-01.csv
-CZECH_NAME := cze_Czech-Republic_CZ
+CZECH_NAME := cze_Czech-Republic
 CZECH_IND := $(OUT_DIR)/$(CZECH_NAME)_IND-WKA.csv
 CZECH_PY := $(OUT_DIR)/$(CZECH_NAME)_PY.csv
 CZECH_AFTERDOSE := $(OUT_DIR)/$(CZECH_NAME)_PY-WKD.csv
@@ -29,6 +29,9 @@ CZECH_CUMD := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK.csv
 CZECH_RISK := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK-G.csv
 CZECH_GAMMA_PARAMS := $(OUT_DIR)/$(CZECH_NAME)_GAMMA-CONSTANT-PARAMS.csv
 CZECH_GAMMA_SERIES := $(OUT_DIR)/$(CZECH_NAME)_GAMMA-CONSTANT-SERIES.csv
+CZECH_WEEKLY_DATE_SEED ?= v1
+CZECH_POPULATION_ROWS := 10325589
+WEEKLY_DATE_SEED ?= v1
 comma := ,
 
 .PHONY: all cze cze-all cze-ind cze-py cze-afterdose cze-kcor cze-gamma indiv-check indiv indivdth publish-kkcor $(CITIES)
@@ -51,15 +54,21 @@ $(CZECH_IND): $(CZECH_INPUT) $(CZECH_HEADER) $(SCRIPT) Makefile
 
 $(CZECH_PY): $(CZECH_IND) $(SCRIPT) Makefile
 	$(RUN) personyear --steps 1,3,6,all --ages "$(AGES)" --start 2021-02-01 --until 2024-09-02 \
+	  --age-reference 2024-09-02 \
+	  --progress-total $(CZECH_POPULATION_ROWS) \
+	  --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
 	  --output "$@" "$(CZECH_IND)"
 
 $(CZECH_AFTERDOSE): $(CZECH_IND) $(SCRIPT) Makefile
 	$(RUN) afterdose --weeks 1-99 --ages 80+,all --until 2024-09-02 \
+	  --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
 	  --output "$@" "$(CZECH_IND)"
 
 cze-kcor: $(CZECH_IND)
 	@if [[ ! -s "$(CZECH_CUMD)" || ! -s "$(CZECH_RISK)" || "$(CZECH_IND)" -nt "$(CZECH_RISK)" || "$(SCRIPT)" -nt "$(CZECH_RISK)" ]]; then \
 	  $(RUN) kcor --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
+	    --age-reference 2024-09-02 \
+	    --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
 	    --risk-output "$(CZECH_RISK)" --output "$(CZECH_CUMD)" "$(CZECH_IND)"; \
 	fi
 
@@ -124,16 +133,22 @@ $(1):
 	  $(RUN) afterdose --headers "$$$$headers" --weeks 1-99 --step-prefix org --ages 80+,all $$$$opts --output "$(OUT_DIR)/$(2)_PY-WKD-ORG.csv" $$$$inputs || exit $$$$?; \
 	fi; \
 	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_PY.csv"; then \
-	  $(RUN) personyear --steps 1,3,6,all --ages "$(AGES)" --output "$(OUT_DIR)/$(2)_PY.csv" "$$$$anon" || exit $$$$?; \
+	  population=$$$$(( $$$$(wc -l < "$$$$anon") - 1 )); \
+	  reference=$$$$(sed -n '2p' "$$$$anon" | cut -d, -f6); \
+	  $(RUN) personyear --steps 1,3,6,all --ages "$(AGES)" --age-reference "$$$$reference" \
+	    --progress-total "$$$$population" --spread-weekly-dates "$(WEEKLY_DATE_SEED)" \
+	    --output "$(OUT_DIR)/$(2)_PY.csv" "$$$$anon" || exit $$$$?; \
 	fi; \
 	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_PY-WKD.csv"; then \
-	  $(RUN) afterdose --weeks 1-99 --ages 80+,all --output "$(OUT_DIR)/$(2)_PY-WKD.csv" "$$$$anon" || exit $$$$?; \
+	  $(RUN) afterdose --weeks 1-99 --ages 80+,all --spread-weekly-dates "$(WEEKLY_DATE_SEED)" \
+	    --output "$(OUT_DIR)/$(2)_PY-WKD.csv" "$$$$anon" || exit $$$$?; \
 	fi; \
 	if needs "$(OUT_DIR)/$(2)_CUMD-WK.csv"; then \
 	  $(RUN) kcor --headers "$$$$headers" $$$$opts --output "$(OUT_DIR)/$(2)_CUMD-WK.csv" $$$$inputs || exit $$$$?; \
 	fi; \
 	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_CUMD-WK-G.csv"; then \
-	  $(RUN) kcor --risk-output "$(OUT_DIR)/$(2)_CUMD-WK-G.csv" "$$$$anon" || exit $$$$?; \
+	  $(RUN) kcor --spread-weekly-dates "$(WEEKLY_DATE_SEED)" \
+	    --risk-output "$(OUT_DIR)/$(2)_CUMD-WK-G.csv" "$$$$anon" || exit $$$$?; \
 	fi; \
 	elapsed=$$$$(( $$$$(date +%s) - start )); \
 	printf '%s\t%s\n' '$(1)' "$$$$elapsed" | tee "$(OUT_DIR)/timings/$(1).tsv"

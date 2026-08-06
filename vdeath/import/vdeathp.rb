@@ -22,6 +22,15 @@ rescue ArgumentError
   nil
 end
 
+# 週次日付を人物とISO週に固有の曜日へ決定的に分散する。
+# Deterministically spread a weekly date to a person-and-ISO-week-specific weekday.
+def spread_weekly_date(date, seed, areacode, identity)
+  return date unless date && seed
+  cweek = format('%04d-W%02d', date.cwyear, date.cweek)
+  key = [seed, areacode, identity, cweek].join(':')
+  Date.commercial(date.cwyear, date.cweek, 1) + Digest::SHA256.hexdigest(key)[0, 16].to_i(16) % 7
+end
+
 # 出生年区分をvirtual birthday生成用の年範囲へ変換する。
 # Convert a birth-year band into the year range used for virtual birthdays.
 def birth_year_range(value)
@@ -40,8 +49,8 @@ end
 
 def age_range(value, open_age_max)
   text = value.to_s.strip.tr('～', '〜').delete('歳 ')
-  return [text.to_i, text.to_i] if text.match?(/^\d+$/)
-  match = text.match(/^(\d+)[〜~-](\d+)$/)
+  return [text.to_i, text.to_i] if text.match?(/^-?\d+$/)
+  match = text.match(/^(-?\d+)[〜~-](-?\d+)$/)
   return [match[1].to_i, match[2].to_i] if match
   match = text.match(/^(\d+)(?:〜|\+)$/)
   return [match[1].to_i, open_age_max] if match
@@ -99,7 +108,14 @@ class Dataset
     @files = files
     @headers = headers
     parse_area(files.first)
-    scan_metadata
+    @max_death = nil
+    @max_dose = 0
+    @metadata_scan = !(opts[:age_reference] && opts[:command] != 'afterdose')
+    if @metadata_scan
+      progress_start('phase 1/2 metadata')
+      scan_metadata
+      progress_finish
+    end
     if !@max_death && !@source_age_reference && !opts[:age_reference]
       raise '死亡日がないため年齢基準日を決定できません。--age-referenceを指定してください'
     end
@@ -108,9 +124,11 @@ class Dataset
 
   def each_person
     return enum_for(__method__) unless block_given?
+    progress_start(@metadata_scan ? "phase 2/2 #{@opts[:command]}" : "phase 1/1 #{@opts[:command]}")
     seen = Hash.new(0)
     @stats.clear
     each_raw_row do |row, file_index, row_number, file|
+      progress_tick(row_number) if @files.length == 1
       if @opts[:first_infection_only] && row['infection'].to_s.to_i > 1
         @stats[:repeat_infections] += 1
         next
@@ -141,12 +159,16 @@ class Dataset
       @stats[:duplicate_ids] += 1 if seen[identity] > 1
       key = seen[identity] == 1 ? identity : "#{identity}:#{seen[identity]}"
       person = build_person(row, key, identity, range, years)
+      @max_death = person[:death] if person[:death] && (!@max_death || @max_death < person[:death])
+      person[:doses].each_key { |dose| @max_dose = dose if @max_dose < dose }
       @stats[:rows] += 1
       @stats[:deaths] += 1 if person[:death]
       person[:doses].each_key { |dose| @stats["dose#{dose}".to_sym] += 1 }
       @stats[:invalid_dose_sequence] += 1 unless person[:valid_doses]
+      @stats[:same_week_doses] += 1 if person[:same_week_doses]
       yield person
     end
+    progress_finish
   end
 
   private
@@ -198,7 +220,7 @@ class Dataset
   def scan_metadata
     @max_death = nil
     @max_dose = 0
-    each_raw_row do |row, _file_index, _row_number, _file|
+    each_raw_row do |row, _file_index, row_number, _file|
       death = parse_input_date(row['death']) || parse_input_date(row['date_death'])
       death ||= parse_input_date(row['out']) if row['reason_out'].to_s.include?('死')
       @max_death = death if death && (!@max_death || @max_death < death)
@@ -213,7 +235,35 @@ class Dataset
         date = parse_input_date(row["dose#{dose}"]) || parse_input_date(row["date_dose#{dose}"])
         @max_dose = dose if date && @max_dose < dose
       end
+      progress_tick(row_number) if @files.length == 1
     end
+  end
+
+  # 長時間処理のphaseと人口10%ごとの進捗をstderrへ出す。
+  # Report long-running phases and each 10% of the configured population to stderr.
+  def progress_start(label)
+    @progress_label = label
+    @progress_next = 10
+    @progress_count = 0
+    @progress_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    warn "#{label} start" if @opts[:progress_total]
+  end
+
+  def progress_tick(count)
+    total = @opts[:progress_total]
+    return unless total && total.positive?
+    @progress_count = count
+    while @progress_next <= 100 && count * 100 >= total * @progress_next
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @progress_started
+      warn format('%s %d%% population=%d/%d elapsed=%.1fs',
+                  @progress_label, @progress_next, [count, total].min, total, elapsed)
+      @progress_next += 10
+    end
+  end
+
+  def progress_finish
+    return unless @opts[:progress_total]
+    progress_tick(@opts[:progress_total])
   end
 
   # 週単位原dataだけYYYY-WWをISO週の日曜日として読む。
@@ -244,12 +294,22 @@ class Dataset
       pharma = row["pharma#{dose}"] || row["pharma_dose#{dose}"]
       doses[dose] = { date: date, pharma: normalize_pharma(pharma), lot: row["lot#{dose}"].to_s }
     end
+    spread_seed = @opts[:spread_weekly_dates]
+    death = spread_weekly_date(death, spread_seed, @areacode, identity)
+    date_in = spread_weekly_date(date_in, spread_seed, @areacode, identity)
+    date_out = spread_weekly_date(date_out, spread_seed, @areacode, identity)
+    doses.each_value do |value|
+      value[:date] = spread_weekly_date(value[:date], spread_seed, @areacode, identity)
+    end
+    dose_weeks = doses.values.map { |value| [value[:date].cwyear, value[:date].cweek] }
+    same_week_doses = dose_weeks.uniq.length != dose_weeks.length
     person = {
       key: key, source_id: identity, sex: row['sex'].to_s, age_source: row['age'].to_s,
       age_min: range[0], age_max: range[1], death: death,
       age_death: age_range(row['age_death'], @opts[:open_age_max]),
       date_in: date_in, date_out: date_out, doses: doses,
-      valid_doses: doses.keys == (1..doses.length).to_a
+      valid_doses: doses.keys == (1..doses.length).to_a && !same_week_doses,
+      same_week_doses: same_week_doses
     }
     virtual_birthday = parse_date(row['vbirthday'])
     if virtual_birthday
@@ -330,12 +390,12 @@ def each_age_segment(person, start_date, end_date)
     next_birthday = begin
       Date.new(cursor.year, person[:birthday].month, person[:birthday].day)
     rescue ArgumentError
-      Date.new(cursor.year, 2, 28)
+      Date.new(cursor.year, 3, 1)
     end
     next_birthday = begin
       Date.new(cursor.year + 1, person[:birthday].month, person[:birthday].day)
     rescue ArgumentError
-      Date.new(cursor.year + 1, 2, 28)
+      Date.new(cursor.year + 1, 3, 1)
     end if next_birthday <= cursor
     finish = [end_date, next_birthday].min
     yield age, cursor, finish
@@ -346,7 +406,7 @@ end
 def emit_aggregate(csv, dataset, step, period, ages, sums)
   ages.each do |age|
     ref = sums[[age, 0]] || { lives: 0, days: 0, deaths: 0 }
-    keys = (sums.keys.select { |candidate| candidate[0] == age }.map(&:last) + (0..dataset.max_dose).to_a).uniq
+    keys = ((0..dataset.max_dose).to_a + sums.keys.select { |candidate| candidate[0] == age }.map(&:last)).uniq
     keys += %w[vaxx all]
     keys.uniq.each do |dose|
       sum = if dose == 'vaxx'
@@ -366,7 +426,7 @@ def emit_aggregate(csv, dataset, step, period, ages, sums)
   end
 end
 
-def run_personyear(dataset, opts)
+def run_personyear_legacy(dataset, opts)
   finish = opts[:until] || dataset.age_reference
   definitions = opts[:steps].flat_map do |step|
     periods(opts[:start], finish, step).map do |period_start, period_end, label|
@@ -386,7 +446,7 @@ def run_personyear(dataset, opts)
         dose = dose_at(person, death)
         age_label_cache[age_on(person[:birthday], death)].each { |age| sums[[age, dose]][:deaths] += 1 }
       end
-      obs_start = [period_start, person[:date_in] || period_start].max
+      obs_start = [period_start, person[:birthday], person[:date_in] || period_start].max
       obs_end = observation_end(person, period_end)
       next unless obs_start < obs_end
       seen = {}
@@ -407,6 +467,133 @@ def run_personyear(dataset, opts)
     csv << OUTPUT_HEADER
     definitions.each_with_index do |(step, _start, _finish, label), index|
       emit_aggregate(csv, dataset, "#{opts[:step_prefix]}#{step}", label, opts[:ages], sums_by_period[index])
+    end
+  end
+end
+
+# 重なりを持たない期間列から、日付を含む期間の添字を返す。
+# Return the index of the non-overlapping period containing the date.
+def period_index(periods_for_step, date)
+  index = periods_for_step.bsearch_index { |(_start, finish, _label)| date < finish }
+  return nil unless index && periods_for_step[index][0] <= date
+  index
+end
+
+# 固定した年齢区分・接種状態の区間を期間別差分配列へ加える。
+# Add a fixed age-label and dose-state interval to period difference arrays.
+def add_interval_to_periods(metric, periods_for_step, from, to)
+  first = periods_for_step.bsearch_index { |(_start, finish, _label)| from < finish }
+  return unless first
+  last = periods_for_step.bsearch_index { |(start, _finish, _label)| to <= start } || periods_for_step.length
+  return if first >= last
+
+  metric[:live_diff][first] += 1
+  metric[:live_diff][last] -= 1
+  if first == last - 1
+    start, finish, = periods_for_step[first]
+    metric[:partial_days][first] += ([to, finish].min - [from, start].max).to_i
+    return
+  end
+
+  first_start, first_finish, = periods_for_step[first]
+  metric[:partial_days][first] += (first_finish - [from, first_start].max).to_i
+  last_start, last_finish, = periods_for_step[last - 1]
+  metric[:partial_days][last - 1] += ([to, last_finish].min - last_start).to_i
+  return unless first + 1 < last - 1
+  metric[:active_diff][first + 1] += 1
+  metric[:active_diff][last - 1] -= 1
+end
+
+# 人物の全観察期間を一度だけ接種日と誕生日で分割する。
+# Split a person's complete observation interval by dose dates and birthdays only once.
+def person_intervals(person, start_date, finish, age_label_cache)
+  obs_start = [start_date, person[:birthday], person[:date_in] || start_date].max
+  obs_end = observation_end(person, finish)
+  return {} unless obs_start < obs_end
+
+  by_key = Hash.new { |hash, key| hash[key] = [] }
+  boundaries = [obs_start, obs_end]
+  boundaries.concat(person[:doses].values.map { |value| value[:date] }.select { |date| obs_start < date && date < obs_end })
+  boundaries.sort.each_cons(2) do |left, right|
+    dose = dose_at(person, left)
+    each_age_segment(person, left, right) do |age, from, to|
+      age_label_cache[age].each do |label|
+        intervals = by_key[[label, dose]]
+        if intervals.last && intervals.last[1] == from
+          intervals.last[1] = to
+        else
+          intervals << [from, to]
+        end
+      end
+    end
+  end
+  by_key
+end
+
+# 人物時系列と差分配列を使い、期間数に比例する反復を避ける。
+# Use person timelines and difference arrays to avoid work proportional to every period.
+def run_personyear(dataset, opts)
+  return run_personyear_legacy(dataset, opts) if opts[:legacy_personyear]
+
+  finish = opts[:until] || dataset.age_reference
+  periods_by_step = opts[:steps].to_h { |step| [step, periods(opts[:start], finish, step)] }
+  metrics_by_step = periods_by_step.to_h do |step, step_periods|
+    factory = lambda do
+      count = step_periods.length
+      { live_diff: Array.new(count + 1, 0), active_diff: Array.new(count + 1, 0),
+        partial_days: Array.new(count, 0), deaths: Array.new(count, 0) }
+    end
+    [step, Hash.new { |hash, key| hash[key] = factory.call }]
+  end
+  age_label_cache = Hash.new { |hash, age| hash[age] = age_labels(age, opts[:ages]) }
+
+  dataset.each_person do |person|
+    next unless person[:valid_doses]
+    person_intervals(person, opts[:start], finish, age_label_cache).each do |key, intervals|
+      periods_by_step.each do |step, step_periods|
+        metric = metrics_by_step[step][key]
+        intervals.each { |from, to| add_interval_to_periods(metric, step_periods, from, to) }
+      end
+    end
+
+    death = person[:death]
+    resident_at_death = death && (!person[:date_in] || person[:date_in] <= death) &&
+                        (!person[:date_out] || death <= person[:date_out])
+    next unless resident_at_death && opts[:start] <= death && death < finish
+    dose = dose_at(person, death)
+    age_label_cache[age_on(person[:birthday], death)].each do |label|
+      periods_by_step.each do |step, step_periods|
+        index = period_index(step_periods, death)
+        metrics_by_step[step][[label, dose]][:deaths][index] += 1 if index
+      end
+    end
+  end
+
+  sums_by_step = {}
+  periods_by_step.each do |step, step_periods|
+    sums = Array.new(step_periods.length) { Hash.new { |hash, key| hash[key] = { lives: 0, days: 0, deaths: 0 } } }
+    metrics_by_step[step].each do |key, metric|
+      lives = 0
+      active = 0
+      step_periods.each_with_index do |(start, finish_date, _label), index|
+        lives += metric[:live_diff][index]
+        active += metric[:active_diff][index]
+        sums[index][key] = {
+          lives: lives,
+          days: metric[:partial_days][index] + active * (finish_date - start).to_i,
+          deaths: metric[:deaths][index]
+        }
+      end
+    end
+    sums_by_step[step] = sums
+  end
+
+  CSV.open(opts[:output], 'w') do |csv|
+    csv << OUTPUT_HEADER
+    periods_by_step.each do |step, step_periods|
+      step_periods.each_with_index do |(_start, _finish, label), index|
+        emit_aggregate(csv, dataset, "#{opts[:step_prefix]}#{step}", label, opts[:ages], sums_by_step[step][index])
+      end
     end
   end
 end
@@ -674,7 +861,8 @@ opts = {
   age_reference: nil, age_seed_version: 'v1', open_age_max: 124,
   step_prefix: '', allow_dup_id: false, prohibit_reason_in: false, debug: false, report: nil,
   first_infection_only: false, iso_week_dates: false, skip_source_header: false, risk_output: nil,
-  areacode: nil, area: nil, areaj: nil
+  spread_weekly_dates: nil, legacy_personyear: false,
+  areacode: nil, area: nil, areaj: nil, command: command
 }
 
 parser = OptionParser.new do |option|
@@ -700,6 +888,9 @@ parser = OptionParser.new do |option|
   option.on('--prohibit-reason-in') { opts[:prohibit_reason_in] = true }
   option.on('--first-infection-only') { opts[:first_infection_only] = true }
   option.on('--iso-week-dates') { opts[:iso_week_dates] = true }
+  option.on('--spread-weekly-dates SEED') { |value| opts[:spread_weekly_dates] = value }
+  option.on('--progress-total PEOPLE', Integer) { |value| opts[:progress_total] = value }
+  option.on('--legacy-personyear') { opts[:legacy_personyear] = true }
   option.on('--skip-source-header') { opts[:skip_source_header] = true }
   option.on('--areacode CODE') { |value| opts[:areacode] = value }
   option.on('--area NAME') { |value| opts[:area] = value }

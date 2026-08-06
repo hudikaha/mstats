@@ -31,6 +31,15 @@ stored as week numbers and `--first-infection-only` when reinfections add rows f
 same person. `--areacode`, `--area`, and `--areaj` supply area metadata when the source
 has no corresponding fields. Use `--skip-source-header` when `--headers` remaps a CSV
 that also contains its own header row. When `--age-reference` is omitted, the day after the latest death in all inputs is used.
+`--spread-weekly-dates SEED` deterministically distributes weekly vaccination, death,
+entry, and exit dates from Monday through Sunday using SHA-256 of the person ID and ISO
+week. All event types for the same person and week receive the same date. If one person
+has multiple vaccinations in the same ISO week, that person is excluded as an invalid
+dose sequence and counted in the report's `same_week_doses` field.
+`personyear` builds each person's observation timeline once and uses difference arrays
+for complete periods. `--legacy-personyear` remains available only for comparison.
+`--progress-total PEOPLE` reports phase starts and each 10% of the processed population,
+including row counts and elapsed time, to stderr.
 Municipal CSV files without an embedded header require `--headers`. A CSV with its own header row, including `anonymize` output, can be read again without `--headers`.
 
 The program derives a possible birth-date interval from an exact age, age band, or a
@@ -74,13 +83,14 @@ public datasets support reproducibility and validation but do not retain daily p
 
 The default view of [`vdeath.rb`](https://medicalfacts.info/vdeath.rb) is calculated from
 the private daily CSVs before anonymization and therefore has higher precision. The
-page's `src` option can also display a series recalculated from the public
-`indiv` dataset. Death-only records use the
+page's `src` option can also display a series recalculated after deterministically
+spreading public `indiv` dates within each person and ISO week. Death-only records use the
 same anonymization format in `indivdth`.
 Comparing the two makes the aggregation differences caused by weekly anonymization
 visible.
 
-The difference can sometimes be seen directly in the graph. It could be reduced
-somewhat by allocating records from weeks crossing a month boundary between the
-adjacent months according to the number of days, but that adjustment is not currently
-implemented.
+For weekly event dates, SHA-256 of the seed, area code, person ID, and ISO week assigns
+a weekday from Monday through Sunday. Vaccination, death, entry, and exit events for
+the same person and week receive the same date, avoiding an artificial within-week
+ordering. This reconstruction reduces the periodic four-week/five-week-month difference
+caused by concentrating every event on Sunday.

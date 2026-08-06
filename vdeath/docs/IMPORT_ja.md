@@ -29,6 +29,9 @@ vdeathp.rb excess    [options] INPUT...
 `--iso-week-dates`、再感染で同一人物の行が増える入力では`--first-infection-only`を使う。
 元CSVにもheaderがあり、別の対応headerを`--headers`で与える場合は`--skip-source-header`を使う。
 入力に地域fieldがない場合は`--areacode`、`--area`、`--areaj`で指定できる。
+`--spread-weekly-dates SEED`は週次化された接種日、死亡日、転入日、転出日を、人物IDとISO週に対するSHA-256から月曜〜日曜へ決定的に分散する。同じ人物の同じ週はeventの種類によらず同じ日になる。同一人物に同一ISO週の複数接種がある場合、その人物は不正な接種系列として集計から除外し、reportの`same_week_doses`へ数える。
+`personyear`は人物ごとに観察時系列を一度だけ作り、期間の内部を差分配列で集計する。旧実装との検算が必要な場合だけ`--legacy-personyear`を指定できる。
+`--progress-total PEOPLE`を指定すると、phaseの開始と処理人口10%ごとの人数・経過時間をstderrへ表示する。
 `--age-reference`を省略すると、全入力中の最終死亡日の翌日を年齢基準日にする。
 元のheaderを含まない自治体CSVには`--headers`が必要である。`anonymize`出力のように先頭行にheaderを持つCSVは、`--headers`なしで再入力できる。
 
@@ -66,6 +69,6 @@ make cze          # チェコ公式週次個票からvdeathとKCORを生成
 
 `*-IND-WKA.csv`と`*-DTH-WKA.csv`は、非公開の日単位個票CSVから生成した匿名化個票です。これらはそれぞれElasticSearchの`indiv`と`indivdth`として公開します。公開個票は日付を週単位へ丸めているため、内部処理の再現・検証に使えますが、日単位の精度は失われています。
 
-[`vdeath.rb`](https://medicalfacts.info/vdeath.rb)のデフォルト表示は、公開用に匿名化する前の非公開日単位CSVから計算した、より精度の高い系列です。ページの`src`オプションで、公開`indiv`を再解析した匿名化データ系列も表示できます。死亡者のみの`indivdth`も同じ匿名化形式です。両者を比較することで、週単位匿名化による集計差を確認できます。
+[`vdeath.rb`](https://medicalfacts.info/vdeath.rb)のデフォルト表示は、公開用に匿名化する前の非公開日単位CSVから計算した、より精度の高い系列です。ページの`src`オプションで、公開`indiv`の日付を人物・ISO週ごとに週内分散して再解析した匿名化データ系列も表示できます。死亡者のみの`indivdth`も同じ匿名化形式です。両者を比較することで、週単位匿名化による集計差を確認できます。
 
-この差はグラフ上で目視できる場合があります。週を跨ぐ個票を、跨いだ日数に応じて連続する月へ按分すれば差を少し改善できると考えられますが、現在は実施していません。
+週次化されたevent日には、seed、地域code、人物ID、ISO週のSHA-256から月曜〜日曜を割り当てる。同じ人物・同じ週の接種、死亡、転入、転出は同じ日になるため、週内で人工的な前後関係を作らない。この再構成により、全eventを日曜日へ集中させたときの4週月・5週月による周期的な差を抑える。

@@ -117,7 +117,7 @@ Ages = {
 Sources = if default_index == 'vdeath'
               {
                   'org' => { sel: nil, ja: '日単位の元データから計算', en: 'Calculated from daily source data' },
-                  'anon' => { sel: nil, ja: '公開した週単位匿名化から計算(月次単純集計なので月ごとは誤差大)', en: 'Calculated from published weekly anonymization (monthly simple aggregation has large month-to-month errors)' }
+                  'anon' => { sel: nil, ja: '公開した週単位匿名化を週内分散して計算', en: 'Calculated from published weekly anonymization with within-week spreading' }
               }
           else
               { 'anon' => { sel: nil, ja: '従来data', en: 'Legacy data' } }

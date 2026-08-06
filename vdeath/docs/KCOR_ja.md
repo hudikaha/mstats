@@ -74,9 +74,9 @@ H0(t)   = (exp(theta * Hobs(t)) - 1) / theta
 ```sh
 ruby import/kcor_gamma.rb \
   --quiet-start 2022-W24 --quiet-end 2024-W16 \
-  --output ../outputs/cze_Czech-Republic_CZ_GAMMA-CONSTANT-PARAMS.csv \
-  --series-output ../outputs/cze_Czech-Republic_CZ_GAMMA-CONSTANT-SERIES.csv \
-  ../outputs/cze_Czech-Republic_CZ_CUMD-WK-G.csv
+  --output ../outputs/cze_Czech-Republic_GAMMA-CONSTANT-PARAMS.csv \
+  --series-output ../outputs/cze_Czech-Republic_GAMMA-CONSTANT-SERIES.csv \
+  ../outputs/cze_Czech-Republic_CUMD-WK-G.csv
 ```
 
 parameter出力には`theta`、週単位の`k`、quiet point数、RMSE、境界解を示す`fit_status`を保存する。series出力は
