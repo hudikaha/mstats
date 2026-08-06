@@ -669,9 +669,15 @@ def compact_ages(values)
     while i < indexes.length
         j = i
         j += 1 while j + 1 < indexes.length && indexes[j + 1] == indexes[j] + 1
-        first = age_key_bounds(StandardAgeKeys[indexes[i]])
-        last = age_key_bounds(StandardAgeKeys[indexes[j]])
-        out << "#{first.first}-#{last.last}"
+        if i == j
+            out << StandardAgeKeys[indexes[i]]
+        else
+            first = age_key_bounds(StandardAgeKeys[indexes[i]])
+            last = age_key_bounds(StandardAgeKeys[indexes[j]])
+            lower = format('%02d', first.first)
+            upper = last.last == '100over' ? last.last : format('%02d', last.last)
+            out << "#{lower}-#{upper}"
+        end
         i = j + 1
     end
     out.concat(values & %w[unknown elementary junior])
@@ -1004,9 +1010,13 @@ if ! $iframeflag
         if (ageMode) {
           const first = order[nums[i]];
           const last = order[nums[j]];
-          const lower = first == '100over' ? 100 : Number(first.slice(0, 2));
-          const upper = last == '100over' ? '100over' : Number(last.slice(3, 5));
-          out.push(lower + '-' + upper);
+          if (i == j) {
+            out.push(first);
+          } else {
+            const lower = first.slice(0, 2);
+            const upper = last == '100over' ? '100over' : last.slice(3, 5);
+            out.push(lower + '-' + upper);
+          }
         } else {
           const a = String(nums[i]);
           const b = String(nums[j]);
