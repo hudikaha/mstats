@@ -42,7 +42,9 @@ text = {
     observed: '観測', adjusted: 'Gamma補正', theta: 'θ', fit: 'fit',
     loading: 'データを読み込んでいます…', load_error: 'データを読み込めませんでした。',
     no_fit: '選択したcohortのgamma parameterがありません。',
-    osaka_disabled: '大阪（Gamma補正時は選択不可）'
+    osaka_disabled: '大阪（Gamma補正時は選択不可）',
+    gamma_active: 'Gamma補正を適用中', gamma_separator: '、',
+    osaka_gamma_note: '大阪市は死亡者のみのデータのため選択できません'
   },
   en: {
     cutoff: 'Cutoff', area: 'Area', age: 'Age', doses: 'doses',
@@ -57,7 +59,9 @@ text = {
     observed: 'Observed', adjusted: 'Gamma-adjusted', theta: 'θ', fit: 'fit',
     loading: 'Loading data…', load_error: 'Could not load data.',
     no_fit: 'Gamma parameters are unavailable for the selected cohort.',
-    osaka_disabled: 'Osaka (unavailable during gamma adjustment)'
+    osaka_disabled: 'Osaka (unavailable during gamma adjustment)',
+    gamma_active: 'Gamma adjustment is active', gamma_separator: ': ',
+    osaka_gamma_note: 'Osaka cannot be selected because its data include deaths only.'
   }
 }.fetch($l)
 
@@ -79,7 +83,7 @@ print <<~HTML
     <div class="kcor-row"><span class="kcor-label">#{text[:age]}:</span><span id="age"></span></div>
     <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span></div>
     <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span></div>
-    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button></div>
+    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><span id="osaka-gamma-note" hidden><span class="gamma-active-note">#{text[:gamma_active]}</span>#{text[:gamma_separator]}#{text[:osaka_gamma_note]}</span></div>
     <div id="fit-results">
       <div class="fit-result"><span id="gamma-factor" class="mono">&mdash;</span></div>
       <div class="fit-result gamma-fit-result"><span class="cohort2">#{text[:cohort2]} fit:</span><span id="c2fit" class="mono">&mdash;</span></div>

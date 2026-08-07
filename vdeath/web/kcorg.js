@@ -98,6 +98,7 @@
     }
     osakaCheckedBeforeGamma = false;
     document.getElementById('gamma-toggle').textContent = text.gamma_apply;
+    document.getElementById('osaka-gamma-note').hidden = true;
     document.getElementById('gamma-factor').textContent = '—';
   };
 
@@ -536,6 +537,7 @@
         quietEnd.value = 0;
         updateQuietLabel();
         document.getElementById('gamma-toggle').textContent = gammaMode ? text.gamma_remove : text.gamma_apply;
+        document.getElementById('osaka-gamma-note').hidden = !gammaMode;
         render();
       };
       const metadata = await fetchJson({
