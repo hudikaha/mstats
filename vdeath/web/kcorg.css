@@ -10,6 +10,7 @@
 #quiet-thumb { position: absolute; top: 50%; left: 0; width: 16px; height: 16px; border: 1px solid #666; border-radius: 50%; background: #687080; transform: translate(-50%, -50%); box-sizing: border-box; }
 #quiet-end { position: absolute; left: -8px; top: 0; width: calc(100% + 16px); height: 28px; margin: 0; opacity: 0; cursor: pointer; touch-action: none; }
 #gamma-toggle { padding: .35em .8em; }
+#osaka-gamma-note[hidden] { display: none !important; }
 .gamma-active-note { color: #c00000; font-weight: 600; }
 #fit-results { margin: .25em 0 .45em; }
 .fit-result { display: flex; gap: .55em; height: 1.45em; line-height: 1.45; white-space: nowrap; overflow: hidden; }
