@@ -572,6 +572,20 @@
       ? [0, Math.max(1.0e-12, rrMaximum * 1.05)]
       : [1 / (rrMagnitude * 1.05), rrMagnitude * 1.05];
     const rrCondition = rrLinear ? `${denominator} > 0` : `${numerator} > 0 && ${denominator} > 0`;
+    const summaryFormat = adjustedMode ? '.6f' : ',.0f';
+    const summaryTooltip = [
+      {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
+      {field: 'summary2', type: 'quantitative', title: text.cohort2, format: summaryFormat},
+      {field: 'summary1', type: 'quantitative', title: text.cohort1, format: summaryFormat},
+      {field: 'summaryRR', type: 'quantitative', title: 'RR', format: '.4f'}
+    ];
+    for (const row of wide) {
+      const value2 = gammaReady ? row.adjusted2 : (adjustedMode ? row.observed2 : row.deaths2);
+      const value1 = gammaReady ? row.adjusted1 : (adjustedMode ? row.observed1 : row.deaths1);
+      row.summary1 = Number.isFinite(value1) ? value1 * displayFactor : null;
+      row.summary2 = Number.isFinite(value2) ? value2 : null;
+      row.summaryRR = row.summary1 > 0 ? row.summary2 / row.summary1 : null;
+    }
     const quietStartDate = document.getElementById('quiet-start-value').textContent;
     const quietEndDate = document.getElementById('quiet-end-value').textContent;
     const fitEndDate = document.getElementById('fit-end-value').textContent;
@@ -584,6 +598,19 @@
       data: {values: [{date: xDomain[1]}]},
       mark: {type: 'rule', stroke: '#020202', opacity: 0},
       encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}}
+    });
+    topLayers.push({
+      mark: {type: 'rule', strokeWidth: 12, opacity: 0.001},
+      params: [{name: 'hoverSummary', select: {type: 'point', encodings: ['x'], nearest: true,
+        on: 'mousemove, touchstart, touchmove', clear: 'mouseout, touchend', empty: 'none'}}],
+      encoding: {x: commonX, tooltip: summaryTooltip}
+    }, {
+      transform: [{filter: {param: 'hoverSummary', empty: false}}],
+      mark: {type: 'rule', strokeWidth: 8, opacity: 0.1},
+      encoding: {
+        x: commonX,
+        tooltip: summaryTooltip
+      }
     });
     if (gammaMode) {
       topLayers.push({
