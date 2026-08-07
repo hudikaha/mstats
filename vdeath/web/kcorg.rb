@@ -36,7 +36,7 @@ text = {
     ratio: '累積hazard比 = コホート2 / コホート1', death_ratio: '累積死亡人数比 = コホート2 / コホート1',
     gamma_apply: 'Gamma補正を適用', gamma_remove: 'Gamma補正を解除',
     quiet_start: 'quiet window開始週', quiet_end: 'quiet window終了週', fit_end: 'Fit終了週',
-    fitting: 'fit中…', fit_apply: 'Fitを適用', fit_remove: 'Fitを解除',
+    fitting: 'fit中…',
     fit_wait: 'Gamma補正には4週以上のquiet windowが必要です。',
     baseline_factor: '選択週基準化：コホート1 ×%{factor}',
     gamma_factor: '選択週基準化：コホート1 ×%{factor}',
@@ -54,7 +54,7 @@ text = {
     ratio: 'Cumulative hazard ratio = Cohort 2 / Cohort 1', death_ratio: 'Cumulative death-count ratio = Cohort 2 / Cohort 1',
     gamma_apply: 'Apply gamma adjustment', gamma_remove: 'Remove gamma adjustment',
     quiet_start: 'Quiet-window start week', quiet_end: 'Quiet-window end week', fit_end: 'Fit end week',
-    fitting: 'Fitting…', fit_apply: 'Apply fit', fit_remove: 'Remove fit',
+    fitting: 'Fitting…',
     fit_wait: 'Gamma adjustment requires a quiet window of at least four weeks.',
     baseline_factor: 'Selected-week normalization: Cohort 1 ×%{factor}',
     gamma_factor: 'Selected-week normalization: Cohort 1 ×%{factor}',
@@ -85,7 +85,7 @@ print <<~HTML
     <div class="kcor-row"><span class="kcor-label">#{text[:age]}:</span><span id="age"></span></div>
     <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span></div>
     <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span></div>
-    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><button type="button" id="fit-toggle" disabled>#{text[:fit_apply]}</button><span id="osaka-gamma-note" hidden><span class="gamma-active-note">#{text[:gamma_active]}</span>#{text[:gamma_separator]}#{text[:osaka_gamma_note]}</span></div>
+    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><span id="osaka-gamma-note" hidden><span class="gamma-active-note">#{text[:gamma_active]}</span>#{text[:gamma_separator]}#{text[:osaka_gamma_note]}</span></div>
     <div id="fit-results">
       <div class="fit-result"><span id="gamma-factor" class="mono">&mdash;</span></div>
       <div class="fit-result gamma-fit-result"><span class="cohort2">#{text[:cohort2]} fit:</span><span id="c2fit" class="mono">&mdash;</span></div>
@@ -107,7 +107,7 @@ print <<~HTML
         <section class="kcor-references">
           <h2>Gamma-frailty補正について</h2>
           <p>初期表示は固定cohortの累積死亡人数です。「Gamma補正を適用」を押すと観測累積hazardを実線で表示し、quiet windowが4週以上なら、そこからθと基準傾きkを推定してGamma補正値を少し太い破線で追加します。0〜3週では推定せず、実測線だけを表示します。</p>
-          <p>quiet windowは開始週と終了週を指定し、初期値は第4週〜第8週です。FitはGamma補正とは別の操作で、開始を第1週に固定し、選択した終了週におけるコホート2／コホート1の比で青線を尺度調整して、その週のKCORを1にします。Fit終了週が0〜3ではFitしません。</p>
+          <p>quiet windowは開始週と終了週を4週以上離して指定し、初期値は第4週〜第8週です。FitはGamma補正とは別の操作で、開始を第1週に固定し、選択した終了週におけるコホート2／コホート1の比で青線を尺度調整して、その週のKCORを1にします。Fit終了週が0〜3ではFitせず、4週以上へ動かすと自動的に適用します。</p>
           <p>選択した地域・年齢・接種回数の週初risk人数と週死亡数を各cohort内で合算してからθとkを推定します。大阪市は通常の累積死亡人数では選択できますが、死亡者だけの資料でrisk setを作れないためGamma補正時は選択できません。</p>
           <p>これはmethod検証用の実装です。<code>theta_zero</code>と<code>theta_upper_bound</code>は推定値が探索境界に達したことを表します。</p>
           <ul>
@@ -121,7 +121,7 @@ print <<~HTML
         <section class="kcor-references">
           <h2>Gamma-frailty adjustment</h2>
           <p>The initial view shows cumulative death counts. Press “Apply gamma adjustment” to show observed cumulative hazards as solid lines. With a quiet window of at least four weeks, theta and the baseline slope k are estimated from that window and gamma-adjusted values are added as slightly thicker dashed lines. At zero to three weeks, only the observed lines are shown.</p>
-          <p>The quiet window has independently selected start and end weeks and defaults to weeks 4–8. Fitting is separate from gamma adjustment: its start is fixed at week 1, and pressing “Apply fit” scales the blue line by the Cohort 2 / Cohort 1 ratio at the selected end week, making KCOR equal to 1 there. Fit end weeks 0–3 do not fit.</p>
+          <p>The quiet-window start and end must remain at least four weeks apart and default to weeks 4–8. Fitting is separate from gamma adjustment: its start is fixed at week 1, and the blue line is scaled by the Cohort 2 / Cohort 1 ratio at the selected end week, making KCOR equal to 1 there. Fit end weeks 0–3 do not fit; moving the end to week 4 or later applies it automatically.</p>
           <p>Weekly risk populations and deaths are summed over the selected areas, ages, and doses within each cohort before theta and k are fitted. Osaka is available for ordinary cumulative death counts, but unavailable during gamma adjustment because its death-only source cannot provide a risk set.</p>
           <p>This is a method-validation implementation. <code>theta_zero</code> and <code>theta_upper_bound</code> identify fits at the search boundary.</p>
           <ul>

@@ -6,7 +6,6 @@
   const cache = new Map();
   let currentData;
   let gammaMode = false;
-  let fitApplied = false;
   let currentView;
   let lastViewWidth = 0;
   let resizeTimer;
@@ -92,7 +91,6 @@
 
   const resetGamma = () => {
     gammaMode = false;
-    fitApplied = false;
     const osaka = document.querySelector('input.area[value="jp271004"]');
     if (osaka) {
       osaka.disabled = false;
@@ -103,7 +101,6 @@
     document.getElementById('osaka-gamma-note').hidden = true;
     document.getElementById('gamma-window-controls').hidden = true;
     document.getElementById('gamma-factor').textContent = '—';
-    document.getElementById('fit-toggle').textContent = text.fit_apply;
   };
 
   const configureSliders = () => {
@@ -366,13 +363,10 @@
     }
     status('');
     const availableFactor = gammaMode ? (gammaReady ? fitFactor : null) : fitFactor;
-    const fitButton = document.getElementById('fit-toggle');
-    fitButton.disabled = !availableFactor;
-    fitButton.textContent = fitApplied ? text.fit_remove : text.fit_apply;
-    document.getElementById('gamma-factor').textContent = fitApplied && availableFactor
+    document.getElementById('gamma-factor').textContent = availableFactor
       ? (gammaMode ? text.gamma_factor : text.baseline_factor).replace('%{factor}', availableFactor.toFixed(4)) : '—';
     const adjustedMode = gammaMode;
-    const displayFactor = fitApplied && availableFactor ? availableFactor : 1;
+    const displayFactor = availableFactor || 1;
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
@@ -394,7 +388,7 @@
         ]
       }
     });
-    const gammaScale = fitApplied && fitFactor ? fitFactor : 1;
+    const gammaScale = availableFactor || 1;
     const topLayers = adjustedMode
       ? [
           line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`),
@@ -542,43 +536,74 @@
         quietDragging = false;
         scheduleRender(0);
       };
-      const startDrag = () => { quietDragging = true; clearTimeout(resizeTimer); };
-      for (const slider of [quietStart, quietEnd, fitEnd]) {
-        slider.onpointerdown = startDrag;
-        slider.onpointerup = finishQuietDrag;
-        slider.onpointercancel = finishQuietDrag;
-      }
       const quietInput = changed => {
-        if (changed === quietStart && Number(quietStart.value) > Number(quietEnd.value)) quietEnd.value = quietStart.value;
-        if (changed === quietEnd && Number(quietEnd.value) < Number(quietStart.value)) quietStart.value = quietEnd.value;
-        fitApplied = false;
+        if (changed === quietStart) quietStart.value = Math.min(Number(quietStart.value), Number(quietEnd.value) - 4);
+        if (changed === quietEnd) quietEnd.value = Math.max(Number(quietEnd.value), Number(quietStart.value) + 4);
         updateSliderLabels();
         moveMarker('quietStartMarker', document.getElementById('quiet-start-value').textContent);
         moveMarker('quietEndMarker', document.getElementById('quiet-end-value').textContent);
         document.getElementById('c1fit').textContent = text.fitting;
         document.getElementById('c2fit').textContent = text.fitting;
         document.getElementById('gamma-factor').textContent = '—';
-        document.getElementById('fit-toggle').textContent = text.fit_apply;
         if (!quietDragging) scheduleRender(80);
       };
       quietStart.oninput = () => quietInput(quietStart);
       quietEnd.oninput = () => quietInput(quietEnd);
       quietStart.onchange = quietEnd.onchange = () => scheduleRender(0);
       fitEnd.oninput = () => {
-        fitApplied = false;
         updateSliderLabels();
         moveMarker('fitMarker', document.getElementById('fit-end-value').textContent);
         document.getElementById('gamma-factor').textContent = '—';
-        document.getElementById('fit-toggle').textContent = text.fit_apply;
         if (!quietDragging) scheduleRender(80);
       };
       fitEnd.onchange = () => scheduleRender(0);
-      document.getElementById('fit-toggle').onclick = () => {
-        fitApplied = !fitApplied;
-        render();
+      // 日本語: 重なったnative rangeではなくtrack自身で近いthumbを選び、dragを一貫して処理する。
+      // English: Let the track select and drag the nearest thumb instead of stacking interactive native ranges.
+      const attachTrackDrag = (container, chooseInput, applyValue) => {
+        let activeInput = null;
+        const pointerValue = event => {
+          const bounds = container.getBoundingClientRect();
+          const fraction = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+          return Math.round(fraction * Number(chooseInput(0).max));
+        };
+        const move = event => {
+          if (!activeInput) return;
+          applyValue(activeInput, pointerValue(event));
+        };
+        container.onpointerdown = event => {
+          quietDragging = true;
+          clearTimeout(resizeTimer);
+          const value = pointerValue(event);
+          activeInput = chooseInput(value);
+          container.setPointerCapture(event.pointerId);
+          move(event);
+        };
+        container.onpointermove = move;
+        container.onpointerup = event => {
+          if (!activeInput) return;
+          move(event);
+          activeInput = null;
+          container.releasePointerCapture(event.pointerId);
+          finishQuietDrag();
+        };
+        container.onpointercancel = () => { activeInput = null; finishQuietDrag(); };
       };
+      attachTrackDrag(
+        document.getElementById('quiet-slider'),
+        value => Math.abs(value - Number(quietStart.value)) <= Math.abs(value - Number(quietEnd.value)) ? quietStart : quietEnd,
+        (input, value) => {
+          input.value = input === quietStart
+            ? Math.min(value, Number(quietEnd.value) - 4)
+            : Math.max(value, Number(quietStart.value) + 4);
+          quietInput(input);
+        }
+      );
+      attachTrackDrag(
+        document.getElementById('fit-slider'),
+        () => fitEnd,
+        (input, value) => { input.value = value; input.oninput(); }
+      );
       document.getElementById('gamma-toggle').onclick = () => {
-        fitApplied = false;
         if (gammaMode) {
           resetGamma();
         } else {
