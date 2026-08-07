@@ -22,7 +22,7 @@ end
 
 iframe = %w[1 true].include?(cgi['i'])
 page_name = File.basename($PROGRAM_NAME, '.rb')
-asset_version = File.mtime(File.join(__dir__, "#{page_name}.js")).to_i
+asset_version = %w[js css].map { |extension| File.mtime(File.join(__dir__, "#{page_name}.#{extension}")).to_i }.max
 title = {
   ja: 'Gamma-frailty補正Kirsch累積アウトカム比（KCOR-G）',
   en: 'Gamma-frailty-adjusted Kirsch Cumulative Outcomes Ratio (KCOR-G)'

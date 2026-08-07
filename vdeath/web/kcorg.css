@@ -41,4 +41,4 @@ option:disabled { color: #777; }
 .cohort2 { color: red; }
 #kcor-status { text-align: center; margin: 1em; }
 #view { width: 100%; max-width: 1020px; margin-left: auto; margin-right: auto; }
-#view .vega-embed { display: flex; justify-content: center; width: 100%; overflow-x: auto; }
+#view.vega-embed { display: flex; justify-content: center; overflow-x: auto; }
