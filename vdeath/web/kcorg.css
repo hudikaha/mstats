@@ -3,7 +3,9 @@
 .kcor-row { display: flex; gap: 12px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
 .kcor-label { font-weight: 600; margin-right: 8px; }
 .inline { display: inline-block; margin-right: .7em; white-space: nowrap; }
-#quiet-end { width: min(520px, 62vw); }
+#quiet-row { margin: .65em auto .2em; }
+#quiet-row > div { margin-bottom: .2em; }
+#quiet-end { width: 100%; margin: 0; }
 #gamma-toggle { padding: .35em .8em; }
 #gamma-factor, #quiet-end-value { overflow-wrap: anywhere; }
 select { max-width: min(100%, 42em); }

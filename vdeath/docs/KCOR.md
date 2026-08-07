@@ -71,7 +71,8 @@ The initial view shows observed cumulative hazards and an always-visible quiet-w
 end-week slider.
 After gamma adjustment is enabled, the browser refits `theta` and `k` from the cutoff
 through the selected end week. Observed lines remain thin, adjusted lines are added in
-bold, and cohort 1 is automatically normalized by `k2/k1`. When multiple areas or ages
+bold only after at least 12 weeks are selected; the initial end week equals the cutoff
+and does not trigger a fit. Cohort 1 is automatically normalized by `k2/k1`. When multiple areas or ages
 are selected, weekly risk populations and deaths are summed before fitting. No manual
 level adjustment is used.
 Osaka cannot be selected because it has no risk set.

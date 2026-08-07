@@ -75,8 +75,11 @@ print <<~HTML
     <div class="kcor-row"><span class="kcor-label">#{text[:age]}:</span><span id="age"></span></div>
     <div class="kcor-row"><label class="kcor-label cohort2" for="c2">#{text[:cohort2]} (#{text[:doses]}):</label><select id="c2"></select><span id="c2fit" class="mono"></span></div>
     <div class="kcor-row"><label class="kcor-label cohort1" for="c1">#{text[:cohort1]} (#{text[:doses]}):</label><select id="c1"></select><span id="c1fit" class="mono"></span></div>
-    <div class="kcor-row" id="quiet-row"><label class="kcor-label" for="quiet-end">#{text[:quiet_end]}:</label><input id="quiet-end" type="range" min="11" step="1"><span id="quiet-end-value" class="mono"></span></div>
     <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><span id="gamma-factor" class="mono"></span></div>
+  </div>
+  <div id="quiet-row" hidden>
+    <div><label class="kcor-label" for="quiet-end">#{text[:quiet_end]}:</label><span id="quiet-end-value" class="mono"></span></div>
+    <input id="quiet-end" type="range" min="0" step="1" value="0">
   </div>
   <div id="view"></div>
   <hr>
@@ -85,7 +88,7 @@ print <<~HTML
         <section class="kcor-references">
           <h2>Gamma-frailty補正について</h2>
           <p>初期表示の実線は、固定cohortの週死亡数と週初risk人数から直接計算した観測累積hazardです。「Gamma補正を適用」を押すと、観測値を細線で残し、Gamma補正後の累積hazardを太線で追加します。</p>
-          <p>fitはcutoffから常時表示されているスライダーで選んだ終了週までを使います。Gamma補正後に終了週を動かすとθと基準傾きkを再推定し、k₂/k₁で青の補正線を赤の補正線へ自動的に重ねます。</p>
+          <p>fitはcutoffから常時表示されているスライダーで選んだ終了週までを使います。終了週の初期値はcutoffと同日で、この状態ではfitしません。Gamma補正後に終了週を12週以上先へ動かすとθと基準傾きkを推定し、k₂/k₁で青の補正線を赤の補正線へ自動的に重ねます。</p>
           <p>選択した地域・年齢の週初risk人数と週死亡数を合算してから、各接種回数cohortのθとkを推定します。大阪市は死亡者だけの資料でrisk setを作れないため選択できません。</p>
           <p>これはmethod検証用の実装です。<code>theta_zero</code>と<code>theta_upper_bound</code>は推定値が探索境界に達したことを表します。</p>
           <ul>
@@ -99,7 +102,7 @@ print <<~HTML
         <section class="kcor-references">
           <h2>Gamma-frailty adjustment</h2>
           <p>The initial solid lines are observed cumulative hazards calculated directly from weekly deaths and the population at risk at the start of each week. Press “Apply gamma adjustment” to retain the observations as thin lines and add gamma-adjusted cumulative hazards as thick lines.</p>
-          <p>The fit uses data from the cutoff through the end week selected by the always-visible slider. After gamma adjustment is enabled, moving the end week refits theta and the baseline slope k, then automatically aligns the blue adjusted line to the red one using k₂/k₁.</p>
+          <p>The fit uses data from the cutoff through the end week selected by the always-visible slider. The end week initially equals the cutoff, so no fit is performed. After gamma adjustment is enabled, moving the end at least 12 weeks forward fits theta and the baseline slope k, then automatically aligns the blue adjusted line to the red one using k₂/k₁.</p>
           <p>Weekly risk populations and deaths are summed over the selected areas and ages before theta and k are fitted for each dose cohort. Osaka cannot be selected because its death-only source cannot provide a risk set.</p>
           <p>This is a method-validation implementation. <code>theta_zero</code> and <code>theta_upper_bound</code> identify fits at the search boundary.</p>
           <ul>

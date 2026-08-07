@@ -6,6 +6,7 @@
   const cache = new Map();
   let currentData;
   let gammaMode = false;
+  let currentView;
   let lastViewWidth = 0;
   let resizeTimer;
 
@@ -104,13 +105,10 @@
 
   const configureQuietSlider = () => {
     const [rows1, rows2] = selectedRows();
-    const maximum = Math.max(11, Math.min(rows1.length, rows2.length) - 1);
+    const maximum = Math.min(rows1.length, rows2.length);
     const slider = document.getElementById('quiet-end');
     slider.max = maximum;
-    const defaultDate = '2024-04-21';
-    let preferred = rows1.findIndex(row => row.date >= defaultDate);
-    if (preferred < 11) preferred = maximum;
-    slider.value = Math.min(preferred, maximum);
+    slider.value = 0;
   };
 
   const rebuildControls = previous => {
@@ -185,6 +183,7 @@
       resetGamma();
       rebuildControls(previous);
       document.getElementById('kcor-controls').hidden = false;
+      document.getElementById('quiet-row').hidden = false;
       status('');
       render();
     } catch (error) {
@@ -248,8 +247,8 @@
 
   // 日本語: cutoffから選択終了週までの累積hazardへ単純Gamma modelをfitする。
   // English: Fit the simple gamma model to cumulative hazards from cutoff through the selected end week.
-  const fitGamma = (series, endIndex) => {
-    const points = series.filter(point => point.time <= endIndex + 1);
+  const fitGamma = (series, endWeeks) => {
+    const points = series.filter(point => point.time <= endWeeks);
     if (points.length < 12 || points.at(-1).observed <= points[0].observed) return null;
     const thetaMax = 100;
     const grid = Array.from({length: 51}, (_, index) => {
@@ -286,15 +285,18 @@
     let fit2 = null;
     let factor = 1;
     if (gammaMode) {
-      const endIndex = Number(document.getElementById('quiet-end').value);
-      fit1 = fitGamma(series1, endIndex);
-      fit2 = fitGamma(series2, endIndex);
+      const endWeeks = Number(document.getElementById('quiet-end').value);
+      fit1 = fitGamma(series1, endWeeks);
+      fit2 = fitGamma(series2, endWeeks);
       document.getElementById('c1fit').textContent = fitLabel(fit1);
       document.getElementById('c2fit').textContent = fitLabel(fit2);
-      if (!fit1 || !fit2 || fit1.k <= 0 || fit2.k <= 0) return {wide: [], factor: 1};
-      factor = fit2.k / fit1.k;
-      series1 = adjustedSeries(series1, fit1);
-      series2 = adjustedSeries(series2, fit2);
+      if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
+        factor = fit2.k / fit1.k;
+        series1 = adjustedSeries(series1, fit1);
+        series2 = adjustedSeries(series2, fit2);
+      } else {
+        factor = null;
+      }
     } else {
       document.getElementById('c1fit').textContent = '';
       document.getElementById('c2fit').textContent = '';
@@ -320,12 +322,14 @@
       return;
     }
     status('');
-    document.getElementById('gamma-factor').textContent = gammaMode
+    document.getElementById('gamma-factor').textContent = gammaMode && factor
       ? text.gamma_factor.replace('%{factor}', factor.toFixed(4)) : '';
-    const displayFactor = gammaMode ? factor : 1;
+    const adjustedMode = gammaMode && factor;
+    const displayFactor = adjustedMode ? factor : 1;
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
+    document.getElementById('quiet-row').style.width = `${chartWidth}px`;
     const commonX = {field: 'date', type: 'temporal', title: text.date, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
     const line = (field, color, width, opacity, title, scale = 1) => ({
       transform: scale === 1 ? [] : [{calculate: `datum.${field} * ${scale}`, as: `${field}_display`}],
@@ -339,7 +343,7 @@
         ]
       }
     });
-    const topLayers = gammaMode
+    const topLayers = adjustedMode
       ? [
           line('observed1', 'blue', 1.2, 0.4, `${text.cohort1} ${text.observed}`),
           line('observed2', 'red', 1.2, 0.4, `${text.cohort2} ${text.observed}`),
@@ -350,12 +354,11 @@
           line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`),
           line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`)
         ];
-    const numerator = gammaMode ? 'datum.adjusted2' : 'datum.observed2';
-    const denominator = gammaMode ? 'datum.adjusted1' : 'datum.observed1';
-    const quietIndex = Number(document.getElementById('quiet-end').value);
-    const quietDate = wide[quietIndex]?.date || wide.at(-1).date;
+    const numerator = adjustedMode ? 'datum.adjusted2' : 'datum.observed2';
+    const denominator = adjustedMode ? 'datum.adjusted1' : 'datum.observed1';
+    const quietDate = document.getElementById('quiet-end-value').textContent;
     topLayers.push({
-      data: {values: [{date: quietDate}]},
+      data: {name: 'quietMarker', values: [{date: quietDate}]},
       mark: {type: 'rule', stroke: '#087f5b', strokeWidth: 3},
       encoding: {
         x: {field: 'date', type: 'temporal'},
@@ -378,7 +381,7 @@
                 y: {field: 'KCOR_G', type: 'quantitative', title: text.ratio, scale: {zero: true}},
                 tooltip: [
                   {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
-                  {field: 'KCOR_G', type: 'quantitative', title: gammaMode ? 'KCOR-G' : 'KCOR', format: '.4f'}
+                  {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? 'KCOR-G' : 'KCOR', format: '.4f'}
                 ]
               }
             },
@@ -388,7 +391,8 @@
       ]
     };
     try {
-      await vegaEmbed('#view', spec, {actions: false});
+      const result = await vegaEmbed('#view', spec, {actions: false});
+      currentView = result.view;
     } catch (error) {
       console.error(error);
       status(text.load_error);
@@ -397,8 +401,17 @@
 
   const updateQuietLabel = () => {
     const [rows] = selectedRows();
-    const index = Number(document.getElementById('quiet-end').value);
-    document.getElementById('quiet-end-value').textContent = rows[index]?.date || '';
+    const weeks = Number(document.getElementById('quiet-end').value);
+    const cutoff = document.querySelector('#cutoff select')?.value || '';
+    document.getElementById('quiet-end-value').textContent = weeks === 0 ? cutoff : (rows[weeks - 1]?.date || cutoff);
+  };
+
+  const moveQuietMarker = () => {
+    if (!currentView || typeof vega === 'undefined') return;
+    const date = document.getElementById('quiet-end-value').textContent;
+    if (!date) return;
+    const changes = vega.changeset().remove(() => true).insert([{date}]);
+    currentView.change('quietMarker', changes).runAsync();
   };
 
   const start = async () => {
@@ -406,10 +419,14 @@
       const quietEnd = document.getElementById('quiet-end');
       quietEnd.oninput = () => {
         updateQuietLabel();
-        if (gammaMode) status(text.fitting);
+        moveQuietMarker();
+        if (gammaMode && Number(quietEnd.value) >= 12) {
+          document.getElementById('gamma-factor').textContent = text.fitting;
+        }
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(render, 80);
+        if (gammaMode) resizeTimer = setTimeout(render, 80);
       };
+      quietEnd.onchange = quietEnd.oninput;
       document.getElementById('gamma-toggle').onclick = () => {
         gammaMode = !gammaMode;
         document.getElementById('gamma-toggle').textContent = gammaMode ? text.gamma_remove : text.gamma_apply;
