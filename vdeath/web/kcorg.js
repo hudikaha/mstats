@@ -31,18 +31,6 @@
     return Number.parseInt(a, 10) - Number.parseInt(b, 10) || a.localeCompare(b);
   };
 
-  const replaceOptions = (select, items, preferred) => {
-    select.replaceChildren();
-    for (const item of items) {
-      const option = new Option(item.label ?? item.value, item.value);
-      option.disabled = Boolean(item.disabled);
-      select.add(option);
-    }
-    const selected = items.find(item => String(item.value) === String(preferred) && !item.disabled)
-      || items.find(item => !item.disabled);
-    if (selected) select.value = selected.value;
-  };
-
   const groupKey = (area, age, dose) => `${area}\u0000${age}\u0000${dose}`;
 
   const selected = className => new Set(
@@ -69,14 +57,16 @@
   const selectedRows = () => {
     const areas = selected('area');
     const ages = selected('age');
-    const dose1 = Number(document.getElementById('c1').value);
-    const dose2 = Number(document.getElementById('c2').value);
-    const aggregate = dose => {
+    const doses1 = new Set([...selected('c1')].map(Number));
+    const doses2 = new Set([...selected('c2')].map(Number));
+    const aggregate = doses => {
       const groups = [];
       for (const area of areas) {
         for (const age of ages) {
-          const rows = currentData.groups.get(groupKey(area, age, dose));
-          if (rows?.length) groups.push(rows);
+          for (const dose of doses) {
+            const rows = currentData.groups.get(groupKey(area, age, dose));
+            if (rows?.length) groups.push(rows);
+          }
         }
       }
       if (!groups.length) return [];
@@ -94,7 +84,7 @@
       }
       return [...totals.values()].sort((a, b) => a.date.localeCompare(b.date));
     };
-    return [aggregate(dose1), aggregate(dose2)];
+    return [aggregate(doses1), aggregate(doses2)];
   };
 
   const resetGamma = () => {
@@ -105,15 +95,13 @@
 
   const configureQuietSlider = () => {
     const [rows1, rows2] = selectedRows();
-    const maximum = Math.min(rows1.length, rows2.length);
+    const weeks = Math.min(rows1.length, rows2.length);
     const slider = document.getElementById('quiet-end');
-    slider.max = maximum;
+    slider.max = Math.max(0, weeks - 3);
     slider.value = 0;
   };
 
   const rebuildControls = previous => {
-    const c1 = document.getElementById('c1');
-    const c2 = document.getElementById('c2');
     const areas = [...currentData.areas.values()]
       .sort((a, b) => a.areacode.localeCompare(b.areacode))
       .map(item => ({value: item.areacode, label: config.language === 'ja' ? item.areaj : item.area}));
@@ -126,12 +114,13 @@
     buildCheckboxes('age', ages.map(value => ({value, label: value})), 'age', ageDefaults);
     const doses = [...new Set([...currentData.groups.values()].map(rows => rows[0].dose))].sort((a, b) => a - b);
     const doseItems = doses.map(value => ({value, label: String(value)}));
-    replaceOptions(c1, doseItems, previous.c1 ?? 0);
-    replaceOptions(c2, doseItems, previous.c2 ?? 1);
-    if (c1.value === c2.value && doseItems.length > 1) c2.value = doseItems[1].value;
+    const c1Defaults = previous.c1?.size ? previous.c1 : new Set(['0']);
+    const c2Defaults = previous.c2?.size ? previous.c2 : new Set(['1']);
+    buildCheckboxes('c1', doseItems, 'c1', c1Defaults);
+    buildCheckboxes('c2', doseItems, 'c2', c2Defaults);
 
     const resetAndRender = () => { resetGamma(); configureQuietSlider(); updateQuietLabel(); render(); };
-    document.querySelectorAll('input.area, input.age').forEach(element => {
+    document.querySelectorAll('input.area, input.age, input.c1, input.c2').forEach(element => {
       element.oninput = () => {
         if (element.classList.contains('age') && element.value === 'all' && element.checked) {
           document.querySelectorAll('input.age').forEach(input => { if (input !== element) input.checked = false; });
@@ -144,16 +133,14 @@
     });
     configureQuietSlider();
     updateQuietLabel();
-    c1.onchange = resetAndRender;
-    c2.onchange = resetAndRender;
   };
 
   const loadCutoff = async cutoff => {
     const previous = {
       areas: currentData ? selected('area') : new Set(),
       ages: currentData ? selected('age') : new Set(),
-      c1: document.getElementById('c1').value,
-      c2: document.getElementById('c2').value
+      c1: currentData ? selected('c1') : new Set(),
+      c2: currentData ? selected('c2') : new Set()
     };
     status(text.loading);
     try {
@@ -249,7 +236,7 @@
   // English: Fit the simple gamma model to cumulative hazards from cutoff through the selected end week.
   const fitGamma = (series, endWeeks) => {
     const points = series.filter(point => point.time <= endWeeks);
-    if (points.length < 12 || points.at(-1).observed <= points[0].observed) return null;
+    if (points.length < 4 || points.at(-1).observed <= points[0].observed) return null;
     const thetaMax = 100;
     const grid = Array.from({length: 51}, (_, index) => {
       const theta = thetaMax * index / 50;
@@ -281,25 +268,19 @@
     const [rows1, rows2] = selectedRows();
     let series1 = observedSeries(rows1);
     let series2 = observedSeries(rows2);
-    let fit1 = null;
-    let fit2 = null;
-    let factor = 1;
-    if (gammaMode) {
-      const endWeeks = Number(document.getElementById('quiet-end').value);
-      fit1 = fitGamma(series1, endWeeks);
-      fit2 = fitGamma(series2, endWeeks);
-      document.getElementById('c1fit').textContent = fitLabel(fit1);
-      document.getElementById('c2fit').textContent = fitLabel(fit2);
-      if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
-        factor = fit2.k / fit1.k;
+    const sliderPosition = Number(document.getElementById('quiet-end').value);
+    const endWeeks = sliderPosition === 0 ? 0 : sliderPosition + 3;
+    const fit1 = fitGamma(series1, endWeeks);
+    const fit2 = fitGamma(series2, endWeeks);
+    document.getElementById('c1fit').textContent = endWeeks ? fitLabel(fit1) : '';
+    document.getElementById('c2fit').textContent = endWeeks ? fitLabel(fit2) : '';
+    let factor = null;
+    if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
+      factor = fit2.k / fit1.k;
+      if (gammaMode) {
         series1 = adjustedSeries(series1, fit1);
         series2 = adjustedSeries(series2, fit2);
-      } else {
-        factor = null;
       }
-    } else {
-      document.getElementById('c1fit').textContent = '';
-      document.getElementById('c2fit').textContent = '';
     }
     const map1 = new Map(series1.map(row => [row.date, row]));
     const map2 = new Map(series2.map(row => [row.date, row]));
@@ -329,7 +310,11 @@
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
-    document.getElementById('quiet-row').style.width = `${chartWidth}px`;
+    const quietRow = document.getElementById('quiet-row');
+    const quietEnd = document.getElementById('quiet-end');
+    quietRow.style.width = `${viewWidth}px`;
+    quietEnd.style.width = `${chartWidth}px`;
+    quietEnd.style.marginLeft = `${Math.min(75, Math.max(0, viewWidth - chartWidth))}px`;
     const commonX = {field: 'date', type: 'temporal', title: text.date, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
     const line = (field, color, width, opacity, title, scale = 1) => ({
       transform: scale === 1 ? [] : [{calculate: `datum.${field} * ${scale}`, as: `${field}_display`}],
@@ -401,7 +386,8 @@
 
   const updateQuietLabel = () => {
     const [rows] = selectedRows();
-    const weeks = Number(document.getElementById('quiet-end').value);
+    const position = Number(document.getElementById('quiet-end').value);
+    const weeks = position === 0 ? 0 : position + 3;
     const cutoff = document.querySelector('#cutoff select')?.value || '';
     document.getElementById('quiet-end-value').textContent = weeks === 0 ? cutoff : (rows[weeks - 1]?.date || cutoff);
   };
@@ -420,11 +406,15 @@
       quietEnd.oninput = () => {
         updateQuietLabel();
         moveQuietMarker();
-        if (gammaMode && Number(quietEnd.value) >= 12) {
+        if (Number(quietEnd.value) > 0) {
+          document.getElementById('c1fit').textContent = text.fitting;
+          document.getElementById('c2fit').textContent = text.fitting;
+        }
+        if (gammaMode && Number(quietEnd.value) > 0) {
           document.getElementById('gamma-factor').textContent = text.fitting;
         }
         clearTimeout(resizeTimer);
-        if (gammaMode) resizeTimer = setTimeout(render, 80);
+        resizeTimer = setTimeout(render, 80);
       };
       quietEnd.onchange = quietEnd.oninput;
       document.getElementById('gamma-toggle').onclick = () => {
