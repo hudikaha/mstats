@@ -228,6 +228,12 @@
     });
   };
 
+  const dateForWeek = week => {
+    const [rows] = selectedRows();
+    const cutoff = document.querySelector('#cutoff select')?.value || '';
+    return Number(week) === 0 ? cutoff : (rows[Number(week) - 1]?.date || cutoff);
+  };
+
   const modelHazard = (time, theta, k) => Math.abs(theta) < 1.0e-12
     ? k * time
     : Math.log1p(theta * k * time) / theta;
@@ -487,9 +493,13 @@
   }
 
   const placeThumb = (sliderId, inputId, thumbId) => {
+    const slider = document.getElementById(sliderId);
     const input = document.getElementById(inputId);
-    const maximum = Number(input.max);
-    const fraction = maximum > 0 ? Number(input.value) / maximum : 0;
+    const selected = Date.parse(dateForWeek(input.value));
+    const first = Date.parse(slider.dataset.firstDate || '');
+    const last = Date.parse(slider.dataset.lastDate || '');
+    const fraction = Number.isFinite(selected) && Number.isFinite(first) && last > first
+      ? Math.max(0, Math.min(1, (selected - first) / (last - first))) : 0;
     document.getElementById(thumbId).style.left = `${fraction * 100}%`;
   };
 
@@ -561,7 +571,17 @@
         const pointerValue = event => {
           const bounds = container.getBoundingClientRect();
           const fraction = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-          return Math.round(fraction * Number(chooseInput(0).max));
+          const first = Date.parse(container.dataset.firstDate || '');
+          const last = Date.parse(container.dataset.lastDate || '');
+          const target = first + fraction * (last - first);
+          const maximum = Number(chooseInput(0).max);
+          let nearest = 0;
+          let distance = Number.POSITIVE_INFINITY;
+          for (let week = 0; week <= maximum; week += 1) {
+            const candidate = Math.abs(Date.parse(dateForWeek(week)) - target);
+            if (candidate < distance) { nearest = week; distance = candidate; }
+          }
+          return nearest;
         };
         const move = event => {
           if (!activeInput) return;
