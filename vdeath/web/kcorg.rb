@@ -32,7 +32,6 @@ text = {
   ja: {
     cutoff: '累積開始日（Cutoff）', area: '地域', age: '年齢', doses: '接種回数',
     cohort1: 'コホート1', cohort2: 'コホート2',
-    cohort2_start: 'コホート2開始接種回数',
     date: '日付', cumulative_deaths: '累積死亡人数', cumulative_hazard: '累積hazard',
     ratio: 'RR = コホート2/コホート1', death_ratio: 'RR = コホート2/コホート1',
     gamma_apply: 'Gamma補正を適用', gamma_remove: 'Gamma補正を解除',
@@ -51,7 +50,6 @@ text = {
   en: {
     cutoff: 'Cutoff', area: 'Area', age: 'Age', doses: 'doses',
     cohort1: 'Cohort 1', cohort2: 'Cohort 2',
-    cohort2_start: 'Cohort 2 starting dose',
     date: 'Date', cumulative_deaths: 'Cumulative deaths', cumulative_hazard: 'Cumulative hazard',
     ratio: 'RR = Cohort2/Cohort1', death_ratio: 'RR = Cohort2/Cohort1',
     gamma_apply: 'Apply gamma adjustment', gamma_remove: 'Remove gamma adjustment',
@@ -84,10 +82,20 @@ print <<~HTML
   <div id="kcor-controls" hidden>
     <div class="kcor-row"><span class="kcor-label">#{text[:cutoff]}:</span><span id="cutoff"></span></div>
     <div class="kcor-row"><span class="kcor-label">#{text[:area]}:</span><span id="area"></span></div>
-    <div class="kcor-row"><span class="kcor-label">#{text[:age]}:</span><span id="age"></span></div>
-    <div id="dose-split-row"><span class="kcor-label">#{text[:cohort2_start]}:</span><div id="dose-split-slider" class="chart-slider"><div class="slider-track"><span id="dose-split-thumb" class="slider-thumb"></span></div><input id="dose-split" class="single-range" type="range" min="1" max="7" step="1" value="1"></div></div>
-    <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span></div>
-    <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span></div>
+    <div class="selection-controls">
+      <div class="selection-block age-control">
+        <div class="kcor-label">#{text[:age]}:</div>
+        <div class="selection-scroll"><div id="age-scale">
+          <div id="age-range-slider" class="chart-slider"><div class="slider-track"><span id="age-start-thumb" class="slider-thumb"></span><span id="age-end-thumb" class="slider-thumb"></span></div><input id="age-start" class="window-range" type="range" min="0" step="1" value="0"><input id="age-end" class="window-range" type="range" min="0" step="1" value="10"></div>
+          <div id="age"></div>
+        </div></div>
+      </div>
+      <div class="selection-block dose-control">
+        <div id="dose-split-row"><div id="dose-split-slider" class="chart-slider"><div class="slider-track"><span id="dose-split-thumb" class="slider-thumb"></span></div><input id="dose-split" class="single-range" type="range" min="1" max="7" step="1" value="1"></div></div>
+        <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span></div>
+        <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span></div>
+      </div>
+    </div>
     <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><span id="osaka-gamma-note" hidden><span class="gamma-active-note">#{text[:gamma_active]}</span>#{text[:gamma_separator]}#{text[:osaka_gamma_note]}</span></div>
     <div id="fit-results">
       <div class="fit-result"><span id="gamma-factor" class="mono">&mdash;</span></div>
@@ -109,7 +117,7 @@ print <<~HTML
       <<~JA
         <section class="kcor-references">
           <h2>Gamma-frailty補正について</h2>
-          <p>初期表示は固定cohortの累積死亡人数です。コホート2開始接種回数スライダーは、選択値未満をコホート1、選択値以上をコホート2へ割り当てます。チェックボックスによる任意指定も可能です。Gamma補正またはFitで線が動くときは、変換前の元の線を同じ太さの破線、利用する最終値を実線で表示します。下段のRRは補正・Fitを反映した最終値を表示します。</p>
+          <p>初期表示は固定cohortの累積死亡人数です。コホート2開始接種回数スライダーは、選択値未満をコホート1、選択値以上をコホート2へ割り当てます。年齢スライダーは10歳区分の連続範囲を選び、80歳以上または全年齢と一致するときは、詳細区分に加えて80+またはallも同時にチェックします。チェックボックスによる任意指定も可能です。Gamma補正またはFitで線が動くときは、変換前の元の線を同じ太さの破線、利用する最終値を実線で表示します。下段のRRは補正・Fitを反映した最終値を表示します。</p>
           <p>quiet windowは開始週と終了週を4週以上離して指定し、初期値は第4週〜第8週です。FitはGamma補正とは別の操作で、開始を第1週に固定し、選択した終了週におけるコホート2／コホート1の比で青線を尺度調整して、その週のKCORを1にします。Fit終了週が0ではFitせず、4週以上へ動かすと自動的に適用します。</p>
           <p>選択した地域・年齢・接種回数の週初risk人数と週死亡数を各cohort内で合算してからθとkを推定します。大阪市は通常の累積死亡人数では選択できますが、死亡者だけの資料でrisk setを作れないためGamma補正時は選択できません。</p>
           <p>これはmethod検証用の実装です。<code>theta_zero</code>と<code>theta_upper_bound</code>は推定値が探索境界に達したことを表します。</p>
@@ -123,7 +131,7 @@ print <<~HTML
       <<~EN
         <section class="kcor-references">
           <h2>Gamma-frailty adjustment</h2>
-          <p>The initial view shows cumulative death counts. The Cohort 2 starting-dose slider assigns lower doses to Cohort 1 and the selected dose and higher doses to Cohort 2; the checkboxes still allow arbitrary selections. When gamma adjustment or fitting moves a line, the original is retained as a dashed line of the same width and the final value is solid. The lower RR chart shows the final value reflecting adjustment and fit.</p>
+          <p>The initial view shows cumulative death counts. The Cohort 2 starting-dose slider assigns lower doses to Cohort 1 and the selected dose and higher doses to Cohort 2. The age slider selects a continuous range of 10-year groups; when it exactly matches ages 80+ or all ages, the detailed groups and the corresponding 80+ or all checkbox are checked together. The checkboxes still allow arbitrary selections. When gamma adjustment or fitting moves a line, the original is retained as a dashed line of the same width and the final value is solid. The lower RR chart shows the final value reflecting adjustment and fit.</p>
           <p>The quiet-window start and end must remain at least four weeks apart and default to weeks 4–8. Fitting is separate from gamma adjustment: its start is fixed at week 1, and the blue line is scaled by the Cohort 2 / Cohort 1 ratio at the selected end week, making KCOR equal to 1 there. A fit end of week 0 does not fit; moving the end to week 4 or later applies it automatically.</p>
           <p>Weekly risk populations and deaths are summed over the selected areas, ages, and doses within each cohort before theta and k are fitted. Osaka is available for ordinary cumulative death counts, but unavailable during gamma adjustment because its death-only source cannot provide a risk set.</p>
           <p>This is a method-validation implementation. <code>theta_zero</code> and <code>theta_upper_bound</code> identify fits at the search boundary.</p>

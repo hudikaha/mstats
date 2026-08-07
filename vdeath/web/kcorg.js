@@ -11,6 +11,7 @@
   let resizeTimer;
   let quietDragging = false;
   let osakaCheckedBeforeGamma = false;
+  let ageRangeValues = [];
 
   const status = message => {
     const element = document.getElementById('kcor-status');
@@ -45,6 +46,8 @@
     for (const item of items) {
       const label = document.createElement('label');
       label.className = 'inline';
+      if (className === 'age' && item.value === '80+') label.classList.add('age-special-first');
+      if (className === 'age' && (item.value === '80+' || item.value === 'all')) label.classList.add('age-special');
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.value = item.value;
@@ -58,7 +61,9 @@
 
   const selectedRows = () => {
     const areas = selected('area');
-    const ages = selected('age');
+    const checkedAges = selected('age');
+    const ages = checkedAges.has('all') ? new Set(['all']) : new Set(checkedAges);
+    if (ages.has('80+')) ageRangeValues.slice(ageRangeValues.indexOf('80-89')).forEach(value => ages.delete(value));
     const doses1 = new Set([...selected('c1')].map(Number));
     const doses2 = new Set([...selected('c2')].map(Number));
     const aggregate = doses => {
@@ -72,7 +77,9 @@
         }
       }
       if (!groups.length) return [];
-      const firstDate = groups.map(rows => rows[0].date).sort().at(-1);
+      // 大阪の旧CUMD-WKは初死亡まで行がないため、開始前を0として最も早い系列から集計する。
+      // Osaka's legacy CUMD-WK has no rows before its first death; treat that prefix as zero.
+      const firstDate = groups.map(rows => rows[0].date).sort()[0];
       const lastDate = groups.map(rows => rows.at(-1).date).sort()[0];
       const totals = new Map();
       for (const rows of groups) {
@@ -158,6 +165,89 @@
     alignDoseSplit();
   };
 
+  const ageRangeMatch = () => {
+    const ages = selected('age');
+    if (!ages.size) return null;
+    const last = ageRangeValues.length - 1;
+    const canonical = new Set(ageRangeValues.filter(value => ages.has(value)));
+    if (ages.has('all') && canonical.size !== ageRangeValues.length) return null;
+    const indexes = ageRangeValues.map((value, index) => ages.has(value) ? index : null).filter(index => index !== null);
+    if (ages.has('80+')) {
+      const eighty = ageRangeValues.indexOf('80-89');
+      if (eighty < 0 || !ageRangeValues.slice(eighty).every(value => ages.has(value))) return null;
+    }
+    if (canonical.size + Number(ages.has('80+')) + Number(ages.has('all')) !== ages.size) return null;
+    const start = Math.min(...indexes);
+    const finish = Math.max(...indexes);
+    return finish - start + 1 === indexes.length ? {start, finish} : null;
+  };
+
+  const alignAgeRange = () => {
+    if (!ageRangeValues.length) return;
+    const slider = document.getElementById('age-range-slider');
+    const scale = document.getElementById('age-scale');
+    const boxes = ageRangeValues.map(value => document.querySelector(`input.age[value="${value}"]`)?.getBoundingClientRect());
+    if (boxes.some(box => !box)) return;
+    const scaleBounds = scale.getBoundingClientRect();
+    const centers = boxes.map(box => box.left + box.width / 2);
+    slider.style.marginLeft = `${centers[0] - scaleBounds.left}px`;
+    slider.style.width = `${centers.at(-1) - centers[0]}px`;
+    const place = (inputId, thumbId) => {
+      const index = Number(document.getElementById(inputId).value);
+      const fraction = centers.at(-1) > centers[0] ? (centers[index] - centers[0]) / (centers.at(-1) - centers[0]) : 0;
+      document.getElementById(thumbId).style.left = `${fraction * 100}%`;
+    };
+    place('age-start', 'age-start-thumb');
+    place('age-end', 'age-end-thumb');
+  };
+
+  const syncAgeRange = () => {
+    const match = ageRangeMatch();
+    if (match) {
+      document.getElementById('age-start').value = match.start;
+      document.getElementById('age-end').value = match.finish;
+    }
+    document.getElementById('age-range-slider').classList.toggle('unmatched', !match);
+    requestAnimationFrame(alignAgeRange);
+  };
+
+  const applyAgeRange = (start, finish) => {
+    const last = ageRangeValues.length - 1;
+    const eighty = ageRangeValues.indexOf('80-89');
+    document.querySelectorAll('input.age').forEach(input => {
+      const index = ageRangeValues.indexOf(input.value);
+      input.checked = index >= start && index <= finish ||
+        (input.value === 'all' && start === 0 && finish === last) ||
+        (input.value === '80+' && start === eighty && finish === last);
+    });
+    document.getElementById('age-start').value = start;
+    document.getElementById('age-end').value = finish;
+    document.getElementById('age-range-slider').classList.remove('unmatched');
+    alignAgeRange();
+  };
+
+  const normalizeAgeCheckboxes = changed => {
+    if (changed.value === 'all' && changed.checked) {
+      document.querySelectorAll('input.age').forEach(input => {
+        input.checked = input.value === 'all' || ageRangeValues.includes(input.value);
+      });
+      return;
+    }
+    const all = document.querySelector('input.age[value="all"]');
+    if (changed.value !== 'all' && all) all.checked = false;
+    const eighty = ageRangeValues.indexOf('80-89');
+    const eightyPlus = document.querySelector('input.age[value="80+"]');
+    if (changed.value === '80+' && changed.checked) {
+      ageRangeValues.forEach((value, index) => {
+        const input = document.querySelector(`input.age[value="${value}"]`);
+        if (input) input.checked = index >= eighty;
+      });
+    }
+    const match = ageRangeMatch();
+    if (eightyPlus) eightyPlus.checked = Boolean(match && match.start === eighty && match.finish === ageRangeValues.length - 1);
+    if (all) all.checked = Boolean(match && match.start === 0 && match.finish === ageRangeValues.length - 1);
+  };
+
   const rebuildControls = previous => {
     const compareAreas = (a, b) => Number(a.areacode === 'cze') - Number(b.areacode === 'cze') ||
       a.areacode.localeCompare(b.areacode);
@@ -165,13 +255,25 @@
       .sort(compareAreas)
       .map(item => ({value: item.areacode, label: config.language === 'ja' ? item.areaj : item.area}));
     areas.sort((a, b) => Number(a.value === 'cze') - Number(b.value === 'cze') || a.value.localeCompare(b.value));
-    const ages = [...new Set([...currentData.groups.values()].map(rows => rows[0].age))].sort(compareAges);
+    const availableAges = [...new Set([...currentData.groups.values()].map(rows => rows[0].age))];
+    const ages = [
+      ...availableAges.filter(value => value !== '80+' && value !== 'all').sort(compareAges),
+      ...(['80+', 'all'].filter(value => availableAges.includes(value)))
+    ];
     const areaDefaults = previous.areas?.size ? previous.areas : new Set(
       areas.filter(item => item.value !== 'cze').map(item => item.value)
     );
     const ageDefaults = previous.ages?.size ? previous.ages : new Set(ages.includes('all') ? ['all'] : ages);
     buildCheckboxes('area', areas, 'area', areaDefaults);
     buildCheckboxes('age', ages.map(value => ({value, label: value})), 'age', ageDefaults);
+    ageRangeValues = ages.filter(value => value !== '80+' && value !== 'all');
+    document.getElementById('age-start').max = Math.max(0, ageRangeValues.length - 1);
+    document.getElementById('age-end').max = Math.max(0, ageRangeValues.length - 1);
+    document.getElementById('age-end').value = Math.max(0, ageRangeValues.length - 1);
+    const checkedAll = document.querySelector('input.age[value="all"]:checked');
+    const checkedEighty = document.querySelector('input.age[value="80+"]:checked');
+    if (checkedAll) normalizeAgeCheckboxes(checkedAll);
+    else if (checkedEighty) normalizeAgeCheckboxes(checkedEighty);
     const doses = [0, 1, 2, 3, 4, 5, 6, 7];
     const doseItems = doses.map(value => ({value, label: String(value)}));
     const c1Defaults = previous.c1?.size ? previous.c1 : new Set(['0']);
@@ -182,18 +284,14 @@
     const resetAndRender = () => { resetGamma(); configureSliders(); updateSliderLabels(); render(); };
     document.querySelectorAll('input.area, input.age, input.c1, input.c2').forEach(element => {
       element.oninput = () => {
-        if (element.classList.contains('age') && element.value === 'all' && element.checked) {
-          document.querySelectorAll('input.age').forEach(input => { if (input !== element) input.checked = false; });
-        } else if (element.classList.contains('age') && element.checked) {
-          const all = document.querySelector('input.age[value="all"]');
-          if (all) all.checked = false;
-        }
+        if (element.classList.contains('age')) { normalizeAgeCheckboxes(element); syncAgeRange(); }
         if (element.classList.contains('c1') || element.classList.contains('c2')) syncDoseSplit();
         resetAndRender();
       };
     });
     configureSliders();
     updateSliderLabels();
+    syncAgeRange();
     syncDoseSplit();
   };
 
@@ -420,6 +518,7 @@
     const displayFactor = availableFactor || 1;
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
+    alignAgeRange();
     alignDoseSplit();
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
     const quietRow = document.getElementById('quiet-row');
@@ -718,6 +817,66 @@
       doseSplitInput.onchange = () => {
         resetGamma(); configureSliders(); updateSliderLabels(); render();
       };
+      const ageRangeSlider = document.getElementById('age-range-slider');
+      const ageStart = document.getElementById('age-start');
+      const ageEnd = document.getElementById('age-end');
+      let ageDragging = false;
+      let activeAgeInput = null;
+      let pendingAgeX = null;
+      const ageIndexAtPointer = event => {
+        const boxes = ageRangeValues.map(value => document.querySelector(`input.age[value="${value}"]`)?.getBoundingClientRect());
+        let nearest = 0;
+        let distance = Number.POSITIVE_INFINITY;
+        boxes.forEach((box, index) => {
+          const candidate = Math.abs((box.left + box.width / 2) - event.clientX);
+          if (candidate < distance) { nearest = index; distance = candidate; }
+        });
+        return nearest;
+      };
+      const moveAgeRange = event => {
+        if (!ageDragging) return;
+        event.preventDefault();
+        const index = ageIndexAtPointer(event);
+        if (!activeAgeInput) {
+          const current = Number(ageStart.value);
+          if (event.clientX === pendingAgeX) return;
+          activeAgeInput = event.clientX > pendingAgeX ? ageEnd : ageStart;
+          if (index === current && Number(ageEnd.value) === current) return;
+        }
+        if (activeAgeInput === ageStart) ageStart.value = Math.min(index, Number(ageEnd.value));
+        else ageEnd.value = Math.max(index, Number(ageStart.value));
+        applyAgeRange(Number(ageStart.value), Number(ageEnd.value));
+      };
+      ageRangeSlider.onpointerdown = event => {
+        event.preventDefault();
+        ageDragging = true;
+        const index = ageIndexAtPointer(event);
+        const start = Number(ageStart.value);
+        const finish = Number(ageEnd.value);
+        if (start === finish && index === start) {
+          activeAgeInput = null;
+          pendingAgeX = event.clientX;
+        } else {
+          activeAgeInput = Math.abs(index - start) <= Math.abs(index - finish) ? ageStart : ageEnd;
+          pendingAgeX = null;
+          if (activeAgeInput === ageStart) ageStart.value = Math.min(index, finish);
+          else ageEnd.value = Math.max(index, start);
+          applyAgeRange(Number(ageStart.value), Number(ageEnd.value));
+        }
+        ageRangeSlider.setPointerCapture(event.pointerId);
+      };
+      ageRangeSlider.onpointermove = moveAgeRange;
+      ageRangeSlider.onpointerup = event => {
+        if (!ageDragging) return;
+        moveAgeRange(event);
+        ageDragging = false;
+        activeAgeInput = null;
+        pendingAgeX = null;
+        ageRangeSlider.releasePointerCapture(event.pointerId);
+        resetGamma(); configureSliders(); updateSliderLabels(); render();
+      };
+      ageRangeSlider.onpointercancel = () => { ageDragging = false; activeAgeInput = null; pendingAgeX = null; };
+      ageRangeSlider.ondragstart = event => event.preventDefault();
       document.getElementById('gamma-toggle').onclick = () => {
         if (gammaMode) {
           resetGamma();
@@ -751,6 +910,7 @@
       await loadCutoff(cutoff.value || cutoffs[0]);
       new ResizeObserver(entries => {
         const width = entries[0].contentRect.width;
+        alignAgeRange();
         alignDoseSplit();
         if (!currentData || Math.abs(width - lastViewWidth) < 2) return;
         clearTimeout(resizeTimer);

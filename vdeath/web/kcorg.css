@@ -3,12 +3,18 @@
 .kcor-row { display: flex; gap: 12px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
 .kcor-label { font-weight: 600; margin-right: 8px; }
 .inline { display: inline-block; margin-right: .7em; white-space: nowrap; }
+.selection-controls { display: flex; flex-wrap: wrap; gap: .7em 2em; align-items: flex-start; }
+.selection-block { min-width: 0; max-width: 100%; }
+.selection-scroll { max-width: 100%; overflow-x: auto; }
+#age-scale { width: max-content; min-width: 100%; }
+#age { display: flex; flex-wrap: nowrap; gap: .55em; align-items: flex-start; }
+#age .inline, #c1 .inline, #c2 .inline { display: inline-flex; flex-direction: column; align-items: center; margin-right: 0; }
+#age .age-special-first { margin-left: .8em; }
+#age-range-slider { width: 20em; }
+#age-range-slider.unmatched, #dose-split-slider.unmatched { opacity: .32; }
 #c1, #c2 { display: inline-grid; grid-template-columns: repeat(8, max-content); column-gap: .7em; }
-#c1 .inline, #c2 .inline { margin-right: 0; }
-#dose-split-row { position: relative; height: 50px; margin: 2px 0 -4px; }
-#dose-split-row > .kcor-label { display: block; }
-#dose-split-slider { position: absolute; top: 20px; width: 12em; }
-#dose-split-slider.unmatched { opacity: .32; }
+#dose-split-row { position: relative; height: 28px; margin: 2px 0 -4px; }
+#dose-split-slider { position: absolute; top: 0; width: 12em; }
 #quiet-row { margin: .65em auto .2em; }
 #quiet-row > div { margin-bottom: .2em; }
 .chart-slider { position: relative; height: 28px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
@@ -35,4 +41,4 @@ option:disabled { color: #777; }
 .cohort2 { color: red; }
 #kcor-status { text-align: center; margin: 1em; }
 #view { width: 100%; max-width: 1020px; margin-left: auto; margin-right: auto; }
-#view .vega-embed { width: 100%; }
+#view .vega-embed { display: flex; justify-content: center; width: 100%; overflow-x: auto; }
