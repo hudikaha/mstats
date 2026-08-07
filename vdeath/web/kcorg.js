@@ -585,9 +585,11 @@
         };
         const move = event => {
           if (!activeInput) return;
+          event.preventDefault();
           applyValue(activeInput, pointerValue(event));
         };
         container.onpointerdown = event => {
+          event.preventDefault();
           quietDragging = true;
           clearTimeout(resizeTimer);
           const value = pointerValue(event);
@@ -595,6 +597,7 @@
           container.setPointerCapture(event.pointerId);
           move(event);
         };
+        container.ondragstart = event => event.preventDefault();
         container.onpointermove = move;
         container.onpointerup = event => {
           if (!activeInput) return;

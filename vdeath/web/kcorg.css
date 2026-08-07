@@ -5,9 +5,9 @@
 .inline { display: inline-block; margin-right: .7em; white-space: nowrap; }
 #quiet-row { margin: .65em auto .2em; }
 #quiet-row > div { margin-bottom: .2em; }
-.chart-slider { position: relative; height: 28px; cursor: pointer; touch-action: none; }
+.chart-slider { position: relative; height: 28px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 .slider-track { position: absolute; left: 0; right: 0; top: 13px; height: 3px; border-radius: 2px; background: #9aa0aa; }
-.slider-thumb { position: absolute; top: 50%; left: 0; width: 16px; height: 16px; border: 1px solid #666; border-radius: 50%; background: #687080; transform: translate(-50%, -50%); box-sizing: border-box; }
+.slider-thumb { position: absolute; top: 50%; left: 0; width: 16px; height: 16px; border: 1px solid #666; border-radius: 50%; background: #687080; transform: translate(-50%, -50%); box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 .window-range, .single-range { position: absolute; left: -8px; top: 0; width: calc(100% + 16px); height: 28px; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; pointer-events: none; touch-action: none; }
 .window-range::-webkit-slider-thumb, .single-range::-webkit-slider-thumb { width: 20px; height: 28px; appearance: none; -webkit-appearance: none; pointer-events: none; opacity: 0; }
 .window-range::-moz-range-thumb, .single-range::-moz-range-thumb { width: 20px; height: 28px; pointer-events: none; opacity: 0; }
