@@ -42,7 +42,7 @@ text = {
     observed: '観測', adjusted: 'Gamma補正', theta: 'θ', fit: 'fit',
     loading: 'データを読み込んでいます…', load_error: 'データを読み込めませんでした。',
     no_fit: '選択したcohortのgamma parameterがありません。',
-    osaka_disabled: '大阪（死亡者のみの資料のため選択不可）'
+    osaka_disabled: '大阪（Gamma補正時は選択不可）'
   },
   en: {
     cutoff: 'Cutoff', area: 'Area', age: 'Age', doses: 'doses',
@@ -57,7 +57,7 @@ text = {
     observed: 'Observed', adjusted: 'Gamma-adjusted', theta: 'θ', fit: 'fit',
     loading: 'Loading data…', load_error: 'Could not load data.',
     no_fit: 'Gamma parameters are unavailable for the selected cohort.',
-    osaka_disabled: 'Osaka (unavailable: death-only source data)'
+    osaka_disabled: 'Osaka (unavailable during gamma adjustment)'
   }
 }.fetch($l)
 
@@ -98,7 +98,7 @@ print <<~HTML
           <h2>Gamma-frailty補正について</h2>
           <p>初期表示は固定cohortの累積死亡人数です。4週以上では、選択区間内で青線へ一定倍率を掛けたときの赤線との二乗誤差が最小になる倍率を求め、青線を自動的に重ねます。表示する線は各cohortにつき1本です。「Gamma補正を適用」を押すと、観測累積hazardを細線、Gamma補正後の累積hazardを太線で表示します。</p>
           <p>fitはcutoffから常時表示されているスライダーで選んだ終了週までを使います。終了週は0週から1週刻みで動き、0〜3週ではfitせず、4週以上を選ぶとGamma補正の表示状態にかかわらずθと基準傾きkを推定します。「Gamma補正を適用」を押すと、k₂/k₁で青の補正線を赤の補正線へ自動的に重ねます。</p>
-          <p>選択した地域・年齢・接種回数の週初risk人数と週死亡数を各cohort内で合算してからθとkを推定します。大阪市は死亡者だけの資料でrisk setを作れないため選択できません。</p>
+          <p>選択した地域・年齢・接種回数の週初risk人数と週死亡数を各cohort内で合算してからθとkを推定します。大阪市は通常の累積死亡人数では選択できますが、死亡者だけの資料でrisk setを作れないためGamma補正時は選択できません。</p>
           <p>これはmethod検証用の実装です。<code>theta_zero</code>と<code>theta_upper_bound</code>は推定値が探索境界に達したことを表します。</p>
           <ul>
             <li><a href="kcor.rb">Gamma補正なしのKCOR</a></li>
@@ -112,7 +112,7 @@ print <<~HTML
           <h2>Gamma-frailty adjustment</h2>
           <p>The initial view shows cumulative death counts. At four or more weeks, a constant multiplier for the blue line is fitted by minimizing its squared error against the red line over the selected interval. One line is shown per cohort. Press “Apply gamma adjustment” to show observed cumulative hazards as thin lines and gamma-adjusted cumulative hazards as thick lines.</p>
           <p>The fit uses data from the cutoff through the end week selected by the always-visible slider. The slider moves in one-week steps from week 0. Weeks 0–3 do not fit; at four or more weeks, theta and the baseline slope k are fitted whether or not gamma adjustment is displayed. “Apply gamma adjustment” automatically aligns the blue adjusted line to the red one using k₂/k₁.</p>
-          <p>Weekly risk populations and deaths are summed over the selected areas, ages, and doses within each cohort before theta and k are fitted. Osaka cannot be selected because its death-only source cannot provide a risk set.</p>
+          <p>Weekly risk populations and deaths are summed over the selected areas, ages, and doses within each cohort before theta and k are fitted. Osaka is available for ordinary cumulative death counts, but unavailable during gamma adjustment because its death-only source cannot provide a risk set.</p>
           <p>This is a method-validation implementation. <code>theta_zero</code> and <code>theta_upper_bound</code> identify fits at the search boundary.</p>
           <ul>
             <li><a href="kcor.rb">KCOR without gamma adjustment</a></li>

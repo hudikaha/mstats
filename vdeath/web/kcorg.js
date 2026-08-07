@@ -10,6 +10,7 @@
   let lastViewWidth = 0;
   let resizeTimer;
   let quietDragging = false;
+  let osakaCheckedBeforeGamma = false;
 
   const status = message => {
     const element = document.getElementById('kcor-status');
@@ -90,6 +91,12 @@
 
   const resetGamma = () => {
     gammaMode = false;
+    const osaka = document.querySelector('input.area[value="jp271004"]');
+    if (osaka) {
+      osaka.disabled = false;
+      if (osakaCheckedBeforeGamma) osaka.checked = true;
+    }
+    osakaCheckedBeforeGamma = false;
     document.getElementById('gamma-toggle').textContent = text.gamma_apply;
     document.getElementById('gamma-factor').textContent = '—';
   };
@@ -108,11 +115,10 @@
     const areas = [...currentData.areas.values()]
       .sort(compareAreas)
       .map(item => ({value: item.areacode, label: config.language === 'ja' ? item.areaj : item.area}));
-    areas.push({value: 'jp271004', label: text.osaka_disabled, disabled: true});
     areas.sort((a, b) => Number(a.value === 'cze') - Number(b.value === 'cze') || a.value.localeCompare(b.value));
     const ages = [...new Set([...currentData.groups.values()].map(rows => rows[0].age))].sort(compareAges);
     const areaDefaults = previous.areas?.size ? previous.areas : new Set(
-      areas.filter(item => !item.disabled && item.value !== 'cze').map(item => item.value)
+      areas.filter(item => item.value !== 'cze').map(item => item.value)
     );
     const ageDefaults = previous.ages?.size ? previous.ages : new Set(ages.includes('all') ? ['all'] : ages);
     buildCheckboxes('area', areas, 'area', areaDefaults);
@@ -152,8 +158,8 @@
       if (!cache.has(cutoff)) {
         cache.set(cutoff, fetchJson({
           size: 1000000,
-          _source: ['areacode', 'area', 'areaj', 'date', 'age', 'dose', 'at_risk', 'deaths_week'],
-          query: {bool: {filter: [{term: {series: 'cumd_wk_g'}}, {term: {cutoff}}]}},
+          _source: ['areacode', 'area', 'areaj', 'date', 'age', 'dose', 'at_risk', 'deaths_week', 'deaths'],
+          query: {bool: {filter: [{term: {cutoff}}, {exists: {field: 'date'}}]}},
           sort: [{date: 'asc'}, {id: 'asc'}]
         }).then(result => {
           const groups = new Map();
@@ -167,6 +173,19 @@
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push(row);
             areas.set(row.areacode, row);
+          }
+          // 大阪のCUMD-WKはrisk人数を持たないため、累積死亡数から週死亡数だけを復元する。
+          // Osaka CUMD-WK lacks risk counts, so recover weekly deaths from cumulative deaths only.
+          for (const rows of groups.values()) {
+            rows.sort((a, b) => a.date.localeCompare(b.date));
+            if (rows.every(row => Number.isFinite(row.at_risk) && Number.isFinite(row.deaths_week))) continue;
+            let previousDeaths = 0;
+            for (const row of rows) {
+              const deaths = Number(row.deaths) || 0;
+              row.deaths_week = Math.max(0, deaths - previousDeaths);
+              row.at_risk = 0;
+              previousDeaths = deaths;
+            }
           }
           return {groups, areas};
         }));
@@ -193,6 +212,14 @@
       observed += -Math.log1p(-row.deaths_week / row.at_risk);
       return {date: row.date, time: index + 1, deaths, observed, atRisk: row.at_risk};
     }).filter(Boolean);
+  };
+
+  const cumulativeDeathsSeries = rows => {
+    let deaths = 0;
+    return rows.map(row => {
+      deaths += row.deaths_week;
+      return {date: row.date, deaths};
+    });
   };
 
   const modelHazard = (time, theta, k) => Math.abs(theta) < 1.0e-12
@@ -273,11 +300,14 @@
 
   const prepareWide = () => {
     const [rows1, rows2] = selectedRows();
+    const deaths1 = cumulativeDeathsSeries(rows1);
+    const deaths2 = cumulativeDeathsSeries(rows2);
     let series1 = observedSeries(rows1);
     let series2 = observedSeries(rows2);
     const endWeeks = Number(document.getElementById('quiet-end').value);
-    const fit1 = fitGamma(series1, endWeeks);
-    const fit2 = fitGamma(series2, endWeeks);
+    const gammaEligible = !selected('area').has('jp271004');
+    const fit1 = gammaEligible ? fitGamma(series1, endWeeks) : null;
+    const fit2 = gammaEligible ? fitGamma(series2, endWeeks) : null;
     const fit1Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit1) : '');
     const fit2Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit2) : '');
     document.getElementById('c1fit').textContent = gammaMode && fit1Text ? fit1Text : '—';
@@ -294,13 +324,15 @@
     }
     const map1 = new Map(series1.map(row => [row.date, row]));
     const map2 = new Map(series2.map(row => [row.date, row]));
-    const dates = [...new Set([...map1.keys(), ...map2.keys()])].sort();
+    const deathsMap1 = new Map(deaths1.map(row => [row.date, row.deaths]));
+    const deathsMap2 = new Map(deaths2.map(row => [row.date, row.deaths]));
+    const dates = [...new Set([...deathsMap1.keys(), ...deathsMap2.keys()])].sort();
     const wide = dates.map(date => ({
       date,
       observed1: map1.get(date)?.observed ?? null,
       observed2: map2.get(date)?.observed ?? null,
-      deaths1: map1.get(date)?.deaths ?? null,
-      deaths2: map2.get(date)?.deaths ?? null,
+      deaths1: deathsMap1.get(date) ?? null,
+      deaths2: deathsMap2.get(date) ?? null,
       adjusted1: map1.get(date)?.adjusted ?? null,
       adjusted2: map2.get(date)?.adjusted ?? null
     }));
@@ -362,6 +394,16 @@
     const denominator = adjustedMode ? 'datum.adjusted1' : 'datum.deaths1';
     const quietDate = document.getElementById('quiet-end-value').textContent;
     topLayers.push({
+      data: {values: [{date: xDomain[0]}]},
+      mark: {type: 'rule', stroke: '#010101', opacity: 0},
+      encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}}
+    });
+    topLayers.push({
+      data: {values: [{date: xDomain[1]}]},
+      mark: {type: 'rule', stroke: '#020202', opacity: 0},
+      encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}}
+    });
+    topLayers.push({
       data: {name: 'quietMarker', values: [{date: quietDate}]},
       mark: {type: 'rule', stroke: '#087f5b', strokeWidth: 3},
       encoding: {
@@ -397,21 +439,15 @@
     try {
       const result = await vegaEmbed('#view', spec, {actions: false, renderer: 'svg'});
       currentView = result.view;
-      const markerX = () => {
+      const markerX = color => {
         const marker = [...document.querySelectorAll('#view svg *')]
-          .find(element => getComputedStyle(element).stroke === 'rgb(8, 127, 91)');
-        return marker?.getBoundingClientRect().left;
+          .find(element => getComputedStyle(element).stroke === color);
+        const bounds = marker?.getBoundingClientRect();
+        return bounds ? bounds.left + bounds.width / 2 : null;
       };
-      const setMarker = async date => {
-        const changes = vega.changeset().remove(() => true).insert([{date}]);
-        await currentView.change('quietMarker', changes).runAsync();
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        return markerX();
-      };
-      const selectedDate = document.getElementById('quiet-end-value').textContent;
-      const firstX = await setMarker(document.querySelector('#cutoff select').value);
-      const lastX = await setMarker(wide.at(-1).date);
-      await setMarker(selectedDate);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const firstX = markerX('rgb(1, 1, 1)');
+      const lastX = markerX('rgb(2, 2, 2)');
       if (Number.isFinite(firstX) && Number.isFinite(lastX) && lastX > firstX) {
         const rowLeft = quietRow.getBoundingClientRect().left;
         quietSlider.style.marginLeft = `${firstX - rowLeft}px`;
@@ -484,7 +520,18 @@
       };
       quietEnd.onchange = () => scheduleRender(0);
       document.getElementById('gamma-toggle').onclick = () => {
-        gammaMode = !gammaMode;
+        if (gammaMode) {
+          resetGamma();
+        } else {
+          gammaMode = true;
+          const osaka = document.querySelector('input.area[value="jp271004"]');
+          if (osaka) {
+            osakaCheckedBeforeGamma = osaka.checked;
+            osaka.checked = false;
+            osaka.disabled = true;
+          }
+        }
+        configureQuietSlider();
         quietEnd.value = 0;
         updateQuietLabel();
         document.getElementById('gamma-toggle').textContent = gammaMode ? text.gamma_remove : text.gamma_apply;
