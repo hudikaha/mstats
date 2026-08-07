@@ -3,6 +3,12 @@
 .kcor-row { display: flex; gap: 12px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
 .kcor-label { font-weight: 600; margin-right: 8px; }
 .inline { display: inline-block; margin-right: .7em; white-space: nowrap; }
+#c1, #c2 { display: inline-grid; grid-template-columns: repeat(8, max-content); column-gap: .7em; }
+#c1 .inline, #c2 .inline { margin-right: 0; }
+#dose-split-row { position: relative; height: 50px; margin: 2px 0 -4px; }
+#dose-split-row > .kcor-label { display: block; }
+#dose-split-slider { position: absolute; top: 20px; width: 12em; }
+#dose-split-slider.unmatched { opacity: .32; }
 #quiet-row { margin: .65em auto .2em; }
 #quiet-row > div { margin-bottom: .2em; }
 .chart-slider { position: relative; height: 28px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }

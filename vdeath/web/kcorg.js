@@ -115,6 +115,49 @@
     fitEnd.value = 0;
   };
 
+  const doseSplitMatch = () => {
+    const doses1 = selected('c1');
+    const doses2 = selected('c2');
+    for (let startDose = 1; startDose <= 7; startDose += 1) {
+      const expected1 = new Set(Array.from({length: startDose}, (_, dose) => String(dose)));
+      const expected2 = new Set(Array.from({length: 8 - startDose}, (_, index) => String(startDose + index)));
+      const same = (actual, expected) => actual.size === expected.size && [...expected].every(value => actual.has(value));
+      if (same(doses1, expected1) && same(doses2, expected2)) return startDose;
+    }
+    return null;
+  };
+
+  const alignDoseSplit = () => {
+    const slider = document.getElementById('dose-split-slider');
+    const row = document.getElementById('dose-split-row');
+    const first = document.querySelector('input.c2[value="1"]')?.getBoundingClientRect();
+    const last = document.querySelector('input.c2[value="7"]')?.getBoundingClientRect();
+    if (!slider || !row || !first || !last) return;
+    const rowBounds = row.getBoundingClientRect();
+    const firstCenter = first.left + first.width / 2;
+    const lastCenter = last.left + last.width / 2;
+    slider.style.left = `${firstCenter - rowBounds.left}px`;
+    slider.style.width = `${lastCenter - firstCenter}px`;
+    const value = Number(document.getElementById('dose-split').value);
+    document.getElementById('dose-split-thumb').style.left = `${(value - 1) / 6 * 100}%`;
+  };
+
+  const syncDoseSplit = () => {
+    const match = doseSplitMatch();
+    const slider = document.getElementById('dose-split-slider');
+    if (match !== null) document.getElementById('dose-split').value = match;
+    slider.classList.toggle('unmatched', match === null);
+    requestAnimationFrame(alignDoseSplit);
+  };
+
+  const applyDoseSplit = startDose => {
+    document.querySelectorAll('input.c1').forEach(input => { input.checked = Number(input.value) < startDose; });
+    document.querySelectorAll('input.c2').forEach(input => { input.checked = Number(input.value) >= startDose; });
+    document.getElementById('dose-split').value = startDose;
+    document.getElementById('dose-split-slider').classList.remove('unmatched');
+    alignDoseSplit();
+  };
+
   const rebuildControls = previous => {
     const compareAreas = (a, b) => Number(a.areacode === 'cze') - Number(b.areacode === 'cze') ||
       a.areacode.localeCompare(b.areacode);
@@ -132,7 +175,7 @@
     const doses = [0, 1, 2, 3, 4, 5, 6, 7];
     const doseItems = doses.map(value => ({value, label: String(value)}));
     const c1Defaults = previous.c1?.size ? previous.c1 : new Set(['0']);
-    const c2Defaults = previous.c2?.size ? previous.c2 : new Set(['1', '2']);
+    const c2Defaults = previous.c2?.size ? previous.c2 : new Set(['1', '2', '3', '4', '5', '6', '7']);
     buildCheckboxes('c1', doseItems, 'c1', c1Defaults);
     buildCheckboxes('c2', doseItems, 'c2', c2Defaults);
 
@@ -145,11 +188,13 @@
           const all = document.querySelector('input.age[value="all"]');
           if (all) all.checked = false;
         }
+        if (element.classList.contains('c1') || element.classList.contains('c2')) syncDoseSplit();
         resetAndRender();
       };
     });
     configureSliders();
     updateSliderLabels();
+    syncDoseSplit();
   };
 
   const loadCutoff = async cutoff => {
@@ -375,6 +420,7 @@
     const displayFactor = availableFactor || 1;
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
+    alignDoseSplit();
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
     const quietRow = document.getElementById('quiet-row');
     const quietSlider = document.getElementById('quiet-slider');
@@ -636,6 +682,42 @@
         (input, value) => { input.value = value; input.oninput(); },
         finalizeFitEnd
       );
+      const doseSplitSlider = document.getElementById('dose-split-slider');
+      const doseSplitInput = document.getElementById('dose-split');
+      let doseDragging = false;
+      const doseAtPointer = event => {
+        const bounds = doseSplitSlider.getBoundingClientRect();
+        const fraction = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+        return 1 + Math.round(fraction * 6);
+      };
+      const moveDoseSplit = event => {
+        if (!doseDragging) return;
+        event.preventDefault();
+        applyDoseSplit(doseAtPointer(event));
+      };
+      doseSplitSlider.onpointerdown = event => {
+        event.preventDefault();
+        doseDragging = true;
+        doseSplitSlider.setPointerCapture(event.pointerId);
+        moveDoseSplit(event);
+      };
+      doseSplitSlider.onpointermove = moveDoseSplit;
+      doseSplitSlider.onpointerup = event => {
+        if (!doseDragging) return;
+        moveDoseSplit(event);
+        doseDragging = false;
+        doseSplitSlider.releasePointerCapture(event.pointerId);
+        resetGamma();
+        configureSliders();
+        updateSliderLabels();
+        render();
+      };
+      doseSplitSlider.onpointercancel = () => { doseDragging = false; };
+      doseSplitSlider.ondragstart = event => event.preventDefault();
+      doseSplitInput.oninput = () => applyDoseSplit(Number(doseSplitInput.value));
+      doseSplitInput.onchange = () => {
+        resetGamma(); configureSliders(); updateSliderLabels(); render();
+      };
       document.getElementById('gamma-toggle').onclick = () => {
         if (gammaMode) {
           resetGamma();
@@ -669,6 +751,7 @@
       await loadCutoff(cutoff.value || cutoffs[0]);
       new ResizeObserver(entries => {
         const width = entries[0].contentRect.width;
+        alignDoseSplit();
         if (!currentData || Math.abs(width - lastViewWidth) < 2) return;
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(render, 120);
