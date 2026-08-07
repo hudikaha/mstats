@@ -396,8 +396,8 @@
     });
     const topLayers = adjustedMode
       ? (gammaReady ? [
-          line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`, 1, [16, 3]),
-          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`, 1, [16, 3]),
+          line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`, 1, [8, 5]),
+          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`, 1, [8, 5]),
           line('adjusted1', 'blue', 2.4, 1, `${text.cohort1} ${text.adjusted}`, displayFactor),
           line('adjusted2', 'red', 2.4, 1, `${text.cohort2} ${text.adjusted}`)
         ] : [
@@ -405,7 +405,7 @@
           line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`)
         ])
       : (availableFactor ? [
-          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, 1, [16, 3]),
+          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, 1, [8, 5]),
           line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, displayFactor),
           line('deaths2', 'red', 2.4, 1, `${text.cohort2}`)
         ] : [
