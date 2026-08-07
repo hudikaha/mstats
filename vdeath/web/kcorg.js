@@ -567,10 +567,17 @@
         document.getElementById('gamma-factor').textContent = '—';
         if (!quietDragging) scheduleRender(80);
       };
-      fitEnd.onchange = () => scheduleRender(0);
+      const finalizeFitEnd = () => {
+        const value = Number(fitEnd.value);
+        if (value >= 1 && value <= 3) {
+          fitEnd.value = 4;
+          fitEnd.oninput();
+        }
+      };
+      fitEnd.onchange = () => { finalizeFitEnd(); scheduleRender(0); };
       // 日本語: 重なったnative rangeではなくtrack自身で近いthumbを選び、dragを一貫して処理する。
       // English: Let the track select and drag the nearest thumb instead of stacking interactive native ranges.
-      const attachTrackDrag = (container, chooseInput, applyValue) => {
+      const attachTrackDrag = (container, chooseInput, applyValue, finalizeInput = null) => {
         let activeInput = null;
         const pointerValue = event => {
           const bounds = container.getBoundingClientRect();
@@ -606,6 +613,7 @@
         container.onpointerup = event => {
           if (!activeInput) return;
           move(event);
+          if (finalizeInput) finalizeInput(activeInput);
           activeInput = null;
           container.releasePointerCapture(event.pointerId);
           finishQuietDrag();
@@ -625,7 +633,8 @@
       attachTrackDrag(
         document.getElementById('fit-slider'),
         () => fitEnd,
-        (input, value) => { input.value = value; input.oninput(); }
+        (input, value) => { input.value = value; input.oninput(); },
+        finalizeFitEnd
       );
       document.getElementById('gamma-toggle').onclick = () => {
         if (gammaMode) {
