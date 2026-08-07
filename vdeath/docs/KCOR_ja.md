@@ -54,13 +54,15 @@ cohort_size, at_risk, deaths_week, deaths, censored_week
 - `censored_week`: 対象週に転出などで観察終了した人数
 
 `theta`、quiet window、補正後hazard、KCOR値は解析versionに依存するため保存しない。
-完全な個票または`IND-WKA`から生成できるが、死亡者だけの`DTH-WKA`からはrisk setを作れない。
-`--output`を省略して`--risk-output`だけを指定すれば、従来の`CUMD-WK`を変更せずrisk setだけを生成できる。
+本番dataは完全な元個票から生成する。死亡者だけの`DTH-WKA`からはrisk setを作れない。
+`--output`を省略して`--risk-output`だけを指定すれば、G形式だけを生成できる。
 
 ## 単純gamma-frailty fitting
 
 `import/kcor_gamma.rb`は`CUMD-WK-G`を読み、area・cutoff・age・doseごとに
 constant-baseline gamma-frailty modelをquiet windowへ非線形最小二乗fittingする。
+[`kcorg.rb`](https://medicalfacts.info/kcorg.rb)は推定した`theta`でgamma inversionを行い、
+補正累積hazardとそのcohort間比を表示する。大阪市はrisk setがないため選択できない。
 
 ```text
 MR(t)   = deaths_week(t) / at_risk(t)

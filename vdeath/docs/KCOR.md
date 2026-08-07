@@ -57,16 +57,17 @@ cohort_size, at_risk, deaths_week, deaths, censored_week
 - `censored_week`: observations ending during the week, such as move-outs
 
 The format does not store theta, quiet windows, adjusted hazards, or KCOR values because
-those depend on the analysis version. It can be generated from complete individual records
-or `IND-WKA`, but not from death-only `DTH-WKA` input.
-When only `--risk-output` is supplied, the program generates risk sets without replacing
-the existing `CUMD-WK` output.
+those depend on the analysis version. Production data is generated from complete source
+records. A risk set cannot be generated from death-only `DTH-WKA` input.
+When only `--risk-output` is supplied, the program emits only the G-format output.
 
 ## Simple gamma-frailty fitting
 
 `import/kcor_gamma.rb` reads `CUMD-WK-G` and fits a constant-baseline gamma-frailty
 model by nonlinear least squares for each area, cutoff, age, and dose group within a
-quiet window.
+quiet window. [`kcorg.rb`](https://medicalfacts.info/kcorg.rb) applies gamma inversion
+with the fitted theta and displays adjusted cumulative hazards and their cohort ratio.
+Osaka cannot be selected because it has no risk set.
 
 ```text
 MR(t)   = deaths_week(t) / at_risk(t)

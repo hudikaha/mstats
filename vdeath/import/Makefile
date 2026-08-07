@@ -150,8 +150,8 @@ $(1):
 	  $(RUN) kcor --headers "$$$$headers" $$$$opts --output "$(OUT_DIR)/$(2)_CUMD-WK.csv" $$$$inputs || exit $$$$?; \
 	fi; \
 	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_CUMD-WK-G.csv"; then \
-	  $(RUN) kcor --spread-weekly-dates "$(WEEKLY_DATE_SEED)" \
-	    --risk-output "$(OUT_DIR)/$(2)_CUMD-WK-G.csv" "$$$$anon" || exit $$$$?; \
+	  $(RUN) kcor --headers "$$$$headers" $$$$opts \
+	    --risk-output "$(OUT_DIR)/$(2)_CUMD-WK-G.csv" $$$$inputs || exit $$$$?; \
 	fi; \
 	elapsed=$$$$(( $$$$(date +%s) - start )); \
 	printf '%s\t%s\n' '$(1)' "$$$$elapsed" | tee "$(OUT_DIR)/timings/$(1).tsv"

@@ -14,7 +14,10 @@ options = {
   mapping: File.expand_path('../config/elasticsearch/vdeath2026.json', __dir__),
   batch_size: 1_000,
   replace: false,
-  add_doc_id: true
+  add_doc_id: true,
+  integer_fields: %w[lives persondays deaths],
+  float_fields: %w[lb0 ub0 rr0 lbm ubm mortality],
+  constants: {}
 }
 
 OptionParser.new do |parser|
@@ -26,6 +29,13 @@ OptionParser.new do |parser|
   parser.on('--batch-size N', Integer, 'Documents per bulk request') { |v| options[:batch_size] = v }
   parser.on('--replace', 'Delete and recreate the destination index') { options[:replace] = true }
   parser.on('--no-doc-id', 'Do not add the vdeath-only doc_id field') { options[:add_doc_id] = false }
+  parser.on('--integer-fields LIST', 'Comma-separated integer fields') { |v| options[:integer_fields] = v.split(',') }
+  parser.on('--float-fields LIST', 'Comma-separated floating-point fields') { |v| options[:float_fields] = v.split(',') }
+  parser.on('--set FIELD=VALUE', 'Add a constant source field (repeatable)') do |v|
+    field, value = v.split('=', 2)
+    abort "Invalid --set value: #{v}" if field.to_s.empty? || value.nil?
+    options[:constants][field] = value
+  end
 end.parse!
 abort 'CSV file is required' if ARGV.empty?
 
@@ -70,8 +80,8 @@ unless head.is_a?(Net::HTTPSuccess)
   es_request(base_uri, account, password, Net::HTTP::Put, index_path, File.read(options[:mapping]))
 end
 
-integer_fields = %w[lives persondays deaths].freeze
-float_fields = %w[lb0 ub0 rr0 lbm ubm mortality].freeze
+integer_fields = options[:integer_fields].freeze
+float_fields = options[:float_fields].freeze
 batch = []
 count = 0
 
@@ -94,6 +104,7 @@ ARGV.each do |path|
   CSV.foreach(path, headers: true) do |row|
     source = row.to_h
     id = source.fetch('id')
+    source.merge!(options[:constants])
     source['doc_id'] = id if options[:add_doc_id]
     integer_fields.each { |field| source[field] = source[field].to_i if source.key?(field) }
     float_fields.each do |field|

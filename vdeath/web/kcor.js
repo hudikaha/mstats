@@ -80,7 +80,9 @@
         cache.set(cutoff, fetchJson(config.elasticsearch_url, {
           size: 1000000,
           _source: ['areacode', 'area', 'areaj', 'date', 'age', 'dose', 'deaths'],
-          query: {term: {cutoff}},
+          // gamma parameter文書を除き、週次系列だけを取得する。
+          // Exclude gamma parameter documents and fetch weekly series only.
+          query: {bool: {filter: [{term: {cutoff}}, {exists: {field: 'date'}}]}},
           sort: [{date: 'asc'}, {id: 'asc'}]
         }).then(result => {
           const records = result.hits.hits.map(hit => hit._source);
@@ -94,7 +96,9 @@
           const ageIndex = new Map(ages.map((age, index) => [age, index]));
           return {
             areas, dates, ages,
-            rows: records.map(row => [areaIndex.get(row.areacode), dateIndex.get(row.date), ageIndex.get(row.age), row.dose, row.deaths])
+            // 接種回数は_sourceの文字列・数値にかかわらず数値へ正規化する。
+            // Normalize doses to numbers regardless of the _source representation.
+            rows: records.map(row => [areaIndex.get(row.areacode), dateIndex.get(row.date), ageIndex.get(row.age), Number(row.dose), row.deaths])
           };
         }));
       }

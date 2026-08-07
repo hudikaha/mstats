@@ -199,6 +199,11 @@ curl -sS -H 'Content-Type: application/json' \
 ## kcorの検索例
 
 地域、cutoff、年齢、接種回数を指定します。
+大阪市以外のrecordは`series=cumd_wk_g`で、通常KCORの共通fieldに加えて
+`cohort_size`、`at_risk`、`deaths_week`、`censored_week`を持ちます。
+死亡者資料だけの大阪市は`series=cumd_wk`で、これらのrisk-set fieldを持ちません。
+`series=gamma_params`は地域・cutoff・年齢・接種回数ごとのconstant-baseline
+gamma-frailty fitting結果で、`theta`、`k`、`rmse`、`fit_status`、quiet windowを持ちます。
 
 ```sh
 curl -sS -H 'Content-Type: application/json' \

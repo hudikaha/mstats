@@ -205,6 +205,13 @@ their `type` is `conf`, `est`, or `jpns`.
 ## kcor example
 
 Filter by area, cutoff, age, and dose.
+Records outside Osaka use `series=cumd_wk_g` and include `cohort_size`,
+`at_risk`, `deaths_week`, and `censored_week` in addition to the common KCOR
+fields. Osaka has death-only source data, uses `series=cumd_wk`, and does not
+contain those risk-set fields.
+`series=gamma_params` stores constant-baseline gamma-frailty fit results by
+area, cutoff, age, and dose, including `theta`, `k`, `rmse`, `fit_status`, and
+the quiet window.
 
 ```sh
 curl -sS -H 'Content-Type: application/json' \

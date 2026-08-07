@@ -12,7 +12,7 @@ server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
 ```text
 公開名  Elasticsearchでの接続先
 mstats  alias -> mstats20260719
-kcor    alias -> kcor2025
+kcor    alias -> kcor20260807
 vdeath   index vdeath（年齢補正後の接種後死亡data）
 indiv    alias -> indiv20260721（週単位匿名化IND）
 indivdth 死亡者のみの週単位匿名化個票（DTH-WKA）
