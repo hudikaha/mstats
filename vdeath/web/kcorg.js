@@ -615,7 +615,7 @@
               encoding: {
                 x: commonX,
                 y: {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? text.ratio : text.death_ratio,
-                  scale: {type: rrLinear ? 'linear' : 'log', zero: rrLinear, domain: rrDomain}},
+                  scale: {type: rrLinear ? 'linear' : 'log', zero: rrLinear, domain: rrDomain, nice: false}},
                 tooltip: [
                   {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
                   {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? 'KCOR-G' : 'KCOR', format: '.4f'}
