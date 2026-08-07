@@ -559,6 +559,19 @@
         ]);
     const numerator = gammaReady ? 'datum.adjusted2' : (adjustedMode ? 'datum.observed2' : 'datum.deaths2');
     const denominator = gammaReady ? 'datum.adjusted1' : (adjustedMode ? 'datum.observed1' : 'datum.deaths1');
+    const rrLinear = !document.getElementById('rr-log').checked;
+    const rrValues = wide.map(row => {
+      const value2 = gammaReady ? row.adjusted2 : (adjustedMode ? row.observed2 : row.deaths2);
+      const value1 = gammaReady ? row.adjusted1 : (adjustedMode ? row.observed1 : row.deaths1);
+      return value1 > 0 ? value2 / (value1 * displayFactor) : null;
+    }).filter(value => Number.isFinite(value) && value > 0);
+    const rrMaximum = rrValues.length ? Math.max(...rrValues) : 1;
+    const rrMinimum = rrValues.length ? Math.min(...rrValues) : 1;
+    const rrMagnitude = Math.max(rrMaximum, 1 / rrMinimum);
+    const rrDomain = rrLinear
+      ? [0, Math.max(1.0e-12, rrMaximum * 1.05)]
+      : [1 / (rrMagnitude * 1.05), rrMagnitude * 1.05];
+    const rrCondition = rrLinear ? `${denominator} > 0` : `${numerator} > 0 && ${denominator} > 0`;
     const quietStartDate = document.getElementById('quiet-start-value').textContent;
     const quietEndDate = document.getElementById('quiet-end-value').textContent;
     const fitEndDate = document.getElementById('fit-end-value').textContent;
@@ -595,13 +608,14 @@
         {width: chartWidth, height: 230, data: {values: wide}, layer: topLayers},
         {
           width: chartWidth, height: 160, data: {values: wide},
-          transform: [{calculate: `${denominator} > 0 ? ${numerator} / (${denominator} * ${displayFactor}) : null`, as: 'KCOR_G'}],
+          transform: [{calculate: `${rrCondition} ? ${numerator} / (${denominator} * ${displayFactor}) : null`, as: 'KCOR_G'}],
           layer: [
             {
               mark: {type: 'line', stroke: '#111', strokeWidth: 2},
               encoding: {
                 x: commonX,
-                y: {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? text.ratio : text.death_ratio, scale: {zero: true}},
+                y: {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? text.ratio : text.death_ratio,
+                  scale: {type: rrLinear ? 'linear' : 'log', zero: rrLinear, domain: rrDomain}},
                 tooltip: [
                   {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
                   {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? 'KCOR-G' : 'KCOR', format: '.4f'}
@@ -896,6 +910,7 @@
         document.getElementById('gamma-window-controls').hidden = !gammaMode;
         render();
       };
+      document.getElementById('rr-log').oninput = render;
       const metadata = await fetchJson({
         size: 0,
         query: {term: {series: 'cumd_wk_g'}},

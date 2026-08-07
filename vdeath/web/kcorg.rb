@@ -34,6 +34,7 @@ text = {
     cohort1: 'コホート1', cohort2: 'コホート2',
     date: '日付', cumulative_deaths: '累積死亡人数', cumulative_hazard: '累積hazard',
     ratio: 'RR = コホート2/コホート1', death_ratio: 'RR = コホート2/コホート1',
+    rr_log: '対数表示',
     gamma_apply: 'Gamma補正を適用', gamma_remove: 'Gamma補正を解除',
     quiet_start: 'quiet window開始週', quiet_end: 'quiet window終了週', fit_end: 'Fit終了週',
     fitting: 'fit中…',
@@ -52,6 +53,7 @@ text = {
     cohort1: 'Cohort 1', cohort2: 'Cohort 2',
     date: 'Date', cumulative_deaths: 'Cumulative deaths', cumulative_hazard: 'Cumulative hazard',
     ratio: 'RR = Cohort2/Cohort1', death_ratio: 'RR = Cohort2/Cohort1',
+    rr_log: 'Log scale',
     gamma_apply: 'Apply gamma adjustment', gamma_remove: 'Remove gamma adjustment',
     quiet_start: 'Quiet-window start week', quiet_end: 'Quiet-window end week', fit_end: 'Fit end week',
     fitting: 'Fitting…',
@@ -112,12 +114,13 @@ print <<~HTML
     <div id="fit-slider" class="chart-slider"><div class="slider-track"><span id="fit-thumb" class="slider-thumb"></span></div><input id="fit-end" class="single-range" type="range" min="0" step="1" value="0"></div>
   </div>
   <div id="view"></div>
+  <div id="rr-scale-control"><label><input type="checkbox" id="rr-log" checked> #{text[:rr_log]}</label></div>
   <hr>
   #{if $l == :ja
       <<~JA
         <section class="kcor-references">
           <h2>Gamma-frailty補正について</h2>
-          <p>初期表示は固定cohortの累積死亡人数です。コホート2開始接種回数スライダーは、選択値未満をコホート1、選択値以上をコホート2へ割り当てます。年齢スライダーは10歳区分の連続範囲を選び、80歳以上または全年齢と一致するときは、詳細区分に加えて80+またはallも同時にチェックします。チェックボックスによる任意指定も可能です。Gamma補正またはFitで線が動くときは、変換前の元の線を同じ太さの破線、利用する最終値を実線で表示します。下段のRRは補正・Fitを反映した最終値を表示します。</p>
+          <p>初期表示は固定cohortの累積死亡人数です。コホート2開始接種回数スライダーは、選択値未満をコホート1、選択値以上をコホート2へ割り当てます。年齢スライダーは10歳区分の連続範囲を選び、80歳以上または全年齢と一致するときは、詳細区分に加えて80+またはallも同時にチェックします。チェックボックスによる任意指定も可能です。Gamma補正またはFitで線が動くときは、変換前の元の線を同じ太さの破線、利用する最終値を実線で表示します。下段のRRは補正・Fitを反映した最終値を表示し、初期状態は1を中心とする対数軸です。「対数表示」のチェックを外すと0始まりの線形軸へ切り替わります。</p>
           <p>quiet windowは開始週と終了週を4週以上離して指定し、初期値は第4週〜第8週です。FitはGamma補正とは別の操作で、開始を第1週に固定し、選択した終了週におけるコホート2／コホート1の比で青線を尺度調整して、その週のKCORを1にします。Fit終了週が0ではFitせず、4週以上へ動かすと自動的に適用します。</p>
           <p>選択した地域・年齢・接種回数の週初risk人数と週死亡数を各cohort内で合算してからθとkを推定します。大阪市は通常の累積死亡人数では選択できますが、死亡者だけの資料でrisk setを作れないためGamma補正時は選択できません。</p>
           <p>これはmethod検証用の実装です。<code>theta_zero</code>と<code>theta_upper_bound</code>は推定値が探索境界に達したことを表します。</p>
@@ -131,7 +134,7 @@ print <<~HTML
       <<~EN
         <section class="kcor-references">
           <h2>Gamma-frailty adjustment</h2>
-          <p>The initial view shows cumulative death counts. The Cohort 2 starting-dose slider assigns lower doses to Cohort 1 and the selected dose and higher doses to Cohort 2. The age slider selects a continuous range of 10-year groups; when it exactly matches ages 80+ or all ages, the detailed groups and the corresponding 80+ or all checkbox are checked together. The checkboxes still allow arbitrary selections. When gamma adjustment or fitting moves a line, the original is retained as a dashed line of the same width and the final value is solid. The lower RR chart shows the final value reflecting adjustment and fit.</p>
+          <p>The initial view shows cumulative death counts. The Cohort 2 starting-dose slider assigns lower doses to Cohort 1 and the selected dose and higher doses to Cohort 2. The age slider selects a continuous range of 10-year groups; when it exactly matches ages 80+ or all ages, the detailed groups and the corresponding 80+ or all checkbox are checked together. The checkboxes still allow arbitrary selections. When gamma adjustment or fitting moves a line, the original is retained as a dashed line of the same width and the final value is solid. The lower RR chart shows the final value reflecting adjustment and fit and defaults to a logarithmic axis centered on 1. Clear “Log scale” to switch to a linear axis starting at 0.</p>
           <p>The quiet-window start and end must remain at least four weeks apart and default to weeks 4–8. Fitting is separate from gamma adjustment: its start is fixed at week 1, and the blue line is scaled by the Cohort 2 / Cohort 1 ratio at the selected end week, making KCOR equal to 1 there. A fit end of week 0 does not fit; moving the end to week 4 or later applies it automatically.</p>
           <p>Weekly risk populations and deaths are summed over the selected areas, ages, and doses within each cohort before theta and k are fitted. Osaka is available for ordinary cumulative death counts, but unavailable during gamma adjustment because its death-only source cannot provide a risk set.</p>
           <p>This is a method-validation implementation. <code>theta_zero</code> and <code>theta_upper_bound</code> identify fits at the search boundary.</p>
