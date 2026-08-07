@@ -13,6 +13,7 @@
 #fit-results { margin: .25em 0 .45em; }
 .fit-result { display: flex; gap: .55em; height: 1.45em; line-height: 1.45; white-space: nowrap; overflow: hidden; }
 .fit-result .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#fit-results:not(.gamma-active) .gamma-fit-result { display: none; }
 #quiet-end-value { overflow-wrap: anywhere; }
 select { max-width: min(100%, 42em); }
 option:disabled { color: #777; }

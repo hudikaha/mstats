@@ -299,6 +299,7 @@
     : text.no_fit;
 
   const prepareWide = () => {
+    document.getElementById('fit-results').classList.toggle('gamma-active', gammaMode);
     const [rows1, rows2] = selectedRows();
     const deaths1 = cumulativeDeathsSeries(rows1);
     const deaths2 = cumulativeDeathsSeries(rows2);

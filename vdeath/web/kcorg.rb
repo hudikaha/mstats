@@ -82,8 +82,8 @@ print <<~HTML
     <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button></div>
     <div id="fit-results">
       <div class="fit-result"><span id="gamma-factor" class="mono">&mdash;</span></div>
-      <div class="fit-result"><span class="cohort2">#{text[:cohort2]} fit:</span><span id="c2fit" class="mono">&mdash;</span></div>
-      <div class="fit-result"><span class="cohort1">#{text[:cohort1]} fit:</span><span id="c1fit" class="mono">&mdash;</span></div>
+      <div class="fit-result gamma-fit-result"><span class="cohort2">#{text[:cohort2]} fit:</span><span id="c2fit" class="mono">&mdash;</span></div>
+      <div class="fit-result gamma-fit-result"><span class="cohort1">#{text[:cohort1]} fit:</span><span id="c1fit" class="mono">&mdash;</span></div>
     </div>
   </div>
   <div id="quiet-row" hidden>
