@@ -62,7 +62,9 @@ cohort_size, at_risk, deaths_week, deaths, censored_week
 `import/kcor_gamma.rb`は`CUMD-WK-G`を読み、area・cutoff・age・doseごとに
 constant-baseline gamma-frailty modelをquiet windowへ非線形最小二乗fittingする。
 [`kcorg.rb`](https://medicalfacts.info/kcorg.rb)は推定した`theta`でgamma inversionを行い、
-補正累積hazardとそのcohort間比を表示する。大阪市はrisk setがないため選択できない。
+補正累積hazardとそのcohort間比を表示する。cohort間比はcohort 2の補正累積hazardを
+cohort 1の補正累積hazardで直接割り、手動の倍率調整は行わない。
+大阪市はrisk setがないため選択できない。
 
 ```text
 MR(t)   = deaths_week(t) / at_risk(t)

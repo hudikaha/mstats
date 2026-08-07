@@ -5,7 +5,6 @@
   const text = config.text;
   const cache = new Map();
   let currentData;
-  let renderSerial = 0;
   let lastViewWidth = 0;
   let resizeTimer;
 
@@ -188,49 +187,31 @@
     }));
   };
 
-  const updateDbLabel = () => {
-    const input = document.querySelector('#s2 input[type="range"]');
-    if (!input) return;
-    const update = () => {
-      const db = Number(input.value);
-      document.getElementById('s2val').textContent = `×${Math.pow(10, db / 10).toFixed(2)} (dB=${db.toFixed(1)})`;
-    };
-    input.oninput = update;
-    update();
-  };
-
   async function render() {
     if (!currentData) return;
-    const serial = ++renderSerial;
     const wide = prepareWide();
     if (!wide.length) {
       document.getElementById('view').replaceChildren();
       return;
     }
-    const currentDb = Number(document.querySelector('#s2 input[type="range"]')?.value || 0);
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
     const commonX = {field: 'date', type: 'temporal', title: text.date, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
     const line = (field, color, dash, title) => ({
-      transform: field === 'adjusted1' ? [
-        {calculate: 'pow(10, slope_dB/10)', as: 'db_factor'},
-        {calculate: 'datum.adjusted1 * datum.db_factor', as: 'adjusted1_scaled'}
-      ] : [],
       mark: {type: 'line', stroke: color, strokeWidth: dash ? 1.5 : 2.5, strokeDash: dash || undefined, opacity: dash ? 0.55 : 1},
       encoding: {
         x: commonX,
-        y: {field: field === 'adjusted1' ? 'adjusted1_scaled' : field, type: 'quantitative', title: text.cumulative_hazard, scale: {zero: true}},
+        y: {field, type: 'quantitative', title: text.cumulative_hazard, scale: {zero: true}},
         tooltip: [
           {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
-          {field: field === 'adjusted1' ? 'adjusted1_scaled' : field, type: 'quantitative', title, format: '.6f'}
+          {field, type: 'quantitative', title, format: '.6f'}
         ]
       }
     });
     const spec = {
       $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
       config: {title: {fontSize: 16}, axis: {titleFontSize: 15, labelFontSize: 15}},
-      params: [{name: 'slope_dB', value: Number.isNaN(currentDb) ? 0 : currentDb, bind: {input: 'range', min: -20, max: 20, step: 0.1, element: '#s2'}}],
       vconcat: [
         {
           width: chartWidth, height: 230, data: {values: wide},
@@ -244,9 +225,7 @@
         {
           width: chartWidth, height: 160, data: {values: wide},
           transform: [
-            {calculate: 'pow(10, slope_dB/10)', as: 'db_factor'},
-            {calculate: 'datum.adjusted1 * datum.db_factor', as: 'adjusted1_scaled'},
-            {calculate: 'datum.adjusted1_scaled > 0 ? datum.adjusted2 / datum.adjusted1_scaled : null', as: 'KCOR_G'}
+            {calculate: 'datum.adjusted1 > 0 ? datum.adjusted2 / datum.adjusted1 : null', as: 'KCOR_G'}
           ],
           layer: [
             {
@@ -267,7 +246,6 @@
     };
     try {
       await vegaEmbed('#view', spec, {actions: false});
-      if (serial === renderSerial) updateDbLabel();
     } catch (error) {
       console.error(error);
       status(text.load_error);

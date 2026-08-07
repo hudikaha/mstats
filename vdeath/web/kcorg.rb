@@ -31,9 +31,9 @@ title = {
 text = {
   ja: {
     cutoff: '累積開始日（Cutoff）', area: '地域', age: '年齢', doses: '接種回数',
-    cohort1: 'コホート1', cohort2: 'コホート2', slope: 'コホート1の水準（dB）',
+    cohort1: 'コホート1', cohort2: 'コホート2',
     date: '日付', cumulative_hazard: '累積hazard',
-    ratio: '補正累積hazard比 = コホート2 / 調整後コホート1',
+    ratio: 'Gamma補正後累積hazard比 = コホート2 / コホート1',
     observed: '観測', adjusted: 'Gamma補正', theta: 'θ', fit: 'fit',
     loading: 'データを読み込んでいます…', load_error: 'データを読み込めませんでした。',
     no_fit: '選択したcohortのgamma parameterがありません。',
@@ -41,9 +41,9 @@ text = {
   },
   en: {
     cutoff: 'Cutoff', area: 'Area', age: 'Age', doses: 'doses',
-    cohort1: 'Cohort 1', cohort2: 'Cohort 2', slope: 'Cohort 1 level (dB)',
+    cohort1: 'Cohort 1', cohort2: 'Cohort 2',
     date: 'Date', cumulative_hazard: 'Cumulative hazard',
-    ratio: 'Adjusted cumulative hazard ratio = Cohort 2 / Cohort 1 (scaled)',
+    ratio: 'Gamma-adjusted cumulative hazard ratio = Cohort 2 / Cohort 1',
     observed: 'Observed', adjusted: 'Gamma-adjusted', theta: 'θ', fit: 'fit',
     loading: 'Loading data…', load_error: 'Could not load data.',
     no_fit: 'Gamma parameters are unavailable for the selected cohort.',
@@ -69,10 +69,6 @@ print <<~HTML
     <div class="kcor-row"><label class="kcor-label" for="age">#{text[:age]}:</label><select id="age"></select></div>
     <div class="kcor-row"><label class="kcor-label cohort2" for="c2">#{text[:cohort2]} (#{text[:doses]}):</label><select id="c2"></select><span id="c2fit" class="mono"></span></div>
     <div class="kcor-row"><label class="kcor-label cohort1" for="c1">#{text[:cohort1]} (#{text[:doses]}):</label><select id="c1"></select><span id="c1fit" class="mono"></span></div>
-    <div class="kcor-row">
-      <span class="kcor-label cohort1">#{text[:slope]}:</span>
-      <span id="s2"></span><span id="s2val" class="mono">×1.00 (dB=0.0)</span>
-    </div>
   </div>
   <div id="view"></div>
   <hr>
@@ -80,7 +76,7 @@ print <<~HTML
       <<~JA
         <section class="kcor-references">
           <h2>Gamma-frailty補正について</h2>
-          <p>固定cohortの週死亡数と週初risk人数から離散hazardを計算し、2022-W24〜2024-W16のquiet windowへconstant-baseline gamma-frailty modelを当てはめます。表示するKCOR-Gは、gamma inversion後の累積hazardの比です。</p>
+          <p>破線は固定cohortの週死亡数と週初risk人数から直接計算した観測累積hazardです。2022-W24〜2024-W16のquiet windowへconstant-baseline gamma-frailty modelを当てはめ、破線と推定したθから逆算したGamma補正後累積hazardを実線で示します。下段のKCOR-Gは、赤の実線を青の実線で割った値であり、手動の倍率調整は行いません。</p>
           <p>地域・年齢・接種回数ごとに別々のθを推定するため、この画面では各cohortを単一の地域・年齢・接種回数として比較します。大阪市は死亡者だけの資料でrisk setを作れないため選択できません。</p>
           <p>これはmethod検証用の実装です。<code>theta_zero</code>と<code>theta_upper_bound</code>は推定値が探索境界に達したことを表します。</p>
           <ul>
@@ -93,7 +89,7 @@ print <<~HTML
       <<~EN
         <section class="kcor-references">
           <h2>Gamma-frailty adjustment</h2>
-          <p>Weekly discrete hazards are calculated from deaths and the population at risk at the start of each week. A constant-baseline gamma-frailty model is fitted over the 2022-W24 to 2024-W16 quiet window. KCOR-G is the ratio of gamma-inverted cumulative hazards.</p>
+          <p>Dashed lines are observed cumulative hazards calculated directly from weekly deaths and the population at risk at the start of each week. A constant-baseline gamma-frailty model is fitted over the 2022-W24 to 2024-W16 quiet window, and solid lines show cumulative hazards obtained by gamma inversion from the dashed lines and fitted theta. The lower KCOR-G plot divides the red solid line by the blue solid line, without manual scaling.</p>
           <p>Theta is fitted separately for each area, age, and dose cohort, so this view compares single area-age-dose cohorts. Osaka cannot be selected because its death-only source cannot provide a risk set.</p>
           <p>This is a method-validation implementation. <code>theta_zero</code> and <code>theta_upper_bound</code> identify fits at the search boundary.</p>
           <ul>

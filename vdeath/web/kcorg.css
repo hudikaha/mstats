@@ -2,10 +2,6 @@
 .language-selector label { margin: 0 .5em; }
 .kcor-row { display: flex; gap: 12px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
 .kcor-label { font-weight: 600; margin-right: 8px; }
-#s2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-#s2 .vega-bind { display: inline-flex !important; gap: 6px; margin: 0; }
-#s2 br { display: none !important; }
-#s2 input[type="range"] { width: min(520px, 65vw); }
 select { max-width: min(100%, 42em); }
 option:disabled { color: #777; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
