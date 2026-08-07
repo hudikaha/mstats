@@ -35,10 +35,10 @@ text = {
     date: '日付', cumulative_deaths: '累積死亡人数', cumulative_hazard: '累積hazard',
     ratio: '累積hazard比 = コホート2 / コホート1', death_ratio: '累積死亡人数比 = コホート2 / コホート1',
     gamma_apply: 'Gamma補正を適用', gamma_remove: 'Gamma補正を解除',
-    quiet_end: 'fit終了週', fitting: 'fit中…',
-    fit_wait: 'fitには4週以上必要です。',
-    baseline_factor: '人数fit：コホート1 ×%{factor}',
-    gamma_factor: '自動整列：コホート1 × k₂/k₁ = ×%{factor}',
+    quiet_end: 'quiet window終了週', fitting: 'fit中…', fit_apply: 'Fitを適用', fit_remove: 'Fitを解除',
+    fit_wait: 'Gamma補正には4週以上のquiet windowが必要です。',
+    baseline_factor: '4週基準化：コホート1 ×%{factor}',
+    gamma_factor: '4週基準化：コホート1 ×%{factor}',
     observed: '観測', adjusted: 'Gamma補正', theta: 'θ', fit: 'fit',
     loading: 'データを読み込んでいます…', load_error: 'データを読み込めませんでした。',
     no_fit: '選択したcohortのgamma parameterがありません。',
@@ -52,10 +52,10 @@ text = {
     date: 'Date', cumulative_deaths: 'Cumulative deaths', cumulative_hazard: 'Cumulative hazard',
     ratio: 'Cumulative hazard ratio = Cohort 2 / Cohort 1', death_ratio: 'Cumulative death-count ratio = Cohort 2 / Cohort 1',
     gamma_apply: 'Apply gamma adjustment', gamma_remove: 'Remove gamma adjustment',
-    quiet_end: 'Fit end week', fitting: 'Fitting…',
-    fit_wait: 'At least four weeks are required for fitting.',
-    baseline_factor: 'Count fit: Cohort 1 ×%{factor}',
-    gamma_factor: 'Automatic alignment: Cohort 1 × k₂/k₁ = ×%{factor}',
+    quiet_end: 'Quiet-window end week', fitting: 'Fitting…', fit_apply: 'Apply fit', fit_remove: 'Remove fit',
+    fit_wait: 'Gamma adjustment requires a quiet window of at least four weeks.',
+    baseline_factor: 'Week-4 normalization: Cohort 1 ×%{factor}',
+    gamma_factor: 'Week-4 normalization: Cohort 1 ×%{factor}',
     observed: 'Observed', adjusted: 'Gamma-adjusted', theta: 'θ', fit: 'fit',
     loading: 'Loading data…', load_error: 'Could not load data.',
     no_fit: 'Gamma parameters are unavailable for the selected cohort.',
@@ -83,7 +83,7 @@ print <<~HTML
     <div class="kcor-row"><span class="kcor-label">#{text[:age]}:</span><span id="age"></span></div>
     <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span></div>
     <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span></div>
-    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><span id="osaka-gamma-note" hidden><span class="gamma-active-note">#{text[:gamma_active]}</span>#{text[:gamma_separator]}#{text[:osaka_gamma_note]}</span></div>
+    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><button type="button" id="fit-toggle" disabled>#{text[:fit_apply]}</button><span id="osaka-gamma-note" hidden><span class="gamma-active-note">#{text[:gamma_active]}</span>#{text[:gamma_separator]}#{text[:osaka_gamma_note]}</span></div>
     <div id="fit-results">
       <div class="fit-result"><span id="gamma-factor" class="mono">&mdash;</span></div>
       <div class="fit-result gamma-fit-result"><span class="cohort2">#{text[:cohort2]} fit:</span><span id="c2fit" class="mono">&mdash;</span></div>
@@ -100,8 +100,8 @@ print <<~HTML
       <<~JA
         <section class="kcor-references">
           <h2>Gamma-frailty補正について</h2>
-          <p>初期表示は固定cohortの累積死亡人数です。4週以上では、選択区間内で青線へ一定倍率を掛けたときの赤線との二乗誤差が最小になる倍率を求め、青線を自動的に重ねます。表示する線は各cohortにつき1本です。「Gamma補正を適用」を押すと、観測累積hazardを細線、Gamma補正後の累積hazardを太線で表示します。</p>
-          <p>fitはcutoffから常時表示されているスライダーで選んだ終了週までを使います。終了週は0週から1週刻みで動き、0〜3週ではfitせず、4週以上を選ぶとGamma補正の表示状態にかかわらずθと基準傾きkを推定します。「Gamma補正を適用」を押すと、k₂/k₁で青の補正線を赤の補正線へ自動的に重ねます。</p>
+          <p>初期表示は固定cohortの累積死亡人数です。「Gamma補正を適用」を押すと観測累積hazardを実線で表示し、quiet windowが4週以上なら、そこからθと基準傾きkを推定してGamma補正値を少し太い破線で追加します。0〜3週では推定せず、実測線だけを表示します。</p>
+          <p>quiet windowはcutoffからスライダーで選んだ終了週までです。FitはGamma補正とは別の操作で、Kirschの基準化に合わせ、累積開始後の第4週におけるコホート2／コホート1の比で青線を尺度調整し、その週のKCORを1にします。quiet windowを変更するとFitは解除されます。</p>
           <p>選択した地域・年齢・接種回数の週初risk人数と週死亡数を各cohort内で合算してからθとkを推定します。大阪市は通常の累積死亡人数では選択できますが、死亡者だけの資料でrisk setを作れないためGamma補正時は選択できません。</p>
           <p>これはmethod検証用の実装です。<code>theta_zero</code>と<code>theta_upper_bound</code>は推定値が探索境界に達したことを表します。</p>
           <ul>
@@ -114,8 +114,8 @@ print <<~HTML
       <<~EN
         <section class="kcor-references">
           <h2>Gamma-frailty adjustment</h2>
-          <p>The initial view shows cumulative death counts. At four or more weeks, a constant multiplier for the blue line is fitted by minimizing its squared error against the red line over the selected interval. One line is shown per cohort. Press “Apply gamma adjustment” to show observed cumulative hazards as thin lines and gamma-adjusted cumulative hazards as thick lines.</p>
-          <p>The fit uses data from the cutoff through the end week selected by the always-visible slider. The slider moves in one-week steps from week 0. Weeks 0–3 do not fit; at four or more weeks, theta and the baseline slope k are fitted whether or not gamma adjustment is displayed. “Apply gamma adjustment” automatically aligns the blue adjusted line to the red one using k₂/k₁.</p>
+          <p>The initial view shows cumulative death counts. Press “Apply gamma adjustment” to show observed cumulative hazards as solid lines. With a quiet window of at least four weeks, theta and the baseline slope k are estimated from that window and gamma-adjusted values are added as slightly thicker dashed lines. At zero to three weeks, only the observed lines are shown.</p>
+          <p>The quiet window runs from the cutoff through the end week selected by the slider. Fitting is separate from gamma adjustment. Following Kirsch's normalization, pressing “Apply fit” scales the blue line by the Cohort 2 / Cohort 1 ratio at the fourth accumulated week, making KCOR equal to 1 at that week. Changing the quiet window removes the fit.</p>
           <p>Weekly risk populations and deaths are summed over the selected areas, ages, and doses within each cohort before theta and k are fitted. Osaka is available for ordinary cumulative death counts, but unavailable during gamma adjustment because its death-only source cannot provide a risk set.</p>
           <p>This is a method-validation implementation. <code>theta_zero</code> and <code>theta_upper_bound</code> identify fits at the search boundary.</p>
           <ul>

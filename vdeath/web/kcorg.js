@@ -6,6 +6,7 @@
   const cache = new Map();
   let currentData;
   let gammaMode = false;
+  let fitApplied = false;
   let currentView;
   let lastViewWidth = 0;
   let resizeTimer;
@@ -91,6 +92,7 @@
 
   const resetGamma = () => {
     gammaMode = false;
+    fitApplied = false;
     const osaka = document.querySelector('input.area[value="jp271004"]');
     if (osaka) {
       osaka.disabled = false;
@@ -100,6 +102,7 @@
     document.getElementById('gamma-toggle').textContent = text.gamma_apply;
     document.getElementById('osaka-gamma-note').hidden = true;
     document.getElementById('gamma-factor').textContent = '—';
+    document.getElementById('fit-toggle').textContent = text.fit_apply;
   };
 
   const configureQuietSlider = () => {
@@ -314,13 +317,10 @@
     const fit2Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit2) : '');
     document.getElementById('c1fit').textContent = gammaMode && fit1Text ? fit1Text : '—';
     document.getElementById('c2fit').textContent = gammaMode && fit2Text ? fit2Text : '—';
-    let gammaFactor = null;
-    if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
-      gammaFactor = fit2.k / fit1.k;
-    }
-    if (gammaMode) {
-      // fit未成立時もGamma表示を維持し、補正値は観測hazardと同値にする。
-      // Keep gamma display active without a fit; adjusted hazard then equals observed hazard.
+    const gammaReady = gammaMode && endWeeks >= 4 && fit1 && fit2;
+    if (gammaReady) {
+      // quiet windowからthetaを推定できたときだけGamma補正値を作る。
+      // Build gamma-adjusted values only when theta was estimated from the quiet window.
       series1 = adjustedSeries(series1, fit1);
       series2 = adjustedSeries(series2, fit2);
     }
@@ -338,28 +338,33 @@
       adjusted1: map1.get(date)?.adjusted ?? null,
       adjusted2: map2.get(date)?.adjusted ?? null
     }));
-    const fitRows = wide.slice(0, endWeeks);
-    const denominator = fitRows.reduce((sum, row) => sum + row.deaths1 * row.deaths1, 0);
-    const baselineFactor = endWeeks >= 4 && denominator > 0
-      ? fitRows.reduce((sum, row) => sum + row.deaths1 * row.deaths2, 0) / denominator
-      : null;
-    return {gammaFactor, baselineFactor, wide};
+    // 累積開始後の第4週を基準にKCORを1へ正規化する。
+    // Normalize KCOR to 1 at the fourth accumulated week.
+    const anchor = wide[3];
+    const factorNumerator = gammaReady ? anchor?.adjusted2 : anchor?.deaths2;
+    const factorDenominator = gammaReady ? anchor?.adjusted1 : anchor?.deaths1;
+    const fitFactor = Number.isFinite(factorNumerator) && Number.isFinite(factorDenominator) && factorDenominator > 0
+      ? factorNumerator / factorDenominator : null;
+    return {fitFactor, gammaReady, wide};
   };
 
   async function render() {
     if (!currentData) return;
-    const {wide, gammaFactor, baselineFactor} = prepareWide();
+    const {wide, fitFactor, gammaReady} = prepareWide();
     if (!wide.length) {
       document.getElementById('view').replaceChildren();
       status(text.no_fit);
       return;
     }
     status('');
-    document.getElementById('gamma-factor').textContent = gammaMode && gammaFactor
-      ? text.gamma_factor.replace('%{factor}', gammaFactor.toFixed(4))
-      : (!gammaMode && baselineFactor ? text.baseline_factor.replace('%{factor}', baselineFactor.toFixed(4)) : '—');
+    const availableFactor = gammaMode ? (gammaReady ? fitFactor : null) : fitFactor;
+    const fitButton = document.getElementById('fit-toggle');
+    fitButton.disabled = !availableFactor;
+    fitButton.textContent = fitApplied ? text.fit_remove : text.fit_apply;
+    document.getElementById('gamma-factor').textContent = fitApplied && availableFactor
+      ? (gammaMode ? text.gamma_factor : text.baseline_factor).replace('%{factor}', availableFactor.toFixed(4)) : '—';
     const adjustedMode = gammaMode;
-    const displayFactor = adjustedMode ? (gammaFactor || 1) : (baselineFactor || 1);
+    const displayFactor = fitApplied && availableFactor ? availableFactor : 1;
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
@@ -369,9 +374,9 @@
     quietRow.style.width = `${viewWidth}px`;
     const xDomain = [document.querySelector('#cutoff select').value, wide.at(-1).date];
     const commonX = {field: 'date', type: 'temporal', title: text.date, scale: {domain: xDomain}, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
-    const line = (field, color, width, opacity, title, scale = 1) => ({
+    const line = (field, color, width, opacity, title, scale = 1, strokeDash = null) => ({
       transform: scale === 1 ? [] : [{calculate: `datum.${field} * ${scale}`, as: `${field}_display`}],
-      mark: {type: 'line', stroke: color, strokeWidth: width, opacity},
+      mark: {type: 'line', stroke: color, strokeWidth: width, opacity, ...(strokeDash ? {strokeDash} : {})},
       encoding: {
         x: commonX,
         y: {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title: adjustedMode ? text.cumulative_hazard : text.cumulative_deaths, scale: {zero: true}},
@@ -381,20 +386,22 @@
         ]
       }
     });
-    const gammaScale = gammaFactor || 1;
+    const gammaScale = fitApplied && fitFactor ? fitFactor : 1;
     const topLayers = adjustedMode
       ? [
-          line('observed1', 'blue', 1.2, 0.65, `${text.cohort1} ${text.observed}`),
-          line('observed2', 'red', 1.2, 0.65, `${text.cohort2} ${text.observed}`),
-          line('adjusted1', 'blue', 3.2, 1, `${text.cohort1} ${text.adjusted}`, gammaScale),
-          line('adjusted2', 'red', 3.2, 1, `${text.cohort2} ${text.adjusted}`)
+          line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`),
+          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`),
+          ...(gammaReady ? [
+            line('adjusted1', 'blue', 3, 1, `${text.cohort1} ${text.adjusted}`, gammaScale, [8, 5]),
+            line('adjusted2', 'red', 3, 1, `${text.cohort2} ${text.adjusted}`, 1, [8, 5])
+          ] : [])
         ]
       : [
-          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, baselineFactor || 1),
+          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, displayFactor),
           line('deaths2', 'red', 2.4, 1, `${text.cohort2}`)
         ];
-    const numerator = adjustedMode ? 'datum.adjusted2' : 'datum.deaths2';
-    const denominator = adjustedMode ? 'datum.adjusted1' : 'datum.deaths1';
+    const numerator = gammaReady ? 'datum.adjusted2' : (adjustedMode ? 'datum.observed2' : 'datum.deaths2');
+    const denominator = gammaReady ? 'datum.adjusted1' : (adjustedMode ? 'datum.observed1' : 'datum.deaths1');
     const quietDate = document.getElementById('quiet-end-value').textContent;
     topLayers.push({
       data: {values: [{date: xDomain[0]}]},
@@ -510,19 +517,24 @@
       quietEnd.onpointerup = finishQuietDrag;
       quietEnd.onpointercancel = finishQuietDrag;
       quietEnd.oninput = () => {
+        fitApplied = false;
         updateQuietLabel();
         moveQuietMarker();
         if (Number(quietEnd.value) > 0) {
           document.getElementById('c1fit').textContent = text.fitting;
           document.getElementById('c2fit').textContent = text.fitting;
         }
-        if (gammaMode && Number(quietEnd.value) > 0) {
-          document.getElementById('gamma-factor').textContent = text.fitting;
-        }
+        document.getElementById('gamma-factor').textContent = '—';
+        document.getElementById('fit-toggle').textContent = text.fit_apply;
         if (!quietDragging) scheduleRender(80);
       };
       quietEnd.onchange = () => scheduleRender(0);
+      document.getElementById('fit-toggle').onclick = () => {
+        fitApplied = !fitApplied;
+        render();
+      };
       document.getElementById('gamma-toggle').onclick = () => {
+        fitApplied = false;
         if (gammaMode) {
           resetGamma();
         } else {
