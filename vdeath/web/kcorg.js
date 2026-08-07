@@ -394,20 +394,24 @@
         ]
       }
     });
-    const gammaScale = availableFactor || 1;
     const topLayers = adjustedMode
-      ? [
+      ? (gammaReady ? [
+          line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`, 1, [16, 3]),
+          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`, 1, [16, 3]),
+          line('adjusted1', 'blue', 2.4, 1, `${text.cohort1} ${text.adjusted}`, displayFactor),
+          line('adjusted2', 'red', 2.4, 1, `${text.cohort2} ${text.adjusted}`)
+        ] : [
           line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`),
-          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`),
-          ...(gammaReady ? [
-            line('adjusted1', 'blue', 4.2, 1, `${text.cohort1} ${text.adjusted}`, gammaScale, [16, 3]),
-            line('adjusted2', 'red', 4.2, 1, `${text.cohort2} ${text.adjusted}`, 1, [16, 3])
-          ] : [])
-        ]
-      : [
+          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`)
+        ])
+      : (availableFactor ? [
+          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, 1, [16, 3]),
           line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, displayFactor),
           line('deaths2', 'red', 2.4, 1, `${text.cohort2}`)
-        ];
+        ] : [
+          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`),
+          line('deaths2', 'red', 2.4, 1, `${text.cohort2}`)
+        ]);
     const numerator = gammaReady ? 'datum.adjusted2' : (adjustedMode ? 'datum.observed2' : 'datum.deaths2');
     const denominator = gammaReady ? 'datum.adjusted1' : (adjustedMode ? 'datum.observed1' : 'datum.deaths1');
     const quietStartDate = document.getElementById('quiet-start-value').textContent;
