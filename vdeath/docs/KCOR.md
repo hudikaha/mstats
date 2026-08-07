@@ -67,8 +67,12 @@ When only `--risk-output` is supplied, the program emits only the G-format outpu
 model by nonlinear least squares for each area, cutoff, age, and dose group within a
 quiet window. [`kcorg.rb`](https://medicalfacts.info/kcorg.rb) applies gamma inversion
 with the fitted theta and displays adjusted cumulative hazards and their cohort ratio.
-The ratio directly divides the adjusted cumulative hazard of cohort 2 by that of
-cohort 1; no manual scaling is applied.
+The initial view shows observed cumulative hazards and an always-visible quiet-window
+end-week slider.
+After gamma adjustment is enabled, the browser refits `theta` and `k` from the cutoff
+through the selected end week. Observed lines remain thin, adjusted lines are added in
+bold, and cohort 1 is automatically normalized by `k2/k1`. Manual level adjustment is
+No manual level adjustment is used.
 Osaka cannot be selected because it has no risk set.
 
 ```text
