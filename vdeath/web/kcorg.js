@@ -257,7 +257,7 @@
 
   const adjustedSeries = (series, fit) => series.map(row => ({
     ...row,
-    adjusted: Math.abs(fit.theta) < 1.0e-12
+    adjusted: !fit || Math.abs(fit.theta) < 1.0e-12
       ? row.observed
       : Math.expm1(fit.theta * row.observed) / fit.theta
   }));
@@ -280,10 +280,12 @@
     let gammaFactor = null;
     if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
       gammaFactor = fit2.k / fit1.k;
-      if (gammaMode) {
-        series1 = adjustedSeries(series1, fit1);
-        series2 = adjustedSeries(series2, fit2);
-      }
+    }
+    if (gammaMode) {
+      // fit未成立時もGamma表示を維持し、補正値は観測hazardと同値にする。
+      // Keep gamma display active without a fit; adjusted hazard then equals observed hazard.
+      series1 = adjustedSeries(series1, fit1);
+      series2 = adjustedSeries(series2, fit2);
     }
     const map1 = new Map(series1.map(row => [row.date, row]));
     const map2 = new Map(series2.map(row => [row.date, row]));
@@ -317,8 +319,8 @@
     document.getElementById('gamma-factor').textContent = gammaMode && gammaFactor
       ? text.gamma_factor.replace('%{factor}', gammaFactor.toFixed(4))
       : (!gammaMode && baselineFactor ? text.baseline_factor.replace('%{factor}', baselineFactor.toFixed(4)) : '—');
-    const adjustedMode = gammaMode && gammaFactor;
-    const displayFactor = adjustedMode ? gammaFactor : (baselineFactor || 1);
+    const adjustedMode = gammaMode;
+    const displayFactor = adjustedMode ? (gammaFactor || 1) : (baselineFactor || 1);
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
@@ -464,6 +466,8 @@
       quietEnd.onchange = quietEnd.oninput;
       document.getElementById('gamma-toggle').onclick = () => {
         gammaMode = !gammaMode;
+        quietEnd.value = 0;
+        updateQuietLabel();
         document.getElementById('gamma-toggle').textContent = gammaMode ? text.gamma_remove : text.gamma_apply;
         render();
       };
