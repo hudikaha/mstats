@@ -90,7 +90,7 @@
   const resetGamma = () => {
     gammaMode = false;
     document.getElementById('gamma-toggle').textContent = text.gamma_apply;
-    document.getElementById('gamma-factor').textContent = '';
+    document.getElementById('gamma-factor').textContent = '—';
   };
 
   const configureQuietSlider = () => {
@@ -275,8 +275,8 @@
     const fit2 = fitGamma(series2, endWeeks);
     const fit1Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit1) : '');
     const fit2Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit2) : '');
-    document.getElementById('c1fit').textContent = gammaMode ? fit1Text : '';
-    document.getElementById('c2fit').textContent = gammaMode ? fit2Text : '';
+    document.getElementById('c1fit').textContent = gammaMode && fit1Text ? fit1Text : '—';
+    document.getElementById('c2fit').textContent = gammaMode && fit2Text ? fit2Text : '—';
     let gammaFactor = null;
     if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
       gammaFactor = fit2.k / fit1.k;
@@ -316,7 +316,7 @@
     status('');
     document.getElementById('gamma-factor').textContent = gammaMode && gammaFactor
       ? text.gamma_factor.replace('%{factor}', gammaFactor.toFixed(4))
-      : (!gammaMode && baselineFactor ? text.baseline_factor.replace('%{factor}', baselineFactor.toFixed(4)) : '');
+      : (!gammaMode && baselineFactor ? text.baseline_factor.replace('%{factor}', baselineFactor.toFixed(4)) : '—');
     const adjustedMode = gammaMode && gammaFactor;
     const displayFactor = adjustedMode ? gammaFactor : (baselineFactor || 1);
     const viewWidth = document.getElementById('view').clientWidth || 1020;
@@ -342,10 +342,10 @@
     });
     const topLayers = adjustedMode
       ? [
-          line('observed1', 'blue', 1.2, 0.4, `${text.cohort1} ${text.observed}`),
-          line('observed2', 'red', 1.2, 0.4, `${text.cohort2} ${text.observed}`),
           line('adjusted1', 'blue', 3.2, 1, `${text.cohort1} ${text.adjusted}`, gammaFactor),
-          line('adjusted2', 'red', 3.2, 1, `${text.cohort2} ${text.adjusted}`)
+          line('adjusted2', 'red', 3.2, 1, `${text.cohort2} ${text.adjusted}`),
+          line('observed1', 'blue', 1.2, 0.65, `${text.cohort1} ${text.observed}`),
+          line('observed2', 'red', 1.2, 0.65, `${text.cohort2} ${text.observed}`)
         ]
       : [
           line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, baselineFactor || 1),

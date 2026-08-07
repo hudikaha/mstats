@@ -77,9 +77,14 @@ print <<~HTML
     <div class="kcor-row"><span class="kcor-label">#{text[:cutoff]}:</span><span id="cutoff"></span></div>
     <div class="kcor-row"><span class="kcor-label">#{text[:area]}:</span><span id="area"></span></div>
     <div class="kcor-row"><span class="kcor-label">#{text[:age]}:</span><span id="age"></span></div>
-    <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span><span id="c2fit" class="mono"></span></div>
-    <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span><span id="c1fit" class="mono"></span></div>
-    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><span id="gamma-factor" class="mono"></span></div>
+    <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span></div>
+    <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span></div>
+    <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button></div>
+    <div id="fit-results">
+      <div class="fit-result"><span id="gamma-factor" class="mono">&mdash;</span></div>
+      <div class="fit-result"><span class="cohort2">#{text[:cohort2]} fit:</span><span id="c2fit" class="mono">&mdash;</span></div>
+      <div class="fit-result"><span class="cohort1">#{text[:cohort1]} fit:</span><span id="c1fit" class="mono">&mdash;</span></div>
+    </div>
   </div>
   <div id="quiet-row" hidden>
     <div><label class="kcor-label" for="quiet-end">#{text[:quiet_end]}:</label><span id="quiet-end-value" class="mono"></span></div>
