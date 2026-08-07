@@ -532,11 +532,7 @@
       mark: {type: 'line', stroke: color, strokeWidth: width, opacity, ...(strokeDash ? {strokeDash} : {})},
       encoding: {
         x: commonX,
-        y: {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title: adjustedMode ? text.cumulative_hazard : text.cumulative_deaths, scale: {zero: true}},
-        tooltip: [
-          {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
-          {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title, format: adjustedMode ? '.6f' : ',.0f'}
-        ]
+        y: {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title: adjustedMode ? text.cumulative_hazard : text.cumulative_deaths, scale: {zero: true}}
       }
     });
     const topLayers = adjustedMode
@@ -589,29 +585,6 @@
     const quietStartDate = document.getElementById('quiet-start-value').textContent;
     const quietEndDate = document.getElementById('quiet-end-value').textContent;
     const fitEndDate = document.getElementById('fit-end-value').textContent;
-    topLayers.push({
-      data: {values: [{date: xDomain[0]}]},
-      mark: {type: 'rule', stroke: '#010101', opacity: 0},
-      encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}}
-    });
-    topLayers.push({
-      data: {values: [{date: xDomain[1]}]},
-      mark: {type: 'rule', stroke: '#020202', opacity: 0},
-      encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}}
-    });
-    topLayers.push({
-      mark: {type: 'rule', strokeWidth: 12, opacity: 0.001},
-      params: [{name: 'hoverSummary', select: {type: 'point', encodings: ['x'], nearest: true,
-        on: 'mousemove, touchstart, touchmove', clear: 'mouseout, touchend', empty: 'none'}}],
-      encoding: {x: commonX, tooltip: summaryTooltip}
-    }, {
-      transform: [{filter: {param: 'hoverSummary', empty: false}}],
-      mark: {type: 'rule', strokeWidth: 8, opacity: 0.1},
-      encoding: {
-        x: commonX,
-        tooltip: summaryTooltip
-      }
-    });
     if (gammaMode) {
       topLayers.push({
         data: {name: 'quietStartMarker', values: [{date: quietStartDate}]},
@@ -627,6 +600,16 @@
       data: {name: 'fitMarker', values: [{date: fitEndDate}]},
       mark: {type: 'rule', stroke: '#6f42c1', strokeWidth: 2},
       encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}, tooltip: [{field: 'date', type: 'temporal', title: text.fit_end, format: '%Y-%m-%d'}]}
+    });
+    topLayers.push({
+      mark: {type: 'point', strokeWidth: 24, opacity: 0},
+      params: [{name: 'hoverSummary', select: {type: 'point', encodings: ['x'], nearest: true,
+        on: 'mousemove, touchstart, touchmove', clear: 'mouseout, touchend', empty: 'none'}}],
+      encoding: {x: commonX}
+    }, {
+      transform: [{filter: {param: 'hoverSummary', empty: false}}],
+      mark: {type: 'rule', strokeWidth: 8, opacity: 0.1},
+      encoding: {x: commonX, tooltip: summaryTooltip}
     });
     const spec = {
       $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
@@ -655,17 +638,13 @@
       ]
     };
     try {
-      const result = await vegaEmbed('#view', spec, {actions: false, renderer: 'svg'});
+      const result = await vegaEmbed('#view', spec, {actions: false});
       currentView = result.view;
-      const markerX = color => {
-        const marker = [...document.querySelectorAll('#view svg *')]
-          .find(element => getComputedStyle(element).stroke === color);
-        const bounds = marker?.getBoundingClientRect();
-        return bounds ? bounds.left + bounds.width / 2 : null;
-      };
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const firstX = markerX('rgb(1, 1, 1)');
-      const lastX = markerX('rgb(2, 2, 2)');
+      const canvasBounds = document.querySelector('#view canvas')?.getBoundingClientRect();
+      const origin = currentView.origin();
+      const firstX = canvasBounds ? canvasBounds.left + origin[0] : null;
+      const lastX = Number.isFinite(firstX) ? firstX + chartWidth : null;
       if (Number.isFinite(firstX) && Number.isFinite(lastX) && lastX > firstX) {
         const rowLeft = quietRow.getBoundingClientRect().left;
         for (const slider of [quietSlider, fitSlider]) {
