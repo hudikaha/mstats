@@ -44,15 +44,56 @@
 
   const groupKey = (area, age, dose) => `${area}\u0000${age}\u0000${dose}`;
 
+  const selected = className => new Set(
+    [...document.querySelectorAll(`input.${className}:checked`)].map(input => input.value)
+  );
+
+  const buildCheckboxes = (containerId, items, className, defaults) => {
+    const container = document.getElementById(containerId);
+    container.replaceChildren();
+    for (const item of items) {
+      const label = document.createElement('label');
+      label.className = 'inline';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = item.value;
+      checkbox.className = className;
+      checkbox.checked = defaults.has(String(item.value));
+      checkbox.disabled = Boolean(item.disabled);
+      label.append(checkbox, document.createTextNode(item.label));
+      container.append(label);
+    }
+  };
+
   const selectedRows = () => {
-    const area = document.getElementById('area').value;
-    const age = document.getElementById('age').value;
+    const areas = selected('area');
+    const ages = selected('age');
     const dose1 = Number(document.getElementById('c1').value);
     const dose2 = Number(document.getElementById('c2').value);
-    return [
-      currentData.groups.get(groupKey(area, age, dose1)) || [],
-      currentData.groups.get(groupKey(area, age, dose2)) || []
-    ];
+    const aggregate = dose => {
+      const groups = [];
+      for (const area of areas) {
+        for (const age of ages) {
+          const rows = currentData.groups.get(groupKey(area, age, dose));
+          if (rows?.length) groups.push(rows);
+        }
+      }
+      if (!groups.length) return [];
+      const firstDate = groups.map(rows => rows[0].date).sort().at(-1);
+      const lastDate = groups.map(rows => rows.at(-1).date).sort()[0];
+      const totals = new Map();
+      for (const rows of groups) {
+        for (const row of rows) {
+          if (row.date < firstDate || row.date > lastDate) continue;
+          if (!totals.has(row.date)) totals.set(row.date, {date: row.date, at_risk: 0, deaths_week: 0});
+          const total = totals.get(row.date);
+          total.at_risk += row.at_risk;
+          total.deaths_week += row.deaths_week;
+        }
+      }
+      return [...totals.values()].sort((a, b) => a.date.localeCompare(b.date));
+    };
+    return [aggregate(dose1), aggregate(dose2)];
   };
 
   const resetGamma = () => {
@@ -73,8 +114,6 @@
   };
 
   const rebuildControls = previous => {
-    const area = document.getElementById('area');
-    const age = document.getElementById('age');
     const c1 = document.getElementById('c1');
     const c2 = document.getElementById('c2');
     const areas = [...currentData.areas.values()]
@@ -82,36 +121,39 @@
       .map(item => ({value: item.areacode, label: config.language === 'ja' ? item.areaj : item.area}));
     areas.push({value: 'jp271004', label: text.osaka_disabled, disabled: true});
     areas.sort((a, b) => a.value.localeCompare(b.value));
-    replaceOptions(area, areas, previous.area || 'cze');
+    const ages = [...new Set([...currentData.groups.values()].map(rows => rows[0].age))].sort(compareAges);
+    const areaDefaults = previous.areas?.size ? previous.areas : new Set(areas.filter(item => !item.disabled).map(item => item.value));
+    const ageDefaults = previous.ages?.size ? previous.ages : new Set(ages.includes('all') ? ['all'] : ages);
+    buildCheckboxes('area', areas, 'area', areaDefaults);
+    buildCheckboxes('age', ages.map(value => ({value, label: value})), 'age', ageDefaults);
+    const doses = [...new Set([...currentData.groups.values()].map(rows => rows[0].dose))].sort((a, b) => a - b);
+    const doseItems = doses.map(value => ({value, label: String(value)}));
+    replaceOptions(c1, doseItems, previous.c1 ?? 0);
+    replaceOptions(c2, doseItems, previous.c2 ?? 1);
+    if (c1.value === c2.value && doseItems.length > 1) c2.value = doseItems[1].value;
 
-    const rebuildAgeAndDose = (preferredAge, preferredC1, preferredC2) => {
-      const rows = [...currentData.groups.entries()]
-        .filter(([, values]) => values[0]?.areacode === area.value)
-        .map(([, values]) => values[0]);
-      const ages = [...new Set(rows.map(row => row.age))].sort(compareAges);
-      replaceOptions(age, ages.map(value => ({value, label: value})), preferredAge || 'all');
-      const doses = [...new Set(rows.filter(row => row.age === age.value).map(row => row.dose))]
-        .sort((a, b) => a - b);
-      const doseItems = doses.map(value => ({value, label: String(value)}));
-      replaceOptions(c1, doseItems, preferredC1 ?? 0);
-      replaceOptions(c2, doseItems, preferredC2 ?? 1);
-      if (c1.value === c2.value && doseItems.length > 1) c2.value = doseItems[1].value;
-    };
-
-    const resetAndRender = () => { resetGamma(); configureQuietSlider(); render(); };
-    rebuildAgeAndDose(previous.age, previous.c1, previous.c2);
+    const resetAndRender = () => { resetGamma(); configureQuietSlider(); updateQuietLabel(); render(); };
+    document.querySelectorAll('input.area, input.age').forEach(element => {
+      element.oninput = () => {
+        if (element.classList.contains('age') && element.value === 'all' && element.checked) {
+          document.querySelectorAll('input.age').forEach(input => { if (input !== element) input.checked = false; });
+        } else if (element.classList.contains('age') && element.checked) {
+          const all = document.querySelector('input.age[value="all"]');
+          if (all) all.checked = false;
+        }
+        resetAndRender();
+      };
+    });
     configureQuietSlider();
     updateQuietLabel();
-    area.onchange = () => { rebuildAgeAndDose('all', 0, 1); resetAndRender(); };
-    age.onchange = () => { rebuildAgeAndDose(age.value, c1.value, c2.value); resetAndRender(); };
     c1.onchange = resetAndRender;
     c2.onchange = resetAndRender;
   };
 
   const loadCutoff = async cutoff => {
     const previous = {
-      area: document.getElementById('area').value,
-      age: document.getElementById('age').value,
+      areas: currentData ? selected('area') : new Set(),
+      ages: currentData ? selected('age') : new Set(),
       c1: document.getElementById('c1').value,
       c2: document.getElementById('c2').value
     };
@@ -310,6 +352,16 @@
         ];
     const numerator = gammaMode ? 'datum.adjusted2' : 'datum.observed2';
     const denominator = gammaMode ? 'datum.adjusted1' : 'datum.observed1';
+    const quietIndex = Number(document.getElementById('quiet-end').value);
+    const quietDate = wide[quietIndex]?.date || wide.at(-1).date;
+    topLayers.push({
+      data: {values: [{date: quietDate}]},
+      mark: {type: 'rule', stroke: '#087f5b', strokeWidth: 3},
+      encoding: {
+        x: {field: 'date', type: 'temporal'},
+        tooltip: [{field: 'date', type: 'temporal', title: text.quiet_end, format: '%Y-%m-%d'}]
+      }
+    });
     const spec = {
       $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
       config: {title: {fontSize: 16}, axis: {titleFontSize: 15, labelFontSize: 15}},
@@ -354,11 +406,9 @@
       const quietEnd = document.getElementById('quiet-end');
       quietEnd.oninput = () => {
         updateQuietLabel();
-        if (gammaMode) {
-          status(text.fitting);
-          clearTimeout(resizeTimer);
-          resizeTimer = setTimeout(render, 80);
-        }
+        if (gammaMode) status(text.fitting);
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(render, 80);
       };
       document.getElementById('gamma-toggle').onclick = () => {
         gammaMode = !gammaMode;

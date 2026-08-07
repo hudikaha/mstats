@@ -64,6 +64,7 @@ constant-baseline gamma-frailty modelをquiet windowへ非線形最小二乗fitt
 [`kcorg.rb`](https://medicalfacts.info/kcorg.rb)は推定した`theta`でgamma inversionを行い、
 初期表示では観測累積hazardと、fit終了週を選ぶquiet window sliderを表示する。Gamma補正を適用すると、
 fit範囲をcutoffから選択終了週までとしてbrowser内で`theta`と`k`を再推定する。
+複数の地域・年齢を選択した場合は、週初risk人数と週死亡数を週ごとに合算してからfitする。
 観測線を細く残して補正線を太く表示し、`k2/k1`をcohort 1へ掛けて自動的に基準化する。
 手動の水準調整は使用しない。
 大阪市はrisk setがないため選択できない。
