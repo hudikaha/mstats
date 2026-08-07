@@ -186,7 +186,7 @@
       if (row.at_risk <= 0 || row.deaths_week < 0 || row.deaths_week >= row.at_risk) return null;
       deaths += row.deaths_week;
       observed += -Math.log1p(-row.deaths_week / row.at_risk);
-      return {date: row.date, time: index + 1, deaths, observed};
+      return {date: row.date, time: index + 1, deaths, observed, atRisk: row.at_risk};
     }).filter(Boolean);
   };
 
@@ -275,11 +275,11 @@
     const fit2 = fitGamma(series2, endWeeks);
     const fit1Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit1) : '');
     const fit2Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit2) : '');
-    document.getElementById('c1fit').textContent = fit1Text;
-    document.getElementById('c2fit').textContent = fit2Text;
-    let factor = null;
+    document.getElementById('c1fit').textContent = gammaMode ? fit1Text : '';
+    document.getElementById('c2fit').textContent = gammaMode ? fit2Text : '';
+    let gammaFactor = null;
     if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
-      factor = fit2.k / fit1.k;
+      gammaFactor = fit2.k / fit1.k;
       if (gammaMode) {
         series1 = adjustedSeries(series1, fit1);
         series2 = adjustedSeries(series2, fit2);
@@ -288,7 +288,7 @@
     const map1 = new Map(series1.map(row => [row.date, row]));
     const map2 = new Map(series2.map(row => [row.date, row]));
     const dates = [...new Set([...map1.keys(), ...map2.keys()])].sort();
-    return {factor, wide: dates.map(date => ({
+    const wide = dates.map(date => ({
       date,
       observed1: map1.get(date)?.observed ?? null,
       observed2: map2.get(date)?.observed ?? null,
@@ -296,30 +296,38 @@
       deaths2: map2.get(date)?.deaths ?? null,
       adjusted1: map1.get(date)?.adjusted ?? null,
       adjusted2: map2.get(date)?.adjusted ?? null
-    }))};
+    }));
+    const fitRows = wide.slice(0, endWeeks);
+    const denominator = fitRows.reduce((sum, row) => sum + row.deaths1 * row.deaths1, 0);
+    const baselineFactor = endWeeks >= 4 && denominator > 0
+      ? fitRows.reduce((sum, row) => sum + row.deaths1 * row.deaths2, 0) / denominator
+      : null;
+    return {gammaFactor, baselineFactor, wide};
   };
 
   async function render() {
     if (!currentData) return;
-    const {wide, factor} = prepareWide();
+    const {wide, gammaFactor, baselineFactor} = prepareWide();
     if (!wide.length) {
       document.getElementById('view').replaceChildren();
       status(text.no_fit);
       return;
     }
     status('');
-    document.getElementById('gamma-factor').textContent = gammaMode && factor
-      ? text.gamma_factor.replace('%{factor}', factor.toFixed(4)) : '';
-    const adjustedMode = gammaMode && factor;
-    const displayFactor = adjustedMode ? factor : 1;
+    document.getElementById('gamma-factor').textContent = gammaMode && gammaFactor
+      ? text.gamma_factor.replace('%{factor}', gammaFactor.toFixed(4))
+      : (!gammaMode && baselineFactor ? text.baseline_factor.replace('%{factor}', baselineFactor.toFixed(4)) : '');
+    const adjustedMode = gammaMode && gammaFactor;
+    const displayFactor = adjustedMode ? gammaFactor : (baselineFactor || 1);
     const viewWidth = document.getElementById('view').clientWidth || 1020;
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
     const quietRow = document.getElementById('quiet-row');
     const quietEnd = document.getElementById('quiet-end');
+    const quietSlider = document.getElementById('quiet-slider');
     quietRow.style.width = `${viewWidth}px`;
-    quietEnd.style.width = `${chartWidth}px`;
-    const commonX = {field: 'date', type: 'temporal', title: text.date, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
+    const xDomain = [document.querySelector('#cutoff select').value, wide.at(-1).date];
+    const commonX = {field: 'date', type: 'temporal', title: text.date, scale: {domain: xDomain}, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
     const line = (field, color, width, opacity, title, scale = 1) => ({
       transform: scale === 1 ? [] : [{calculate: `datum.${field} * ${scale}`, as: `${field}_display`}],
       mark: {type: 'line', stroke: color, strokeWidth: width, opacity},
@@ -336,11 +344,11 @@
       ? [
           line('observed1', 'blue', 1.2, 0.4, `${text.cohort1} ${text.observed}`),
           line('observed2', 'red', 1.2, 0.4, `${text.cohort2} ${text.observed}`),
-          line('adjusted1', 'blue', 3.2, 1, `${text.cohort1} ${text.adjusted}`, factor),
+          line('adjusted1', 'blue', 3.2, 1, `${text.cohort1} ${text.adjusted}`, gammaFactor),
           line('adjusted2', 'red', 3.2, 1, `${text.cohort2} ${text.adjusted}`)
         ]
       : [
-          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`),
+          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, baselineFactor || 1),
           line('deaths2', 'red', 2.4, 1, `${text.cohort2}`)
         ];
     const numerator = adjustedMode ? 'datum.adjusted2' : 'datum.deaths2';
@@ -350,7 +358,7 @@
       data: {name: 'quietMarker', values: [{date: quietDate}]},
       mark: {type: 'rule', stroke: '#087f5b', strokeWidth: 3},
       encoding: {
-        x: {field: 'date', type: 'temporal'},
+        x: {field: 'date', type: 'temporal', scale: {domain: xDomain}},
         tooltip: [{field: 'date', type: 'temporal', title: text.quiet_end, format: '%Y-%m-%d'}]
       }
     });
@@ -367,7 +375,7 @@
               mark: {type: 'line', stroke: '#111', strokeWidth: 2},
               encoding: {
                 x: commonX,
-                y: {field: 'KCOR_G', type: 'quantitative', title: text.ratio, scale: {zero: true}},
+                y: {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? text.ratio : text.death_ratio, scale: {zero: true}},
                 tooltip: [
                   {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
                   {field: 'KCOR_G', type: 'quantitative', title: adjustedMode ? 'KCOR-G' : 'KCOR', format: '.4f'}
@@ -380,21 +388,53 @@
       ]
     };
     try {
-      const result = await vegaEmbed('#view', spec, {actions: false});
+      const result = await vegaEmbed('#view', spec, {actions: false, renderer: 'svg'});
       currentView = result.view;
-      const origin = typeof currentView.origin === 'function' ? currentView.origin() : [0, 0];
-      quietEnd.style.marginLeft = `${Math.max(0, origin[0])}px`;
+      const markerX = () => {
+        const marker = [...document.querySelectorAll('#view svg *')]
+          .find(element => getComputedStyle(element).stroke === 'rgb(8, 127, 91)');
+        return marker?.getBoundingClientRect().left;
+      };
+      const setMarker = async date => {
+        const changes = vega.changeset().remove(() => true).insert([{date}]);
+        await currentView.change('quietMarker', changes).runAsync();
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return markerX();
+      };
+      const selectedDate = document.getElementById('quiet-end-value').textContent;
+      const firstX = await setMarker(document.querySelector('#cutoff select').value);
+      const lastX = await setMarker(wide.at(-1).date);
+      await setMarker(selectedDate);
+      if (Number.isFinite(firstX) && Number.isFinite(lastX) && lastX > firstX) {
+        const rowLeft = quietRow.getBoundingClientRect().left;
+        quietSlider.style.marginLeft = `${firstX - rowLeft}px`;
+        quietSlider.style.width = `${lastX - firstX}px`;
+        quietSlider.dataset.firstDate = document.querySelector('#cutoff select').value;
+        quietSlider.dataset.lastDate = wide.at(-1).date;
+        updateQuietThumb();
+      }
     } catch (error) {
       console.error(error);
       status(text.load_error);
     }
   }
 
+  const updateQuietThumb = () => {
+    const slider = document.getElementById('quiet-slider');
+    const selected = Date.parse(document.getElementById('quiet-end-value').textContent);
+    const first = Date.parse(slider.dataset.firstDate || '');
+    const last = Date.parse(slider.dataset.lastDate || '');
+    const fraction = Number.isFinite(selected) && Number.isFinite(first) && last > first
+      ? Math.max(0, Math.min(1, (selected - first) / (last - first))) : 0;
+    document.getElementById('quiet-thumb').style.left = `${fraction * 100}%`;
+  };
+
   const updateQuietLabel = () => {
     const [rows] = selectedRows();
     const weeks = Number(document.getElementById('quiet-end').value);
     const cutoff = document.querySelector('#cutoff select')?.value || '';
     document.getElementById('quiet-end-value').textContent = weeks === 0 ? cutoff : (rows[weeks - 1]?.date || cutoff);
+    updateQuietThumb();
   };
 
   const moveQuietMarker = () => {

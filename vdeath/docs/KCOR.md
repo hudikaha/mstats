@@ -71,7 +71,10 @@ The initial view shows cumulative death counts and an always-visible quiet-windo
 end-week slider. Independently of that display, the browser fits `theta` and `k` from
 the cutoff through the selected end week. Applying gamma adjustment switches the chart
 to observed and gamma-adjusted cumulative hazards. The slider moves in one-week steps
-from week 0. Weeks 0–3 do not fit; at four or more weeks, fitting runs whether or not gamma adjustment is
+from week 0. Before gamma display is enabled, weeks four and later fit one constant
+multiplier for cohort 1 by minimizing squared error against cohort 2 over the selected
+interval. One cumulative-death line is displayed per cohort.
+Weeks 0–3 do not fit; at four or more weeks, fitting runs whether or not gamma adjustment is
 displayed. When gamma adjustment is applied, observed lines remain thin, adjusted lines
 are added in bold, and cohort 1 is automatically normalized by `k2/k1`. When multiple
 areas, ages, or doses are selected, weekly risk populations and deaths are summed within

@@ -65,6 +65,8 @@ constant-baseline gamma-frailty modelをquiet windowへ非線形最小二乗fitt
 初期表示では累積死亡人数と、fit終了週を選ぶquiet window sliderを表示する。表示とは独立して、
 fit範囲をcutoffから選択終了週までとしてbrowser内で`theta`と`k`を推定する。Gamma補正を
 適用すると、観測累積hazardとGamma補正後累積hazardの表示へ切り替える。
+Gamma補正前の4週以降は、選択区間内でcohort 1へ一定倍率を掛けたときのcohort 2との
+二乗誤差が最小になる倍率をfitし、各cohortを1本の累積死亡人数線で表示する。
 終了週sliderは0週から1週刻みとし、0〜3週ではfitしない。4週以上ではGamma補正の
 表示状態にかかわらずfitする。複数の地域・年齢・接種回数を選択した場合は、
 週初risk人数と週死亡数を各cohort内で週ごとに合算してからfitする。
