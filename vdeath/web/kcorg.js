@@ -97,7 +97,7 @@
     const [rows1, rows2] = selectedRows();
     const weeks = Math.min(rows1.length, rows2.length);
     const slider = document.getElementById('quiet-end');
-    slider.max = Math.max(0, weeks - 3);
+    slider.max = weeks;
     slider.value = 0;
   };
 
@@ -112,10 +112,10 @@
     const ageDefaults = previous.ages?.size ? previous.ages : new Set(ages.includes('all') ? ['all'] : ages);
     buildCheckboxes('area', areas, 'area', areaDefaults);
     buildCheckboxes('age', ages.map(value => ({value, label: value})), 'age', ageDefaults);
-    const doses = [...new Set([...currentData.groups.values()].map(rows => rows[0].dose))].sort((a, b) => a - b);
+    const doses = [0, 1, 2, 3, 4, 5, 6, 7];
     const doseItems = doses.map(value => ({value, label: String(value)}));
     const c1Defaults = previous.c1?.size ? previous.c1 : new Set(['0']);
-    const c2Defaults = previous.c2?.size ? previous.c2 : new Set(['1']);
+    const c2Defaults = previous.c2?.size ? previous.c2 : new Set(['1', '2']);
     buildCheckboxes('c1', doseItems, 'c1', c1Defaults);
     buildCheckboxes('c2', doseItems, 'c2', c2Defaults);
 
@@ -181,10 +181,12 @@
 
   const observedSeries = rows => {
     let observed = 0;
+    let deaths = 0;
     return rows.map((row, index) => {
       if (row.at_risk <= 0 || row.deaths_week < 0 || row.deaths_week >= row.at_risk) return null;
+      deaths += row.deaths_week;
       observed += -Math.log1p(-row.deaths_week / row.at_risk);
-      return {date: row.date, time: index + 1, observed};
+      return {date: row.date, time: index + 1, deaths, observed};
     }).filter(Boolean);
   };
 
@@ -268,12 +270,13 @@
     const [rows1, rows2] = selectedRows();
     let series1 = observedSeries(rows1);
     let series2 = observedSeries(rows2);
-    const sliderPosition = Number(document.getElementById('quiet-end').value);
-    const endWeeks = sliderPosition === 0 ? 0 : sliderPosition + 3;
+    const endWeeks = Number(document.getElementById('quiet-end').value);
     const fit1 = fitGamma(series1, endWeeks);
     const fit2 = fitGamma(series2, endWeeks);
-    document.getElementById('c1fit').textContent = endWeeks ? fitLabel(fit1) : '';
-    document.getElementById('c2fit').textContent = endWeeks ? fitLabel(fit2) : '';
+    const fit1Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit1) : '');
+    const fit2Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit2) : '');
+    document.getElementById('c1fit').textContent = fit1Text;
+    document.getElementById('c2fit').textContent = fit2Text;
     let factor = null;
     if (fit1 && fit2 && fit1.k > 0 && fit2.k > 0) {
       factor = fit2.k / fit1.k;
@@ -289,6 +292,8 @@
       date,
       observed1: map1.get(date)?.observed ?? null,
       observed2: map2.get(date)?.observed ?? null,
+      deaths1: map1.get(date)?.deaths ?? null,
+      deaths2: map2.get(date)?.deaths ?? null,
       adjusted1: map1.get(date)?.adjusted ?? null,
       adjusted2: map2.get(date)?.adjusted ?? null
     }))};
@@ -314,17 +319,16 @@
     const quietEnd = document.getElementById('quiet-end');
     quietRow.style.width = `${viewWidth}px`;
     quietEnd.style.width = `${chartWidth}px`;
-    quietEnd.style.marginLeft = `${Math.min(75, Math.max(0, viewWidth - chartWidth))}px`;
     const commonX = {field: 'date', type: 'temporal', title: text.date, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
     const line = (field, color, width, opacity, title, scale = 1) => ({
       transform: scale === 1 ? [] : [{calculate: `datum.${field} * ${scale}`, as: `${field}_display`}],
       mark: {type: 'line', stroke: color, strokeWidth: width, opacity},
       encoding: {
         x: commonX,
-        y: {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title: text.cumulative_hazard, scale: {zero: true}},
+        y: {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title: adjustedMode ? text.cumulative_hazard : text.cumulative_deaths, scale: {zero: true}},
         tooltip: [
           {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
-          {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title, format: '.6f'}
+          {field: scale === 1 ? field : `${field}_display`, type: 'quantitative', title, format: adjustedMode ? '.6f' : ',.0f'}
         ]
       }
     });
@@ -336,11 +340,11 @@
           line('adjusted2', 'red', 3.2, 1, `${text.cohort2} ${text.adjusted}`)
         ]
       : [
-          line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`),
-          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`)
+          line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`),
+          line('deaths2', 'red', 2.4, 1, `${text.cohort2}`)
         ];
-    const numerator = adjustedMode ? 'datum.adjusted2' : 'datum.observed2';
-    const denominator = adjustedMode ? 'datum.adjusted1' : 'datum.observed1';
+    const numerator = adjustedMode ? 'datum.adjusted2' : 'datum.deaths2';
+    const denominator = adjustedMode ? 'datum.adjusted1' : 'datum.deaths1';
     const quietDate = document.getElementById('quiet-end-value').textContent;
     topLayers.push({
       data: {name: 'quietMarker', values: [{date: quietDate}]},
@@ -378,6 +382,8 @@
     try {
       const result = await vegaEmbed('#view', spec, {actions: false});
       currentView = result.view;
+      const origin = typeof currentView.origin === 'function' ? currentView.origin() : [0, 0];
+      quietEnd.style.marginLeft = `${Math.max(0, origin[0])}px`;
     } catch (error) {
       console.error(error);
       status(text.load_error);
@@ -386,8 +392,7 @@
 
   const updateQuietLabel = () => {
     const [rows] = selectedRows();
-    const position = Number(document.getElementById('quiet-end').value);
-    const weeks = position === 0 ? 0 : position + 3;
+    const weeks = Number(document.getElementById('quiet-end').value);
     const cutoff = document.querySelector('#cutoff select')?.value || '';
     document.getElementById('quiet-end-value').textContent = weeks === 0 ? cutoff : (rows[weeks - 1]?.date || cutoff);
   };

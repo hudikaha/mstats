@@ -67,11 +67,11 @@ When only `--risk-output` is supplied, the program emits only the G-format outpu
 model by nonlinear least squares for each area, cutoff, age, and dose group within a
 quiet window. [`kcorg.rb`](https://medicalfacts.info/kcorg.rb) applies gamma inversion
 with the fitted theta and displays adjusted cumulative hazards and their cohort ratio.
-The initial view shows observed cumulative hazards and an always-visible quiet-window
-end-week slider.
-After gamma adjustment is enabled, the browser refits `theta` and `k` from the cutoff
-through the selected end week. The slider moves from week 0 to week 4 and then in
-one-week steps. At four or more weeks, fitting runs whether or not gamma adjustment is
+The initial view shows cumulative death counts and an always-visible quiet-window
+end-week slider. Independently of that display, the browser fits `theta` and `k` from
+the cutoff through the selected end week. Applying gamma adjustment switches the chart
+to observed and gamma-adjusted cumulative hazards. The slider moves in one-week steps
+from week 0. Weeks 0–3 do not fit; at four or more weeks, fitting runs whether or not gamma adjustment is
 displayed. When gamma adjustment is applied, observed lines remain thin, adjusted lines
 are added in bold, and cohort 1 is automatically normalized by `k2/k1`. When multiple
 areas, ages, or doses are selected, weekly risk populations and deaths are summed within
