@@ -101,16 +101,21 @@
     osakaCheckedBeforeGamma = false;
     document.getElementById('gamma-toggle').textContent = text.gamma_apply;
     document.getElementById('osaka-gamma-note').hidden = true;
+    document.getElementById('gamma-window-controls').hidden = true;
     document.getElementById('gamma-factor').textContent = '—';
     document.getElementById('fit-toggle').textContent = text.fit_apply;
   };
 
-  const configureQuietSlider = () => {
+  const configureSliders = () => {
     const [rows1, rows2] = selectedRows();
     const weeks = Math.min(rows1.length, rows2.length);
-    const slider = document.getElementById('quiet-end');
-    slider.max = weeks;
-    slider.value = 0;
+    const quietStart = document.getElementById('quiet-start');
+    const quietEnd = document.getElementById('quiet-end');
+    const fitEnd = document.getElementById('fit-end');
+    for (const slider of [quietStart, quietEnd, fitEnd]) slider.max = weeks;
+    quietStart.value = Math.min(4, weeks);
+    quietEnd.value = Math.min(8, weeks);
+    fitEnd.value = 0;
   };
 
   const rebuildControls = previous => {
@@ -134,7 +139,7 @@
     buildCheckboxes('c1', doseItems, 'c1', c1Defaults);
     buildCheckboxes('c2', doseItems, 'c2', c2Defaults);
 
-    const resetAndRender = () => { resetGamma(); configureQuietSlider(); updateQuietLabel(); render(); };
+    const resetAndRender = () => { resetGamma(); configureSliders(); updateSliderLabels(); render(); };
     document.querySelectorAll('input.area, input.age, input.c1, input.c2').forEach(element => {
       element.oninput = () => {
         if (element.classList.contains('age') && element.value === 'all' && element.checked) {
@@ -146,8 +151,8 @@
         resetAndRender();
       };
     });
-    configureQuietSlider();
-    updateQuietLabel();
+    configureSliders();
+    updateSliderLabels();
   };
 
   const loadCutoff = async cutoff => {
@@ -272,8 +277,8 @@
 
   // 日本語: cutoffから選択終了週までの累積hazardへ単純Gamma modelをfitする。
   // English: Fit the simple gamma model to cumulative hazards from cutoff through the selected end week.
-  const fitGamma = (series, endWeeks) => {
-    const points = series.filter(point => point.time <= endWeeks);
+  const fitGamma = (series, startWeek, endWeek) => {
+    const points = series.filter(point => point.time >= startWeek && point.time <= endWeek);
     if (points.length < 4 || points.at(-1).observed <= points[0].observed) return null;
     const thetaMax = 100;
     const grid = Array.from({length: 51}, (_, index) => {
@@ -309,15 +314,18 @@
     const deaths2 = cumulativeDeathsSeries(rows2);
     let series1 = observedSeries(rows1);
     let series2 = observedSeries(rows2);
-    const endWeeks = Number(document.getElementById('quiet-end').value);
+    const quietStart = Number(document.getElementById('quiet-start').value);
+    const quietEnd = Number(document.getElementById('quiet-end').value);
+    const fitEnd = Number(document.getElementById('fit-end').value);
     const gammaEligible = !selected('area').has('jp271004');
-    const fit1 = gammaEligible ? fitGamma(series1, endWeeks) : null;
-    const fit2 = gammaEligible ? fitGamma(series2, endWeeks) : null;
-    const fit1Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit1) : '');
-    const fit2Text = endWeeks > 0 && endWeeks < 4 ? text.fit_wait : (endWeeks ? fitLabel(fit2) : '');
+    const fit1 = gammaEligible ? fitGamma(series1, quietStart, quietEnd) : null;
+    const fit2 = gammaEligible ? fitGamma(series2, quietStart, quietEnd) : null;
+    const quietPoints = quietEnd - quietStart + 1;
+    const fit1Text = quietPoints < 4 ? text.fit_wait : fitLabel(fit1);
+    const fit2Text = quietPoints < 4 ? text.fit_wait : fitLabel(fit2);
     document.getElementById('c1fit').textContent = gammaMode && fit1Text ? fit1Text : '—';
     document.getElementById('c2fit').textContent = gammaMode && fit2Text ? fit2Text : '—';
-    const gammaReady = gammaMode && endWeeks >= 4 && fit1 && fit2;
+    const gammaReady = gammaMode && quietPoints >= 4 && fit1 && fit2;
     if (gammaReady) {
       // quiet windowからthetaを推定できたときだけGamma補正値を作る。
       // Build gamma-adjusted values only when theta was estimated from the quiet window.
@@ -340,7 +348,7 @@
     }));
     // 累積開始後の第4週を基準にKCORを1へ正規化する。
     // Normalize KCOR to 1 at the fourth accumulated week.
-    const anchor = wide[3];
+    const anchor = fitEnd >= 4 ? wide[fitEnd - 1] : null;
     const factorNumerator = gammaReady ? anchor?.adjusted2 : anchor?.deaths2;
     const factorDenominator = gammaReady ? anchor?.adjusted1 : anchor?.deaths1;
     const fitFactor = Number.isFinite(factorNumerator) && Number.isFinite(factorDenominator) && factorDenominator > 0
@@ -369,8 +377,8 @@
     lastViewWidth = viewWidth;
     const chartWidth = Math.min(820, Math.max(180, viewWidth - 180));
     const quietRow = document.getElementById('quiet-row');
-    const quietEnd = document.getElementById('quiet-end');
     const quietSlider = document.getElementById('quiet-slider');
+    const fitSlider = document.getElementById('fit-slider');
     quietRow.style.width = `${viewWidth}px`;
     const xDomain = [document.querySelector('#cutoff select').value, wide.at(-1).date];
     const commonX = {field: 'date', type: 'temporal', title: text.date, scale: {domain: xDomain}, axis: {format: '%Y-%m', tickCount: {interval: 'month', step: 1}}};
@@ -402,7 +410,9 @@
         ];
     const numerator = gammaReady ? 'datum.adjusted2' : (adjustedMode ? 'datum.observed2' : 'datum.deaths2');
     const denominator = gammaReady ? 'datum.adjusted1' : (adjustedMode ? 'datum.observed1' : 'datum.deaths1');
-    const quietDate = document.getElementById('quiet-end-value').textContent;
+    const quietStartDate = document.getElementById('quiet-start-value').textContent;
+    const quietEndDate = document.getElementById('quiet-end-value').textContent;
+    const fitEndDate = document.getElementById('fit-end-value').textContent;
     topLayers.push({
       data: {values: [{date: xDomain[0]}]},
       mark: {type: 'rule', stroke: '#010101', opacity: 0},
@@ -413,13 +423,21 @@
       mark: {type: 'rule', stroke: '#020202', opacity: 0},
       encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}}
     });
+    if (gammaMode) {
+      topLayers.push({
+        data: {name: 'quietStartMarker', values: [{date: quietStartDate}]},
+        mark: {type: 'rule', stroke: '#087f5b', strokeWidth: 2},
+        encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}, tooltip: [{field: 'date', type: 'temporal', title: text.quiet_start, format: '%Y-%m-%d'}]}
+      }, {
+        data: {name: 'quietEndMarker', values: [{date: quietEndDate}]},
+        mark: {type: 'rule', stroke: '#087f5b', strokeWidth: 2},
+        encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}, tooltip: [{field: 'date', type: 'temporal', title: text.quiet_end, format: '%Y-%m-%d'}]}
+      });
+    }
     topLayers.push({
-      data: {name: 'quietMarker', values: [{date: quietDate}]},
-      mark: {type: 'rule', stroke: '#087f5b', strokeWidth: 3},
-      encoding: {
-        x: {field: 'date', type: 'temporal', scale: {domain: xDomain}},
-        tooltip: [{field: 'date', type: 'temporal', title: text.quiet_end, format: '%Y-%m-%d'}]
-      }
+      data: {name: 'fitMarker', values: [{date: fitEndDate}]},
+      mark: {type: 'rule', stroke: '#6f42c1', strokeWidth: 2},
+      encoding: {x: {field: 'date', type: 'temporal', scale: {domain: xDomain}}, tooltip: [{field: 'date', type: 'temporal', title: text.fit_end, format: '%Y-%m-%d'}]}
     });
     const spec = {
       $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
@@ -460,11 +478,13 @@
       const lastX = markerX('rgb(2, 2, 2)');
       if (Number.isFinite(firstX) && Number.isFinite(lastX) && lastX > firstX) {
         const rowLeft = quietRow.getBoundingClientRect().left;
-        quietSlider.style.marginLeft = `${firstX - rowLeft}px`;
-        quietSlider.style.width = `${lastX - firstX}px`;
-        quietSlider.dataset.firstDate = document.querySelector('#cutoff select').value;
-        quietSlider.dataset.lastDate = wide.at(-1).date;
-        updateQuietThumb();
+        for (const slider of [quietSlider, fitSlider]) {
+          slider.style.marginLeft = `${firstX - rowLeft}px`;
+          slider.style.width = `${lastX - firstX}px`;
+          slider.dataset.firstDate = document.querySelector('#cutoff select').value;
+          slider.dataset.lastDate = wide.at(-1).date;
+        }
+        updateSliderThumbs();
       }
     } catch (error) {
       console.error(error);
@@ -472,35 +492,47 @@
     }
   }
 
-  const updateQuietThumb = () => {
-    const slider = document.getElementById('quiet-slider');
-    const selected = Date.parse(document.getElementById('quiet-end-value').textContent);
+  const placeThumb = (sliderId, valueId, thumbId) => {
+    const slider = document.getElementById(sliderId);
+    const selected = Date.parse(document.getElementById(valueId).textContent);
     const first = Date.parse(slider.dataset.firstDate || '');
     const last = Date.parse(slider.dataset.lastDate || '');
     const fraction = Number.isFinite(selected) && Number.isFinite(first) && last > first
       ? Math.max(0, Math.min(1, (selected - first) / (last - first))) : 0;
-    document.getElementById('quiet-thumb').style.left = `${fraction * 100}%`;
+    document.getElementById(thumbId).style.left = `${fraction * 100}%`;
   };
 
-  const updateQuietLabel = () => {
+  const updateSliderThumbs = () => {
+    placeThumb('quiet-slider', 'quiet-start-value', 'quiet-start-thumb');
+    placeThumb('quiet-slider', 'quiet-end-value', 'quiet-end-thumb');
+    placeThumb('fit-slider', 'fit-end-value', 'fit-thumb');
+  };
+
+  const updateSliderLabels = () => {
     const [rows] = selectedRows();
-    const weeks = Number(document.getElementById('quiet-end').value);
     const cutoff = document.querySelector('#cutoff select')?.value || '';
-    document.getElementById('quiet-end-value').textContent = weeks === 0 ? cutoff : (rows[weeks - 1]?.date || cutoff);
-    updateQuietThumb();
+    const dateAt = id => {
+      const week = Number(document.getElementById(id).value);
+      return week === 0 ? cutoff : (rows[week - 1]?.date || cutoff);
+    };
+    document.getElementById('quiet-start-value').textContent = dateAt('quiet-start');
+    document.getElementById('quiet-end-value').textContent = dateAt('quiet-end');
+    document.getElementById('fit-end-value').textContent = dateAt('fit-end');
+    updateSliderThumbs();
   };
 
-  const moveQuietMarker = () => {
+  const moveMarker = (name, date) => {
     if (!currentView || typeof vega === 'undefined') return;
-    const date = document.getElementById('quiet-end-value').textContent;
     if (!date) return;
     const changes = vega.changeset().remove(() => true).insert([{date}]);
-    currentView.change('quietMarker', changes).runAsync();
+    try { currentView.change(name, changes).runAsync(); } catch (_) { /* marker is absent in this mode */ }
   };
 
   const start = async () => {
     try {
+      const quietStart = document.getElementById('quiet-start');
       const quietEnd = document.getElementById('quiet-end');
+      const fitEnd = document.getElementById('fit-end');
       const scheduleRender = delay => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(render, delay);
@@ -510,25 +542,37 @@
         quietDragging = false;
         scheduleRender(0);
       };
-      quietEnd.onpointerdown = () => {
-        quietDragging = true;
-        clearTimeout(resizeTimer);
-      };
-      quietEnd.onpointerup = finishQuietDrag;
-      quietEnd.onpointercancel = finishQuietDrag;
-      quietEnd.oninput = () => {
+      const startDrag = () => { quietDragging = true; clearTimeout(resizeTimer); };
+      for (const slider of [quietStart, quietEnd, fitEnd]) {
+        slider.onpointerdown = startDrag;
+        slider.onpointerup = finishQuietDrag;
+        slider.onpointercancel = finishQuietDrag;
+      }
+      const quietInput = changed => {
+        if (changed === quietStart && Number(quietStart.value) > Number(quietEnd.value)) quietEnd.value = quietStart.value;
+        if (changed === quietEnd && Number(quietEnd.value) < Number(quietStart.value)) quietStart.value = quietEnd.value;
         fitApplied = false;
-        updateQuietLabel();
-        moveQuietMarker();
-        if (Number(quietEnd.value) > 0) {
-          document.getElementById('c1fit').textContent = text.fitting;
-          document.getElementById('c2fit').textContent = text.fitting;
-        }
+        updateSliderLabels();
+        moveMarker('quietStartMarker', document.getElementById('quiet-start-value').textContent);
+        moveMarker('quietEndMarker', document.getElementById('quiet-end-value').textContent);
+        document.getElementById('c1fit').textContent = text.fitting;
+        document.getElementById('c2fit').textContent = text.fitting;
         document.getElementById('gamma-factor').textContent = '—';
         document.getElementById('fit-toggle').textContent = text.fit_apply;
         if (!quietDragging) scheduleRender(80);
       };
-      quietEnd.onchange = () => scheduleRender(0);
+      quietStart.oninput = () => quietInput(quietStart);
+      quietEnd.oninput = () => quietInput(quietEnd);
+      quietStart.onchange = quietEnd.onchange = () => scheduleRender(0);
+      fitEnd.oninput = () => {
+        fitApplied = false;
+        updateSliderLabels();
+        moveMarker('fitMarker', document.getElementById('fit-end-value').textContent);
+        document.getElementById('gamma-factor').textContent = '—';
+        document.getElementById('fit-toggle').textContent = text.fit_apply;
+        if (!quietDragging) scheduleRender(80);
+      };
+      fitEnd.onchange = () => scheduleRender(0);
       document.getElementById('fit-toggle').onclick = () => {
         fitApplied = !fitApplied;
         render();
@@ -546,11 +590,11 @@
             osaka.disabled = true;
           }
         }
-        configureQuietSlider();
-        quietEnd.value = 0;
-        updateQuietLabel();
+        fitEnd.value = 0;
+        updateSliderLabels();
         document.getElementById('gamma-toggle').textContent = gammaMode ? text.gamma_remove : text.gamma_apply;
         document.getElementById('osaka-gamma-note').hidden = !gammaMode;
+        document.getElementById('gamma-window-controls').hidden = !gammaMode;
         render();
       };
       const metadata = await fetchJson({
