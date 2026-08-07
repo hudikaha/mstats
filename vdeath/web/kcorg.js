@@ -381,12 +381,13 @@
         ]
       }
     });
+    const gammaScale = gammaFactor || 1;
     const topLayers = adjustedMode
       ? [
-          line('adjusted1', 'blue', 3.2, 1, `${text.cohort1} ${text.adjusted}`, gammaFactor),
-          line('adjusted2', 'red', 3.2, 1, `${text.cohort2} ${text.adjusted}`),
           line('observed1', 'blue', 1.2, 0.65, `${text.cohort1} ${text.observed}`),
-          line('observed2', 'red', 1.2, 0.65, `${text.cohort2} ${text.observed}`)
+          line('observed2', 'red', 1.2, 0.65, `${text.cohort2} ${text.observed}`),
+          line('adjusted1', 'blue', 3.2, 1, `${text.cohort1} ${text.adjusted}`, gammaScale),
+          line('adjusted2', 'red', 3.2, 1, `${text.cohort2} ${text.adjusted}`)
         ]
       : [
           line('deaths1', 'blue', 2.4, 1, `${text.cohort1}`, baselineFactor || 1),
