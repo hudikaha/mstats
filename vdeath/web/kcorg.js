@@ -394,8 +394,8 @@
           line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`),
           line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`),
           ...(gammaReady ? [
-            line('adjusted1', 'blue', 3, 1, `${text.cohort1} ${text.adjusted}`, gammaScale, [8, 5]),
-            line('adjusted2', 'red', 3, 1, `${text.cohort2} ${text.adjusted}`, 1, [8, 5])
+            line('adjusted1', 'blue', 4.2, 1, `${text.cohort1} ${text.adjusted}`, gammaScale, [16, 3]),
+            line('adjusted2', 'red', 4.2, 1, `${text.cohort2} ${text.adjusted}`, 1, [16, 3])
           ] : [])
         ]
       : [
@@ -486,20 +486,17 @@
     }
   }
 
-  const placeThumb = (sliderId, valueId, thumbId) => {
-    const slider = document.getElementById(sliderId);
-    const selected = Date.parse(document.getElementById(valueId).textContent);
-    const first = Date.parse(slider.dataset.firstDate || '');
-    const last = Date.parse(slider.dataset.lastDate || '');
-    const fraction = Number.isFinite(selected) && Number.isFinite(first) && last > first
-      ? Math.max(0, Math.min(1, (selected - first) / (last - first))) : 0;
+  const placeThumb = (sliderId, inputId, thumbId) => {
+    const input = document.getElementById(inputId);
+    const maximum = Number(input.max);
+    const fraction = maximum > 0 ? Number(input.value) / maximum : 0;
     document.getElementById(thumbId).style.left = `${fraction * 100}%`;
   };
 
   const updateSliderThumbs = () => {
-    placeThumb('quiet-slider', 'quiet-start-value', 'quiet-start-thumb');
-    placeThumb('quiet-slider', 'quiet-end-value', 'quiet-end-thumb');
-    placeThumb('fit-slider', 'fit-end-value', 'fit-thumb');
+    placeThumb('quiet-slider', 'quiet-start', 'quiet-start-thumb');
+    placeThumb('quiet-slider', 'quiet-end', 'quiet-end-thumb');
+    placeThumb('fit-slider', 'fit-end', 'fit-thumb');
   };
 
   const updateSliderLabels = () => {
