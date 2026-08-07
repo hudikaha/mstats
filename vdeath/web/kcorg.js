@@ -9,6 +9,7 @@
   let currentView;
   let lastViewWidth = 0;
   let resizeTimer;
+  let quietDragging = false;
 
   const status = message => {
     const element = document.getElementById('kcor-status');
@@ -102,13 +103,17 @@
   };
 
   const rebuildControls = previous => {
+    const compareAreas = (a, b) => Number(a.areacode === 'cze') - Number(b.areacode === 'cze') ||
+      a.areacode.localeCompare(b.areacode);
     const areas = [...currentData.areas.values()]
-      .sort((a, b) => a.areacode.localeCompare(b.areacode))
+      .sort(compareAreas)
       .map(item => ({value: item.areacode, label: config.language === 'ja' ? item.areaj : item.area}));
     areas.push({value: 'jp271004', label: text.osaka_disabled, disabled: true});
-    areas.sort((a, b) => a.value.localeCompare(b.value));
+    areas.sort((a, b) => Number(a.value === 'cze') - Number(b.value === 'cze') || a.value.localeCompare(b.value));
     const ages = [...new Set([...currentData.groups.values()].map(rows => rows[0].age))].sort(compareAges);
-    const areaDefaults = previous.areas?.size ? previous.areas : new Set(areas.filter(item => !item.disabled).map(item => item.value));
+    const areaDefaults = previous.areas?.size ? previous.areas : new Set(
+      areas.filter(item => !item.disabled && item.value !== 'cze').map(item => item.value)
+    );
     const ageDefaults = previous.ages?.size ? previous.ages : new Set(ages.includes('all') ? ['all'] : ages);
     buildCheckboxes('area', areas, 'area', areaDefaults);
     buildCheckboxes('age', ages.map(value => ({value, label: value})), 'age', ageDefaults);
@@ -450,6 +455,21 @@
   const start = async () => {
     try {
       const quietEnd = document.getElementById('quiet-end');
+      const scheduleRender = delay => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(render, delay);
+      };
+      const finishQuietDrag = () => {
+        if (!quietDragging) return;
+        quietDragging = false;
+        scheduleRender(0);
+      };
+      quietEnd.onpointerdown = () => {
+        quietDragging = true;
+        clearTimeout(resizeTimer);
+      };
+      quietEnd.onpointerup = finishQuietDrag;
+      quietEnd.onpointercancel = finishQuietDrag;
       quietEnd.oninput = () => {
         updateQuietLabel();
         moveQuietMarker();
@@ -460,10 +480,9 @@
         if (gammaMode && Number(quietEnd.value) > 0) {
           document.getElementById('gamma-factor').textContent = text.fitting;
         }
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(render, 80);
+        if (!quietDragging) scheduleRender(80);
       };
-      quietEnd.onchange = quietEnd.oninput;
+      quietEnd.onchange = () => scheduleRender(0);
       document.getElementById('gamma-toggle').onclick = () => {
         gammaMode = !gammaMode;
         quietEnd.value = 0;
