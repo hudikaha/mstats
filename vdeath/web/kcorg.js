@@ -54,7 +54,11 @@
       checkbox.className = className;
       checkbox.checked = defaults.has(String(item.value));
       checkbox.disabled = Boolean(item.disabled);
-      label.append(checkbox, document.createTextNode(item.label));
+      const labelText = document.createElement('span');
+      labelText.className = 'option-label';
+      labelText.textContent = item.label;
+      checkbox.setAttribute('aria-label', item.label);
+      label.append(checkbox, labelText);
       container.append(label);
     }
   };

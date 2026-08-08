@@ -74,15 +74,16 @@ config = {language: $l, elasticsearch_url: 'elastic/kcor/_search', text: text}
 print_header(title: title, iframe: iframe)
 print <<~HTML
   <link rel="stylesheet" href="#{page_name}.css?v=#{asset_version}">
-  <form action="#{page_name}.rb" method="get" class="language-selector">
-    <label><input type="radio" name="l" value="ja" #{'checked' if $l == :ja} onchange="this.form.submit()">日本語</label>
-    <label><input type="radio" name="l" value="en" #{'checked' if $l == :en} onchange="this.form.submit()">English</label>
-    #{'<input type="hidden" name="i" value="true">' if iframe}
-  </form>
   <hr>
   <div id="kcor-controls" hidden>
-    <div class="kcor-row"><span class="kcor-label">#{text[:cutoff]}:</span><span id="cutoff"></span></div>
-    <div class="kcor-row"><span class="kcor-label">#{text[:area]}:</span><span id="area"></span></div>
+    <div class="kcor-row cutoff-row"><span class="kcor-label">#{text[:cutoff]}:</span><span id="cutoff"></span>
+      <form action="#{page_name}.rb" method="get" class="language-selector">
+        <label><input type="radio" name="l" value="ja" #{'checked' if $l == :ja} onchange="this.form.submit()">日本語</label>
+        <label><input type="radio" name="l" value="en" #{'checked' if $l == :en} onchange="this.form.submit()">English</label>
+        #{'<input type="hidden" name="i" value="true">' if iframe}
+      </form>
+    </div>
+    <div class="kcor-row area-row"><span class="kcor-label">#{text[:area]}:</span><span id="area"></span></div>
     <div class="selection-controls">
       <div class="selection-block age-control">
         <div class="kcor-label">#{text[:age]}:</div>
