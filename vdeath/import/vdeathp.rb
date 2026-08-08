@@ -738,35 +738,39 @@ def run_kcor_risk(dataset, opts)
 
   last = dataset.max_death && Date.commercial(dataset.max_death.cwyear, dataset.max_death.cweek, 7)
   cumulative_csv = opts[:output] && CSV.open(opts[:output], 'w')
-  cumulative_csv&.then { |csv| csv << %w[id areacode area areaj cutoff cweek date age dose deaths] }
+  cumulative_csv&.then { |csv| csv << %w[id areacode area areaj cutoff cweek date age dose deaths pop] }
+  risk_csv = opts[:risk_output] && CSV.open(opts[:risk_output], 'w')
+  risk_csv&.then do |csv|
+    csv << %w[id areacode area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
+  end
   begin
-    CSV.open(opts[:risk_output], 'w') do |risk_csv|
-      risk_csv << %w[id areacode area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
-      cutoffs.each do |cutoff|
-        groups_by_cutoff[cutoff].each do |(age, dose), group|
-          at_risk = group[:cohort_size]
-          cumulative = 0
-          date = cutoff + 7
-          while last && date <= last
-            weekly_deaths = group[:deaths][date]
-            weekly_censored = group[:censored][date]
-            cumulative += weekly_deaths
-            cweek = format('%04d-W%02d', date.cwyear, date.cweek)
-            id = [dataset.areacode, cutoff, cweek, age, dose].join('_')
-            risk_csv << [id, dataset.areacode, dataset.area, dataset.areaj, cutoff, cweek, date, age, dose,
-                         group[:cohort_size], at_risk, weekly_deaths, cumulative, weekly_censored]
-            if cumulative_csv && cumulative.positive?
-              cumulative_csv << [id, dataset.areacode, dataset.area, dataset.areaj, cutoff, cweek, date,
-                                 age, dose, cumulative]
-            end
-            at_risk -= weekly_deaths + weekly_censored
-            date += 7
+    cutoffs.each do |cutoff|
+      groups_by_cutoff[cutoff].each do |(age, dose), group|
+        at_risk = group[:cohort_size]
+        cumulative = 0
+        date = cutoff + 7
+        while last && date <= last
+          weekly_deaths = group[:deaths][date]
+          weekly_censored = group[:censored][date]
+          cumulative += weekly_deaths
+          cweek = format('%04d-W%02d', date.cwyear, date.cweek)
+          id = [dataset.areacode, cutoff, cweek, age, dose].join('_')
+          risk_csv&.then do |csv|
+            csv << [id, dataset.areacode, dataset.area, dataset.areaj, cutoff, cweek, date, age, dose,
+                    group[:cohort_size], at_risk, weekly_deaths, cumulative, weekly_censored]
           end
+          cumulative_csv&.then do |csv|
+            csv << [id, dataset.areacode, dataset.area, dataset.areaj, cutoff, cweek, date,
+                    age, dose, cumulative, at_risk]
+          end
+          at_risk -= weekly_deaths + weekly_censored
+          date += 7
         end
       end
     end
   ensure
     cumulative_csv&.close
+    risk_csv&.close
   end
 end
 
@@ -865,7 +869,7 @@ opts = {
   age_reference: nil, age_seed_version: 'v1', open_age_max: 124,
   step_prefix: '', allow_dup_id: false, prohibit_reason_in: false, debug: false, report: nil,
   first_infection_only: false, iso_week_dates: false, skip_source_header: false, risk_output: nil,
-  spread_weekly_dates: nil, legacy_personyear: false,
+  spread_weekly_dates: nil, legacy_personyear: false, death_only: false,
   areacode: nil, area: nil, areaj: nil, command: command
 }
 
@@ -874,6 +878,7 @@ parser = OptionParser.new do |option|
   option.on('--headers FILES', Array) { |value| opts[:headers] = value }
   option.on('-o', '--output FILE') { |value| opts[:output] = value }
   option.on('--risk-output FILE') { |value| opts[:risk_output] = value }
+  option.on('--death-only') { opts[:death_only] = true }
   option.on('--start DATE') { |value| opts[:start] = Date.parse(value) }
   option.on('--until DATE') { |value| opts[:until] = Date.parse(value) }
   option.on('--steps LIST', Array) { |value| opts[:steps] = value }
@@ -910,7 +915,7 @@ dataset = Dataset.new(ARGV, opts[:headers], opts)
 case command
 when 'personyear' then run_personyear(dataset, opts)
 when 'afterdose' then run_afterdose(dataset, opts)
-when 'kcor' then opts[:risk_output] ? run_kcor_risk(dataset, opts) : run_kcor(dataset, opts)
+when 'kcor' then opts[:death_only] ? run_kcor(dataset, opts) : run_kcor_risk(dataset, opts)
 when 'anonymize' then run_anonymize(dataset, opts)
 when 'excess' then run_excess(dataset, opts)
 end

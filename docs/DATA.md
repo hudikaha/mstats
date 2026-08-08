@@ -57,6 +57,11 @@ cohort fixed by age group and dose count at the cutoff. Its source CSV suffix is
 | `age` | keyword | Age group at cutoff, such as `00-09` or `80+` |
 | `dose` | integer | Dose count at cutoff; `0` is the unvaccinated cohort |
 | `deaths` | integer | Cumulative deaths after cutoff and through `date` |
+| `pop` | integer | Observed cohort population at the start of the week; present when derivable from the source |
+
+Series with `pop` include zero-death weeks beginning with the week after the cutoff,
+so weekly deaths can be recovered from consecutive `deaths` values. Osaka has
+death-only source data and therefore has no `pop` field.
 
 The web application queries `/elastic/kcor/_search` for the selected cutoff.
 

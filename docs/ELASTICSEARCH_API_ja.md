@@ -89,7 +89,7 @@ _source:
 | index | 内容 | 主なfield |
 |---|---|---|
 | `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc_code`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
-| `kcor` | cutoff別KCOR集計 | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths` |
+| `kcor` | cutoff別KCOR集計 | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
 | `vdeath` | 年齢区分・接種回数ごとの年齢補正済み接種後死亡分析 | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | 週単位匿名化個票（IND-WKA） | `id`, `vbirthday`, `date_doseN`, `date_death` |
 | `indivdth` | 死亡者のみの週単位匿名化個票（DTH-WKA） | `id`, `vbirthday`, `date_death` |
@@ -198,12 +198,9 @@ curl -sS -H 'Content-Type: application/json' \
 
 ## kcorの検索例
 
-地域、cutoff、年齢、接種回数を指定します。
-大阪市以外のrecordは`series=cumd_wk_g`で、通常KCORの共通fieldに加えて
-`cohort_size`、`at_risk`、`deaths_week`、`censored_week`を持ちます。
-死亡者資料だけの大阪市は`series=cumd_wk`で、これらのrisk-set fieldを持ちません。
-`series=gamma_params`は地域・cutoff・年齢・接種回数ごとのconstant-baseline
-gamma-frailty fitting結果で、`theta`、`k`、`rmse`、`fit_status`、quiet windowを持ちます。
+地域、cutoff、年齢、接種回数を指定します。元資料から週初の観察中人数を算出できるrecordは
+`pop`を持ちます。死亡者資料だけの大阪市には`pop`がありません。週死亡数は同一cohortの
+`deaths`（累積死亡数）の前週差から復元できます。
 
 ```sh
 curl -sS -H 'Content-Type: application/json' \

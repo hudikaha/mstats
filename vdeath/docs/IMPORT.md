@@ -14,7 +14,7 @@ vdeathp.rb excess    [options] INPUT...
 
 - `personyear`: person-time by calendar period, age, and dose
 - `afterdose`: person-time by week since each dose
-- `kcor`: cumulative deaths for cohorts fixed at each cutoff
+- `kcor`: weekly cumulative deaths and, when derivable, week-start `pop` for cohorts fixed at each cutoff
 - `anonymize`: anonymous individual records with entry, exit, death, and dose dates rounded to ISO-week Sundays
 - `excess`: annual deaths and age-standardized results, including long-term records without vaccination histories
 
@@ -40,6 +40,8 @@ dose sequence and counted in the report's `same_week_doses` field.
 for complete periods. `--legacy-personyear` remains available only for comparison.
 `--progress-total PEOPLE` reports phase starts and each 10% of the processed population,
 including row counts and elapsed time, to stderr.
+`kcor --death-only` is reserved for death-only sources and emits legacy cumulative
+deaths without estimating `pop`.
 Municipal CSV files without an embedded header require `--headers`. A CSV with its own header row, including `anonymize` output, can be read again without `--headers`.
 
 The program derives a possible birth-date interval from an exact age, age band, or a

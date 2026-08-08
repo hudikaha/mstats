@@ -147,7 +147,8 @@ $(1):
 	    --output "$(OUT_DIR)/$(2)_PY-WKD.csv" "$$$$anon" || exit $$$$?; \
 	fi; \
 	if needs "$(OUT_DIR)/$(2)_CUMD-WK.csv"; then \
-	  $(RUN) kcor --headers "$$$$headers" $$$$opts --output "$(OUT_DIR)/$(2)_CUMD-WK.csv" $$$$inputs || exit $$$$?; \
+	  $(RUN) kcor $(if $(filter yes,$(7)),,--death-only) --headers "$$$$headers" $$$$opts \
+	    --output "$(OUT_DIR)/$(2)_CUMD-WK.csv" $$$$inputs || exit $$$$?; \
 	fi; \
 	if [[ "$(7)" == yes ]] && needs "$(OUT_DIR)/$(2)_CUMD-WK-G.csv"; then \
 	  $(RUN) kcor --headers "$$$$headers" $$$$opts \

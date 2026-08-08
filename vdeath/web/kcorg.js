@@ -89,9 +89,9 @@
       for (const rows of groups) {
         for (const row of rows) {
           if (row.date < firstDate || row.date > lastDate) continue;
-          if (!totals.has(row.date)) totals.set(row.date, {date: row.date, at_risk: 0, deaths_week: 0});
+          if (!totals.has(row.date)) totals.set(row.date, {date: row.date, pop: 0, deaths_week: 0});
           const total = totals.get(row.date);
-          total.at_risk += row.at_risk;
+          total.pop += row.pop;
           total.deaths_week += row.deaths_week;
         }
       }
@@ -315,7 +315,7 @@
       if (!cache.has(cutoff)) {
         cache.set(cutoff, fetchJson({
           size: 1000000,
-          _source: ['areacode', 'area', 'areaj', 'date', 'age', 'dose', 'at_risk', 'deaths_week', 'deaths'],
+          _source: ['areacode', 'area', 'areaj', 'date', 'age', 'dose', 'pop', 'deaths'],
           query: {bool: {filter: [{term: {cutoff}}, {exists: {field: 'date'}}]}},
           sort: [{date: 'asc'}, {id: 'asc'}]
         }).then(result => {
@@ -324,23 +324,20 @@
           for (const hit of result.hits.hits) {
             const row = hit._source;
             row.dose = Number(row.dose);
-            row.at_risk = Number(row.at_risk);
-            row.deaths_week = Number(row.deaths_week);
+            row.pop = row.pop == null ? 0 : Number(row.pop);
             const key = groupKey(row.areacode, row.age, row.dose);
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push(row);
             areas.set(row.areacode, row);
           }
-          // 大阪のCUMD-WKはrisk人数を持たないため、累積死亡数から週死亡数だけを復元する。
-          // Osaka CUMD-WK lacks risk counts, so recover weekly deaths from cumulative deaths only.
+          // 週死亡数は固定コホートの累積死亡数の前週差から復元する。
+          // Recover weekly deaths from week-to-week differences in fixed-cohort cumulative deaths.
           for (const rows of groups.values()) {
             rows.sort((a, b) => a.date.localeCompare(b.date));
-            if (rows.every(row => Number.isFinite(row.at_risk) && Number.isFinite(row.deaths_week))) continue;
             let previousDeaths = 0;
             for (const row of rows) {
               const deaths = Number(row.deaths) || 0;
               row.deaths_week = Math.max(0, deaths - previousDeaths);
-              row.at_risk = 0;
               previousDeaths = deaths;
             }
           }
@@ -364,10 +361,10 @@
     let observed = 0;
     let deaths = 0;
     return rows.map((row, index) => {
-      if (row.at_risk <= 0 || row.deaths_week < 0 || row.deaths_week >= row.at_risk) return null;
+      if (row.pop <= 0 || row.deaths_week < 0 || row.deaths_week >= row.pop) return null;
       deaths += row.deaths_week;
-      observed += -Math.log1p(-row.deaths_week / row.at_risk);
-      return {date: row.date, time: index + 1, deaths, observed, atRisk: row.at_risk};
+      observed += -Math.log1p(-row.deaths_week / row.pop);
+      return {date: row.date, time: index + 1, deaths, observed, atRisk: row.pop};
     }).filter(Boolean);
   };
 
@@ -937,7 +934,7 @@
       document.getElementById('rr-log').oninput = render;
       const metadata = await fetchJson({
         size: 0,
-        query: {term: {series: 'cumd_wk_g'}},
+        query: {exists: {field: 'date'}},
         aggs: {cutoffs: {terms: {field: 'cutoff', size: 100, order: {_key: 'asc'}}}}
       });
       const cutoffs = metadata.aggregations.cutoffs.buckets.map(bucket => bucket.key_as_string);

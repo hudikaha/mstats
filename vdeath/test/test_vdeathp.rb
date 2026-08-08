@@ -226,6 +226,21 @@ class VdeathpTest < Minitest::Test
     cumulative_rows = CSV.read(cumulative, headers: true)
     matching = cumulative_rows.find { |row| row['id'] == death_risk['id'] }
     assert_equal death_risk['deaths'], matching['deaths']
+    assert_equal death_risk['at_risk'], matching['pop']
+    assert_equal risk_rows.length, cumulative_rows.length
+    assert_equal %w[id areacode area areaj cutoff cweek date age dose deaths pop], cumulative_rows.headers
+    risk_rows.zip(cumulative_rows).each do |risk_row, cumulative_row|
+      assert_equal risk_row['id'], cumulative_row['id']
+      assert_equal risk_row['deaths'], cumulative_row['deaths']
+      assert_equal risk_row['at_risk'], cumulative_row['pop']
+    end
+    risk_rows.group_by { |row| [row['cutoff'], row['age'], row['dose']] }.each_value do |rows|
+      previous = 0
+      rows.each do |row|
+        assert_equal row['deaths_week'].to_i, row['deaths'].to_i - previous
+        previous = row['deaths'].to_i
+      end
+    end
     assert_equal 2, risk_rows.select { |row| row['cweek'] == risk_rows.first['cweek'] }.sum { |row| row['cohort_size'].to_i }
 
     risk_only = File.join(@dir, 'czech-risk-only.csv')
@@ -235,6 +250,16 @@ class VdeathpTest < Minitest::Test
     )
     assert status.success?, "#{stdout}\n#{stderr}"
     assert_equal risk_rows.map(&:to_h), CSV.read(risk_only, headers: true).map(&:to_h)
+
+    death_only = File.join(@dir, 'czech-death-only-kcor.csv')
+    stdout, stderr, status = Open3.capture3(
+      'ruby', SCRIPT, 'kcor', '--death-only', '--output', death_only,
+      '--cutoff-start', '2021-06-01', '--cutoff-until', '2021-06-01', '--ages', 'all', output
+    )
+    assert status.success?, "#{stdout}\n#{stderr}"
+    death_only_rows = CSV.read(death_only, headers: true)
+    assert_equal %w[id areacode area areaj cutoff cweek date age dose deaths], death_only_rows.headers
+    assert death_only_rows.all? { |row| row['deaths'].to_i.positive? }
   end
 
   def test_gamma_fit_recovers_synthetic_frailty

@@ -13,7 +13,7 @@ that reads public datasets does not use `espass.txt`.
 ```text
 public name  Elasticsearch target
 mstats       alias -> mstats20260719
-kcor         alias -> kcor20260807
+kcor         alias -> kcor20260808
 vdeath       index vdeath (age-adjusted vaccination/death data)
 indiv         alias -> indiv20260721 (weekly-anonymized IND)
 indivdth      death-only weekly-anonymized individual records (DTH-WKA)

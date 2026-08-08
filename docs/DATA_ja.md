@@ -52,6 +52,10 @@ IDは原則として地域、期間、category、rate、死因、algo、type、�
 | `age` | keyword | cutoff時点の年齢階級。`00-09`、`80+`など |
 | `dose` | integer | cutoff時点の接種回数。`0`は未接種cohort |
 | `deaths` | integer | cutoffより後、`date`までの累積死亡数 |
+| `pop` | integer | 対象週開始時の観察中cohort人数。算出可能な資料だけに存在 |
+
+`pop`がある系列はcutoff翌週からゼロ死亡週も含むため、`deaths`の前週差から週死亡数を
+復元できます。死亡者資料だけの大阪市には`pop`がありません。
 
 Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrecordを取得します。
 

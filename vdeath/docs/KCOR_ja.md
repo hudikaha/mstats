@@ -15,51 +15,47 @@ vdeath/
 ├── import/
 │   └── vdeathp.rb
 └── config/
-    ├── elasticsearch/kcor2025-mapping.json
+    ├── elasticsearch/kcor20260808-mapping.json
     └── logstash/kcor2025.conf
 ```
 
 ## Elasticsearch
 
-- 実体index名は`kcor2025`、公開・検索用aliasは`kcor`です。
+- 実体index名は`kcor20260808`、公開・検索用aliasは`kcor`です。
 - `kcor.js`は公開API `/elastic/kcor/_search`からcutoff一覧と選択cutoffのrecordを取得します。
 - `index.max_result_window`とbrowserの1回のrequest上限は100万件です。
 - `mstats2026`とはdocument schemaもindexも統合しません。
 - 旧`kkcor` indexは使用しません。
-- `CUMD-WK` CSVの10 fieldをすべて保存します。
+- `CUMD-WK` CSVの11 fieldを保存します。大阪市のrecordだけ`pop`を持ちません。
 
 ```text
-id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths
+id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
 ```
 
-`dose`と`deaths`は整数、`cutoff`と`date`は日付、それ以外はkeywordです。
+`dose`、`deaths`、`pop`は整数、`cutoff`と`date`は日付、それ以外はkeywordです。
 Elasticsearchの`_id`にはCSVの`id`を使用し、`id` fieldも`_source`に残します。
 `kcor.rb`は日本の自治体に加えて、`areacode=cze`のチェコ全国系列も同じ形式で表示します。
 
-## Gamma-frailty用週次risk set
+## Gamma-frailty用週次人口
 
-`CUMD-WK-G`は特定のKCOR versionによる補正結果ではなく、gamma-frailtyを含むKCOR解析で
-共通利用する補正前の週次基礎形式である。`vdeathp.rb kcor --risk-output FILE`は従来の
-`CUMD-WK`と同じcohort走査から次のfieldを出力する。
+`vdeathp.rb kcor --output FILE`が生成する`CUMD-WK`は、元資料から算出できる場合に
+週開始時の観察中人数`pop`を持つ。
 
 ```text
-id, areacode, area, areaj, cutoff, cweek, date, age, dose,
-cohort_size, at_risk, deaths_week, deaths, censored_week
+id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
 ```
 
-- `cohort_size`: cutoff時点の固定cohort人数
-- `at_risk`: 対象週開始時の観察中生存人数
-- `deaths_week`: 対象週の死亡数
 - `deaths`: cutoff後の累積死亡数
-- `censored_week`: 対象週に転出などで観察終了した人数
+- `pop`: 対象週開始時の観察中人数
 
-`theta`、quiet window、補正後hazard、KCOR値は解析versionに依存するため保存しない。
-本番dataは完全な元個票から生成する。死亡者だけの`DTH-WKA`からはrisk setを作れない。
-`--output`を省略して`--risk-output`だけを指定すれば、G形式だけを生成できる。
+`pop`がある系列はcutoff翌週から全週を出力する。対象週の死亡数は同一cohortの`deaths`の
+前週差から復元する。`theta`、quiet window、補正後hazard、KCOR値は解析時に計算し、保存しない。
+死亡者だけの`DTH-WKA`からは`pop`を作れない。従来の`--risk-output`は検証用に利用できる。
+死亡者資料から生成する場合は`--death-only`を明示し、`pop`のない従来形式を出力する。
 
 ## 単純gamma-frailty fitting
 
-`import/kcor_gamma.rb`は`CUMD-WK-G`を読み、area・cutoff・age・doseごとに
+`kcorg.rb`は`CUMD-WK`の`pop`と累積`deaths`から、area・cutoff・age・doseごとに
 constant-baseline gamma-frailty modelをquiet windowへ非線形最小二乗fittingする。
 [`kcorg.rb`](https://medicalfacts.info/kcorg.rb)は推定した`theta`でgamma inversionを行い、
 初期表示では累積死亡人数と、fit終了週を選ぶquiet window sliderを表示する。表示とは独立して、

@@ -14,7 +14,7 @@ vdeathp.rb excess    [options] INPUT...
 
 - `personyear`: 暦月、3箇月、6箇月、全期間の年齢・接種回数別人年集計
 - `afterdose`: 接種後の経過週別人年集計
-- `kcor`: cutoff時点のcohort別累積死亡数
+- `kcor`: cutoff時点の固定cohortについて、週別累積死亡数と算出可能な週初人口`pop`
 - `anonymize`: 転入、転出、死亡、接種日をISO週の日曜へ丸めた匿名個票
 - `excess`: 接種歴を含まない長期個票にも使える年別死亡・年齢調整集計
 
@@ -32,6 +32,7 @@ vdeathp.rb excess    [options] INPUT...
 `--spread-weekly-dates SEED`は週次化された接種日、死亡日、転入日、転出日を、人物IDとISO週に対するSHA-256から月曜〜日曜へ決定的に分散する。同じ人物の同じ週はeventの種類によらず同じ日になる。同一人物に同一ISO週の複数接種がある場合、その人物は不正な接種系列として集計から除外し、reportの`same_week_doses`へ数える。
 `personyear`は人物ごとに観察時系列を一度だけ作り、期間の内部を差分配列で集計する。旧実装との検算が必要な場合だけ`--legacy-personyear`を指定できる。
 `--progress-total PEOPLE`を指定すると、phaseの開始と処理人口10%ごとの人数・経過時間をstderrへ表示する。
+`kcor --death-only`は死亡者資料専用で、`pop`を推定せず従来の累積死亡数だけを出力する。
 `--age-reference`を省略すると、全入力中の最終死亡日の翌日を年齢基準日にする。
 元のheaderを含まない自治体CSVには`--headers`が必要である。`anonymize`出力のように先頭行にheaderを持つCSVは、`--headers`なしで再入力できる。
 
