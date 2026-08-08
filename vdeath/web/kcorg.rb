@@ -100,7 +100,6 @@ print <<~HTML
     </div>
     <div class="kcor-row"><button type="button" id="gamma-toggle">#{text[:gamma_apply]}</button><span id="osaka-gamma-note" hidden><span class="gamma-active-note">#{text[:gamma_active]}</span>#{text[:gamma_separator]}#{text[:osaka_gamma_note]}</span></div>
     <div id="fit-results">
-      <div class="fit-result"><span id="gamma-factor" class="mono">&mdash;</span></div>
       <div class="fit-result gamma-fit-result"><span class="cohort2">#{text[:cohort2]} fit:</span><span id="c2fit" class="mono">&mdash;</span></div>
       <div class="fit-result gamma-fit-result"><span class="cohort1">#{text[:cohort1]} fit:</span><span id="c1fit" class="mono">&mdash;</span></div>
     </div>
@@ -110,7 +109,7 @@ print <<~HTML
       <div><span class="kcor-label">quiet window:</span><span id="quiet-start-value" class="mono"></span> – <span id="quiet-end-value" class="mono"></span></div>
       <div id="quiet-slider" class="chart-slider"><div class="slider-track"><span id="quiet-start-thumb" class="slider-thumb"></span><span id="quiet-end-thumb" class="slider-thumb"></span></div><input id="quiet-start" class="window-range" aria-label="#{text[:quiet_start]}" type="range" min="0" step="1" value="4"><input id="quiet-end" class="window-range" aria-label="#{text[:quiet_end]}" type="range" min="0" step="1" value="8"></div>
     </div>
-    <div><label class="kcor-label" for="fit-end">#{text[:fit_end]}:</label><span id="fit-end-value" class="mono"></span></div>
+    <div><label class="kcor-label" for="fit-end">#{text[:fit_end]}:</label><span id="fit-end-value" class="mono"></span><span id="gamma-factor" class="mono" hidden></span></div>
     <div id="fit-slider" class="chart-slider"><div class="slider-track"><span id="fit-thumb" class="slider-thumb"></span></div><input id="fit-end" class="single-range" type="range" min="0" step="1" value="0"></div>
   </div>
   <div id="kcor-status" role="status">#{text[:loading]}</div>

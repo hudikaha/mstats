@@ -111,7 +111,7 @@
     document.getElementById('gamma-toggle').textContent = text.gamma_apply;
     document.getElementById('osaka-gamma-note').hidden = true;
     document.getElementById('gamma-window-controls').hidden = true;
-    document.getElementById('gamma-factor').textContent = '—';
+    document.getElementById('gamma-factor').hidden = true;
   };
 
   const configureSliders = () => {
@@ -520,8 +520,10 @@
     }
     status('');
     const availableFactor = gammaMode ? (gammaReady ? fitFactor : null) : fitFactor;
-    document.getElementById('gamma-factor').textContent = availableFactor
-      ? (gammaMode ? text.gamma_factor : text.baseline_factor).replace('%{factor}', availableFactor.toFixed(4)) : '—';
+    const gammaFactor = document.getElementById('gamma-factor');
+    gammaFactor.hidden = !availableFactor;
+    gammaFactor.textContent = availableFactor
+      ? (gammaMode ? text.gamma_factor : text.baseline_factor).replace('%{factor}', availableFactor.toFixed(4)) : '';
     const adjustedMode = gammaMode;
     const displayFactor = availableFactor || 1;
     const viewWidth = document.getElementById('view').clientWidth || 1020;
@@ -631,7 +633,7 @@
       $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
       config: {title: {fontSize: 16}, axis: {titleFontSize: 15, labelFontSize: 15}},
       vconcat: [
-        {width: chartWidth, height: 230, data: {values: wide}, layer: topLayers},
+        {width: chartWidth, height: 200, data: {values: wide}, layer: topLayers},
         {
           width: chartWidth, height: 160, data: {values: wide},
           transform: [{calculate: `${rrCondition} ? ${numerator} / (${denominator} * ${displayFactor}) : null`, as: 'KCOR_G'}],
@@ -736,7 +738,7 @@
         moveMarker('quietEndMarker', document.getElementById('quiet-end-value').textContent);
         document.getElementById('c1fit').textContent = text.fitting;
         document.getElementById('c2fit').textContent = text.fitting;
-        document.getElementById('gamma-factor').textContent = '—';
+        document.getElementById('gamma-factor').hidden = true;
         if (!quietDragging) scheduleRender(80);
       };
       quietStart.oninput = () => quietInput(quietStart);
@@ -745,7 +747,7 @@
       fitEnd.oninput = () => {
         updateSliderLabels();
         moveMarker('fitMarker', document.getElementById('fit-end-value').textContent);
-        document.getElementById('gamma-factor').textContent = '—';
+        document.getElementById('gamma-factor').hidden = true;
         if (!quietDragging) scheduleRender(80);
       };
       const finalizeFitEnd = () => {
