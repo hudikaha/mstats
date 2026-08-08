@@ -33,9 +33,19 @@ CZECH_WEEKLY_DATE_SEED ?= v1
 CZECH_SOURCE_ROWS := 12597668
 CZECH_POPULATION_ROWS := 10314685
 WEEKLY_DATE_SEED ?= v1
+CUMD_NAMES := cze_Czech-Republic \
+  jp132101_Koganei-Tokyo-JP jp141500_Sagamihara-Kanagawa-JP \
+  jp221309_Hamamatsu-Shizuoka-JP jp222267_Makinohara-Shizuoka-JP \
+  jp232068_Kasugai-Aichi-JP jp232076_Toyokawa-Aichi-JP \
+  jp271004_Osaka-Osaka-JP jp442054_Saiki-Oita-JP
+CUMD_FILES := $(addprefix $(OUT_DIR)/,$(addsuffix _CUMD-WK.csv,$(CUMD_NAMES)))
+CUMD_POP_FILES := $(filter-out $(OUT_DIR)/jp271004_Osaka-Osaka-JP_CUMD-WK.csv,$(CUMD_FILES))
+CUMD_BACKUP_DIR ?= $(OUT_DIR)/cumd-wk-before-vdeathp
 comma := ,
 
-.PHONY: all cze cze-all cze-ind cze-py cze-afterdose cze-kcor cze-gamma indiv-check indiv indivdth publish-kkcor $(CITIES)
+.PHONY: all cze cze-all cze-ind cze-py cze-afterdose cze-kcor cze-gamma \
+  cumd cumd-backup cumd-check cumd-compare cze-cumd-direct publish-cumd \
+  indiv-check indiv indivdth publish-kkcor $(CITIES) $(addsuffix -cumd-direct,$(CITIES))
 all: $(CITIES)
 
 # 日本語: チェコ公式週次個票を一度共通INDへ正規化し、vdeathとKCORを同じ入力から生成する。
@@ -45,6 +55,15 @@ cze-all: cze cze-afterdose
 cze-ind: $(CZECH_IND)
 cze-py: $(CZECH_PY)
 cze-afterdose: $(CZECH_AFTERDOSE)
+
+# 日本語: 既存INDからチェコの新CUMD-WKだけを再生成し、他の集計物には触れない。
+# English: Regenerate only the Czech CUMD-WK from the existing IND without touching other outputs.
+cze-cumd-direct:
+	@test -s "$(CZECH_IND)"
+	$(RUN) kcor --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
+	  --age-reference 2024-09-02 --progress-total $(CZECH_POPULATION_ROWS) \
+	  --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
+	  --output "$(CZECH_CUMD)" "$(CZECH_IND)"
 
 $(CZECH_IND): $(CZECH_INPUT) $(CZECH_HEADER) $(SCRIPT) Makefile
 	@mkdir -p "$(OUT_DIR)"
@@ -107,6 +126,53 @@ publish-kkcor: indiv-check
 	@for f in $(INDIV_FILES) $(INDIVDTH_FILE); do xz -c "$$f" > "/tmp/mstats-kkcor-upload/$$(basename "$$f").xz"; done
 	scp -p /tmp/mstats-kkcor-upload/*.xz $(KKCOR_HOST):$(KKCOR_DIR)/
 
+# 日本語: 現在のCUMD-WKを比較用directoryへ一度だけ退避する。
+# English: Preserve the current CUMD-WK files once in a comparison directory.
+cumd-backup:
+	@test $(words $(CUMD_FILES)) -eq 9
+	@test ! -e "$(CUMD_BACKUP_DIR)" || { echo "Backup already exists: $(CUMD_BACKUP_DIR)"; exit 1; }
+	@mkdir -p "$(CUMD_BACKUP_DIR)"
+	@cp -p $(CUMD_FILES) "$(CUMD_BACKUP_DIR)/"
+	@echo "Backed up 9 CUMD-WK files to $(CUMD_BACKUP_DIR)"
+
+# 日本語: CUMD-WKだけをvdeathp.rbから直接全系列再生成する。
+# English: Regenerate every CUMD-WK directly with vdeathp.rb and no unrelated outputs.
+cumd: cze-cumd-direct $(addsuffix -cumd-direct,$(CITIES))
+
+cumd-check:
+	@test $(words $(CUMD_FILES)) -eq 9
+	@for f in $(CUMD_FILES); do test -s "$$f" || { echo "Missing: $$f"; exit 1; }; done
+	@for f in $(CUMD_POP_FILES); do \
+	  test "$$(head -1 "$$f")" = 'id,areacode,area,areaj,cutoff,cweek,date,age,dose,deaths,pop' || \
+	    { echo "Unexpected header: $$f"; exit 1; }; \
+	done
+	@test "$$(head -1 "$(OUT_DIR)/jp271004_Osaka-Osaka-JP_CUMD-WK.csv")" = \
+	  'id,areacode,area,areaj,cutoff,cweek,date,age,dose,deaths'
+	@wc -l $(CUMD_FILES)
+
+cumd-compare: cumd-check
+	@test -d "$(CUMD_BACKUP_DIR)" || { echo "Missing backup: $(CUMD_BACKUP_DIR)"; exit 1; }
+	@different=0; \
+	for f in $(CUMD_FILES); do \
+	  old="$(CUMD_BACKUP_DIR)/$$(basename "$$f")"; \
+	  test -s "$$old" || { echo "Missing backup: $$old"; exit 1; }; \
+	  if cmp -s "$$old" "$$f"; then \
+	    echo "Identical: $$(basename "$$f")"; \
+	  else \
+	    echo "Different: $$(basename "$$f")"; \
+	    different=1; \
+	  fi; \
+	done; \
+	exit $$different
+
+# 日本語: 検査済みCUMD-WKだけを専用一時directoryで圧縮して公開する。
+# English: Compress and publish only validated CUMD-WK files from a dedicated temporary directory.
+publish-cumd: cumd-check
+	@upload_dir=$$(mktemp -d /tmp/mstats-cumd-upload.XXXXXX); \
+	trap 'rm -r -- "$$upload_dir"' EXIT; \
+	for f in $(CUMD_FILES); do xz -c "$$f" > "$$upload_dir/$$(basename "$$f").xz"; done; \
+	scp -p "$$upload_dir"/*.xz "$(KKCOR_HOST):$(KKCOR_DIR)/"
+
 indivdth:
 	@test -s "$(INDIVDTH_FILE)"
 	@echo "$(INDIVDTH_INDEX): $(INDIVDTH_FILE)"
@@ -114,7 +180,12 @@ indivdth:
 # 日本語: 自治体ごとの差だけをここで宣言し、生成手順は共通化する。
 # English: Declare only municipality-specific differences here and share the generation procedure.
 define municipality
-.PHONY: $(1)
+.PHONY: $(1) $(1)-cumd-direct
+$(1)-cumd-direct:
+	@mkdir -p "$(OUT_DIR)"
+	$(RUN) kcor $(if $(filter yes,$(7)),,--death-only) --headers "$(5)" $(3) \
+	  --output "$(OUT_DIR)/$(2)_CUMD-WK.csv" $(4)
+
 $(1):
 	@mkdir -p "$(OUT_DIR)" "$(OUT_DIR)/timings"
 	@start=$$$$(date +%s); \

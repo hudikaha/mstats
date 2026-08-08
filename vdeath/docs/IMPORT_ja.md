@@ -62,6 +62,10 @@ make              # 全自治体
 make jp132101     # 小金井市だけ
 make FORCE=1      # 既存出力も再生成
 make cze          # チェコ公式週次個票からvdeathとKCORを生成
+make cumd-backup  # 現在の全CUMD-WKを比較用directoryへ退避
+make cumd         # 他の集計物を触らず全CUMD-WKをvdeathp.rbから直接再生成
+make cumd-compare # 退避版と再生成版を全file比較
+make publish-cumd # 検査済みCUMD-WKをxz圧縮して公開directoryへ転送
 ```
 
 チェコ公式CSVはrepository外の`~/work/vdeath-src/Czech`に置き、53 fieldの対応は

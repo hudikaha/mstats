@@ -74,6 +74,10 @@ make              # all municipalities
 make jp132101     # Koganei only
 make FORCE=1      # regenerate existing outputs
 make cze          # generate vdeath and KCOR from Czech official weekly records
+make cumd-backup  # preserve all current CUMD-WK files for comparison
+make cumd         # regenerate only all CUMD-WK files directly with vdeathp.rb
+make cumd-compare # compare every regenerated file with the preserved version
+make publish-cumd # xz-compress and upload the validated CUMD-WK files
 ```
 
 The Czech official CSV remains outside Git under `~/work/vdeath-src/Czech`. Its 53
