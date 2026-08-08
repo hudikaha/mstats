@@ -544,10 +544,12 @@
     });
     const topLayers = adjustedMode
       ? (gammaReady ? [
-          line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`, 1, [8, 5]),
-          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`, 1, [8, 5]),
           line('adjusted1', 'blue', 2.4, 1, `${text.cohort1} ${text.adjusted}`, displayFactor),
-          line('adjusted2', 'red', 2.4, 1, `${text.cohort2} ${text.adjusted}`)
+          line('adjusted2', 'red', 2.4, 1, `${text.cohort2} ${text.adjusted}`),
+          // 元系列を最後に描き、補正線との差が小さくても破線を確認できるようにする。
+          // Draw originals last so their dashes remain visible even when adjustment is small.
+          line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`, 1, [8, 5]),
+          line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`, 1, [8, 5])
         ] : [
           line('observed1', 'blue', 2.4, 1, `${text.cohort1} ${text.observed}`),
           line('observed2', 'red', 2.4, 1, `${text.cohort2} ${text.observed}`)
