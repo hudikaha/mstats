@@ -59,9 +59,9 @@ Use `--death-only` explicitly for death-only sources to emit the legacy format w
 
 ## Simple gamma-frailty fitting
 
-`kcorg.rb` uses `pop` and cumulative `deaths` from `CUMD-WK` to fit a constant-baseline gamma-frailty
+`kcor.rb` uses `pop` and cumulative `deaths` from `CUMD-WK` to fit a constant-baseline gamma-frailty
 model by nonlinear least squares for each area, cutoff, age, and dose group within a
-quiet window. [`kcorg.rb`](https://medicalfacts.info/kcorg.rb) applies gamma inversion
+quiet window. [`kcor.rb`](https://medicalfacts.info/kcor.rb) applies gamma inversion
 with the fitted theta and displays adjusted cumulative hazards and their cohort ratio.
 The initial view shows cumulative death counts and an always-visible quiet-window
 end-week slider. Independently of that display, the browser fits `theta` and `k` from
@@ -79,7 +79,7 @@ level adjustment is used.
 Osaka cannot be selected because it has no risk set.
 
 ```text
-MR(t)   = deaths_week(t) / at_risk(t)
+MR(t)   = deaths_week(t) / pop(t)
 h(t)    = -log(1 - MR(t))
 Hobs(t) = sum h(t)
 Hobs(t) = log(1 + theta * k * t) / theta

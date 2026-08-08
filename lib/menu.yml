@@ -1,7 +1,4 @@
 - href: kcor.rb
-  ja: Kirsch累積アウトカム比（KCOR）
-  en: Kirsch Cumulative Outcomes Ratio (KCOR)
-- href: kcorg.rb
   ja: Gamma-frailty補正Kirsch累積アウトカム比（KCOR-G）
   en: Gamma-frailty-adjusted Kirsch Cumulative Outcomes Ratio (KCOR-G)
 - href: vdeath.rb

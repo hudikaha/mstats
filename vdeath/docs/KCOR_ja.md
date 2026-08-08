@@ -55,9 +55,9 @@ id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
 
 ## 単純gamma-frailty fitting
 
-`kcorg.rb`は`CUMD-WK`の`pop`と累積`deaths`から、area・cutoff・age・doseごとに
+`kcor.rb`は`CUMD-WK`の`pop`と累積`deaths`から、area・cutoff・age・doseごとに
 constant-baseline gamma-frailty modelをquiet windowへ非線形最小二乗fittingする。
-[`kcorg.rb`](https://medicalfacts.info/kcorg.rb)は推定した`theta`でgamma inversionを行い、
+[`kcor.rb`](https://medicalfacts.info/kcor.rb)は推定した`theta`でgamma inversionを行い、
 初期表示では累積死亡人数と、fit終了週を選ぶquiet window sliderを表示する。表示とは独立して、
 fit範囲をcutoffから選択終了週までとしてbrowser内で`theta`と`k`を推定する。Gamma補正を
 適用すると、観測累積hazardとGamma補正後累積hazardの表示へ切り替える。
@@ -71,7 +71,7 @@ Gamma補正前の4週以降は、選択区間内でcohort 1へ一定倍率を掛
 大阪市はrisk setがないため選択できない。
 
 ```text
-MR(t)   = deaths_week(t) / at_risk(t)
+MR(t)   = deaths_week(t) / pop(t)
 h(t)    = -log(1 - MR(t))
 Hobs(t) = sum h(t)
 Hobs(t) = log(1 + theta * k * t) / theta
