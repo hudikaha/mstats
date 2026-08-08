@@ -55,7 +55,9 @@ IDは原則として地域、期間、category、rate、死因、algo、type、�
 | `pop` | integer | 対象週開始時の観察中cohort人数。算出可能な資料だけに存在 |
 
 `pop`がある系列はcutoff翌週からゼロ死亡週も含むため、`deaths`の前週差から週死亡数を
-復元できます。死亡者資料だけの大阪市には`pop`がありません。
+復元できます。`pop`はcutoff時点で観察中の固定cohortから始まる各週初の観察中人数で、
+その週の死亡者と転出者を次週までに差し引きます。したがって自治体の一般人口ではなく、
+時間とともに減少する固定cohortの人数です。死亡者資料だけの大阪市には`pop`がありません。
 
 Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrecordを取得します。
 

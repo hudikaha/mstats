@@ -60,8 +60,12 @@ cohort fixed by age group and dose count at the cutoff. Its source CSV suffix is
 | `pop` | integer | Observed cohort population at the start of the week; present when derivable from the source |
 
 Series with `pop` include zero-death weeks beginning with the week after the cutoff,
-so weekly deaths can be recovered from consecutive `deaths` values. Osaka has
-death-only source data and therefore has no `pop` field.
+so weekly deaths can be recovered from consecutive `deaths` values. `pop` starts
+with the cohort observed at the cutoff and is the number still under observation
+at the beginning of each week; deaths and move-outs during that week are subtracted
+before the following week. It is therefore a decreasing fixed-cohort population,
+not the municipality's general population. Osaka has death-only source data and
+therefore has no `pop` field.
 
 The web application queries `/elastic/kcor/_search` for the selected cutoff.
 
