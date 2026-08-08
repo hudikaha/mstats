@@ -24,8 +24,8 @@ iframe = %w[1 true].include?(cgi['i'])
 page_name = File.basename($PROGRAM_NAME, '.rb')
 asset_version = %w[js css].map { |extension| File.mtime(File.join(__dir__, "#{page_name}.#{extension}")).to_i }.max
 title = {
-  ja: 'Gamma-frailty補正Kirsch累積アウトカム比（KCOR-G）',
-  en: 'Gamma-frailty-adjusted Kirsch Cumulative Outcomes Ratio (KCOR-G)'
+  ja: 'Kirsch累積アウトカム比（KCOR）Gamma補正対応版',
+  en: 'Kirsch Cumulative Outcomes Ratio (KCOR), with Gamma Adjustment'
 }.fetch($l)
 
 text = {
