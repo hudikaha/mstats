@@ -572,15 +572,23 @@
     const summaryTooltip = [
       {field: 'date', type: 'temporal', title: text.date, format: '%Y-%m-%d'},
       {field: 'summary2', type: 'quantitative', title: text.cohort2, format: summaryFormat},
-      {field: 'summary1', type: 'quantitative', title: text.cohort1, format: summaryFormat},
+      {field: 'summary1Show', type: 'nominal', title: text.cohort1},
       {field: 'summaryRR', type: 'quantitative', title: 'RR', format: '.4f'}
     ];
+    const formatSummary = value => adjustedMode
+      ? Number(value).toFixed(6)
+      : Math.round(Number(value)).toLocaleString('en-US');
     for (const row of wide) {
       const value2 = gammaReady ? row.adjusted2 : (adjustedMode ? row.observed2 : row.deaths2);
       const value1 = gammaReady ? row.adjusted1 : (adjustedMode ? row.observed1 : row.deaths1);
       row.summary1 = Number.isFinite(value1) ? value1 * displayFactor : null;
       row.summary2 = Number.isFinite(value2) ? value2 : null;
       row.summaryRR = row.summary1 > 0 ? row.summary2 / row.summary1 : null;
+      row.summary1Show = Number.isFinite(row.summary1)
+        ? (availableFactor
+            ? `${formatSummary(row.summary1)} (${formatSummary(value1)}×${displayFactor.toFixed(2)})`
+            : formatSummary(row.summary1))
+        : '—';
     }
     const quietStartDate = document.getElementById('quiet-start-value').textContent;
     const quietEndDate = document.getElementById('quiet-end-value').textContent;
