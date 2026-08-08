@@ -227,6 +227,10 @@
   };
 
   const normalizeAgeCheckboxes = changed => {
+    if ((changed.value === 'all' || changed.value === '80+') && !changed.checked) {
+      document.querySelectorAll('input.age').forEach(input => { input.checked = false; });
+      return;
+    }
     if (changed.value === 'all' && changed.checked) {
       document.querySelectorAll('input.age').forEach(input => {
         input.checked = input.value === 'all' || ageRangeValues.includes(input.value);

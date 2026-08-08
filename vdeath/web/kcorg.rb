@@ -80,7 +80,6 @@ print <<~HTML
     #{'<input type="hidden" name="i" value="true">' if iframe}
   </form>
   <hr>
-  <div id="kcor-status" role="status">#{text[:loading]}</div>
   <div id="kcor-controls" hidden>
     <div class="kcor-row"><span class="kcor-label">#{text[:cutoff]}:</span><span id="cutoff"></span></div>
     <div class="kcor-row"><span class="kcor-label">#{text[:area]}:</span><span id="area"></span></div>
@@ -113,6 +112,7 @@ print <<~HTML
     <div><label class="kcor-label" for="fit-end">#{text[:fit_end]}:</label><span id="fit-end-value" class="mono"></span></div>
     <div id="fit-slider" class="chart-slider"><div class="slider-track"><span id="fit-thumb" class="slider-thumb"></span></div><input id="fit-end" class="single-range" type="range" min="0" step="1" value="0"></div>
   </div>
+  <div id="kcor-status" role="status">#{text[:loading]}</div>
   <div id="view"></div>
   <div id="rr-scale-control"><label><input type="checkbox" id="rr-log" checked> #{text[:rr_log]}</label></div>
   <hr>
