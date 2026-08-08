@@ -284,8 +284,8 @@
     else if (checkedEighty) normalizeAgeCheckboxes(checkedEighty);
     const doses = [0, 1, 2, 3, 4, 5, 6, 7];
     const doseItems = doses.map(value => ({value, label: String(value)}));
-    const c1Defaults = previous.c1?.size ? previous.c1 : new Set(['0', '1']);
-    const c2Defaults = previous.c2?.size ? previous.c2 : new Set(['2', '3', '4', '5', '6', '7']);
+    const c1Defaults = previous.c1?.size ? previous.c1 : new Set(['0']);
+    const c2Defaults = previous.c2?.size ? previous.c2 : new Set(['1', '2', '3', '4', '5', '6', '7']);
     buildCheckboxes('c1', doseItems, 'c1', c1Defaults);
     buildCheckboxes('c2', doseItems, 'c2', c2Defaults);
 

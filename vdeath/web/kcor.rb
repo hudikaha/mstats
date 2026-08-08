@@ -93,7 +93,7 @@ print <<~HTML
         </div></div>
       </div>
       <div class="selection-block dose-control">
-        <div id="dose-split-row"><div id="dose-split-slider" class="chart-slider"><div class="slider-track"><span id="dose-split-thumb" class="slider-thumb"></span></div><input id="dose-split" class="single-range" type="range" min="1" max="7" step="1" value="2"></div></div>
+        <div id="dose-split-row"><div id="dose-split-slider" class="chart-slider"><div class="slider-track"><span id="dose-split-thumb" class="slider-thumb"></span></div><input id="dose-split" class="single-range" type="range" min="1" max="7" step="1" value="1"></div></div>
         <div class="kcor-row"><span class="kcor-label cohort2">#{text[:cohort2]} (#{text[:doses]}):</span><span id="c2"></span></div>
         <div class="kcor-row"><span class="kcor-label cohort1">#{text[:cohort1]} (#{text[:doses]}):</span><span id="c1"></span></div>
       </div>
