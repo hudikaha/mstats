@@ -35,7 +35,7 @@ SERVER_WEB_DIR ?= fujikawa/covid19
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all fetch fetch-pop fetch-death fetch-stmf check csv mort-csv stmf-csv upload logstash cod codtr
+.PHONY: help all fetch fetch-pop fetch-death fetch-stmf check csv mort-csv stmf-csv yearly-csv validate-csv upload logstash cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -65,9 +65,7 @@ validate_csv() { \
   duplicates=$$(tail -n +2 "$$file" | cut -d, -f1 | LC_ALL=C sort | uniq -d); \
   [[ -z $$duplicates ]] || { echo "duplicate ids: $$file"; return 1; }; \
   awk -F, -v category="$$category" 'NR > 1 && $$5 != category { exit 1 }' "$$file" || { echo "wrong category: $$file"; return 1; }; \
-  if [[ $$category == pop ]]; then \
-    awk -F, 'NR > 1 && ($$15 == "" || $$21 == "") { exit 1 }' "$$file" || { echo "missing core population value: $$file"; return 1; }; \
-  fi; \
+  ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file" || return 1; \
   periods=$$(tail -n +2 "$$file" | cut -d, -f4 | LC_ALL=C sort -u); \
   first=$$(print -r -- "$$periods" | head -1); last=$$(print -r -- "$$periods" | tail -1); \
   echo "$$category: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
@@ -103,6 +101,8 @@ help:
 	@echo 'make csv      原CSV更新時に月次・週次の日時付き累積CSVを同時生成'
 	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
 	@echo 'make stmf-csv STMF pooled CSVをmstats2026週次CSVへ変換（投入しない）'
+	@echo 'make yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
+	@echo 'make validate-csv FILES="..." 投入前に期間・ID・値・出典を検査'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
 	@echo 'make codtr    make codと同じデータ更新（codtr.rbは年未完の月も表示）'
 	@echo 'make upload   最新の人口・月次死因・週次死因CSVをサーバへ送る'
@@ -258,6 +258,20 @@ stmf-csv:
 	 mv "$$tmp" "$$out"; \
 	 echo "created $$out: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
 	 echo '[stmf-csv] uploadとElasticsearch投入はまだ行いません。'
+
+yearly-csv:
+	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
+	 death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); death=$$death_files[1]; \
+	 test -n "$$pop" -a -n "$$death" || { echo '月次CSVが不足しています。先に make csv を実行してください。'; exit 1; }; \
+	 mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(DATA_DIR)/jp-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 ruby "$(ROOT)/import/jp-yearly.rb" "$$death" "$$pop" > "$$tmp"; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; \
+	 mv "$$tmp" "$$out"; echo "created $$out"
+
+validate-csv:
+	@test -n "$(FILES)" || { echo 'FILES="CSV ..."を指定してください。'; exit 1; }
+	@ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url $(FILES)
 
 upload:
 	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \

@@ -72,6 +72,22 @@ cdeath/out         -> ~/work/mstats/data
 
 ## mstats2026 CSV generation
 
+Before import, validate one or more canonical CSV files together. This checks
+period fields, duplicate IDs, categories, age values, cause-code systems,
+source URLs, and infant-rate/birth-denominator pairs:
+
+```sh
+make validate-csv FILES='out/jp-yearly-mstats2026.csv out/us-infant-yearly-mstats2026.csv'
+```
+
+Annual records have `year` but neither `yearmonth` nor `yearweek`. Monthly and
+weekly consumers explicitly require their own period field, so annual records
+in the same Elasticsearch index are not selected by those screens. Generate a
+complete-year Japanese file from the latest monthly death and population CSVs
+with `make yearly-csv`. Death counts are summed over 12 months; population is a
+days-in-month-weighted annual mean; annual rates are recalculated from those two
+values. Incomplete years are omitted.
+
 Monthly and weekly cause-of-death CSVs in one pass:
 
 ```sh

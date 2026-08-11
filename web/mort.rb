@@ -391,6 +391,7 @@ end
 
 $must = [
     {'term' => {'category' => 'death'}},
+    {'exists' => {'field' => 'yearweek'}},
     {'terms' => {'loc_code' => $locs.map(&:downcase)}},
     {'terms' => {'sex' => $sexes}},
     {'terms' => {'death_code' => $death_codes}},

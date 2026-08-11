@@ -103,6 +103,7 @@ files.each do |file|
             death_code: code,
             death_cause: cause,
             algo: '',
+            src_url: [Mstats2026::JPN_DEATH_URL],
             age_all: '', age_0: '', age_1: '', age_2: '', age_3: '', age_4: '', age_00_04: '', age_05_09: '', age_10_14: '', age_15_19: '', age_20_24: '', age_25_29: '', age_30_34: '', age_35_39: '', age_40_44: '', age_45_49: '', age_50_54: '', age_55_59: '', age_60_64: '', age_65_69: '', age_70_74: '', age_75_79: '', age_80_84: '', age_85_89: '', age_90_94: '', age_95_99: '', age_100over: '', age_unknown: '', age_elementary: '', age_junior: '',
         }
         prev_id = id

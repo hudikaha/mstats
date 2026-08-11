@@ -124,6 +124,8 @@ def monthly_series(deaths, populations)
       derived = raw.dup
       derived[:id] = derived_id
       derived[:rate] = rate
+      derived[:src_url] = (Array(raw[:src_url]) | Array(population[:src_url]) |
+                           Array(standard[:src_url])).reject { |url| url.to_s.empty? }
 
       OUTPUT_AGES.each { |age| derived[age] = nil }
       rate_age_groups(population).each do |target, members|

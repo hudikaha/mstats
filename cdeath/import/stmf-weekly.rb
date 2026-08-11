@@ -103,6 +103,7 @@ source_rows.each do |source|
       death_code: '00000',
       death_cause: 'All causes',
       algo: '',
+      src_url: [Mstats2026::HMD_STMF_URL],
       date: week_date(canonical_code, year, week, extra_week_years).to_s,
       year: year,
       week: week,

@@ -720,6 +720,7 @@ data0 = elastic_search(
         { 'term' => {'category' => 'death'} },
         { 'term' => {'loc_code' => 'jpn'} },
         { 'term' => {'sex' => SexCodes.fetch($sex)} },
+        { 'exists' => {'field' => 'yearmonth'} },
     ],
     :should => death_codes.map{|code| {'term' => {'death_code' => code}}},
     :source => ['date', 'sex', 'death_code'] + source_age_fields,
