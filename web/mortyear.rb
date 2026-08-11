@@ -5,9 +5,14 @@
 require 'cgi'
 require 'csv'
 require 'date'
+require 'digest'
+require 'fileutils'
 require 'json'
 require 'matrix'
 require 'optparse'
+require 'tmpdir'
+require 'time'
+require 'zlib'
 
 mfacts = [
   File.expand_path('lib/mfacts.rb', __dir__),
@@ -40,11 +45,12 @@ METRICS = {
   'deaths' => { ja: '実死亡数', en: 'Observed deaths' },
   'std_deaths' => { ja: '標準人口換算死亡数', en: 'Deaths standardized to the reference population' },
   'crude_rate' => { ja: '粗死亡率', en: 'Crude mortality rate' },
-  'asr' => { ja: '年齢調整死亡率', en: 'Age-standardized mortality rate' }
+  'asr' => { ja: '年齢調整死亡率', en: 'Age-standardized mortality rate' },
+  'birth_rate' => { ja: '出生関連死亡率', en: 'Birth-based mortality rate' }
 }.freeze
 SPECIAL_CAUSES = {
-  'INFANT' => { ja: '乳児死亡', en: 'Infant deaths' },
-  'PERINATAL' => { ja: '周産期死亡（近似）', en: 'Perinatal deaths (approximate)' }
+  'INFANT' => { ja: '乳児死亡率', en: 'Infant mortality rate' },
+  'PERINATAL' => { ja: '周産期死亡率（近似）', en: 'Perinatal mortality rate (approximate)' }
 }.freeze
 
 HMD_URL = 'https://www.mortality.org/Data/STMF'
@@ -53,6 +59,10 @@ ESTAT_POP_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datali
 DAYS_PER_YEAR = 365.2425
 Z95 = 1.959963984540054
 MIN_TRAINING_YEARS = 4
+POISSON_SIMULATIONS = 10_000
+CACHE_SCHEMA = 1
+CACHE_MAX_BYTES = 1024 * 1024 * 1024
+CACHE_MAX_AGE = 30 * 24 * 60 * 60
 
 opts = { index: 'mstats', debug: false, fixture: nil, summary: false }
 OptionParser.new do |parser|
@@ -128,6 +138,7 @@ def metric_available?(code, rates, metric)
   when 'std_deaths' then code == 'JPN' && rates.include?('adj')
   when 'crude_rate' then code != 'JPN' && raw && rates.include?('amr')
   when 'asr' then code == 'JPN' && rates.include?('adj') && rates.include?('amr')
+  when 'birth_rate' then code == 'USA'
   else false
   end
 end
@@ -220,6 +231,184 @@ def poisson_prediction(row, fit, variance_scale = 1.0)
   { expected: rate, lower: lower, upper: upper }
 end
 
+def poisson_random(random, lambda)
+  if lambda < 30.0
+    limit = Math.exp(-lambda)
+    product = 1.0
+    count = 0
+    begin
+      count += 1
+      product *= random.rand
+    end while product > limit
+    return count - 1
+  end
+
+  root = Math.sqrt(lambda)
+  log_lambda = Math.log(lambda)
+  b = 0.931 + 2.53 * root
+  a = -0.059 + 0.02483 * b
+  inverse_alpha = 1.1239 + 1.1328 / (b - 3.4)
+  vr = 0.9277 - 3.6224 / (b - 2.0)
+  loop do
+    u = random.rand - 0.5
+    v = random.rand
+    us = 0.5 - u.abs
+    k = ((2.0 * a / us + b) * u + lambda + 0.43).floor
+    return k if us >= 0.07 && v <= vr
+    next if k.negative? || (us < 0.013 && v > us)
+    return k if Math.log(v * inverse_alpha / (a / (us * us) + b)) <= -lambda + k * log_lambda - Math.lgamma(k + 1).first
+  end
+end
+
+def coefficient_draws(fit, count, random)
+  covariance = fit[:covariance]
+  l00 = Math.sqrt([covariance[0][0], 0.0].max)
+  l10 = covariance[1][0] / l00
+  l11 = Math.sqrt([covariance[1][1] - l10 * l10, 0.0].max)
+  Array.new(count) do
+    radius = Math.sqrt(-2.0 * Math.log([random.rand, Float::MIN].max))
+    angle = 2.0 * Math::PI * random.rand
+    z0 = radius * Math.cos(angle)
+    z1 = radius * Math.sin(angle)
+    [fit[:beta][0] + l00 * z0, fit[:beta][1] + l10 * z0 + l11 * z1]
+  end
+end
+
+def poisson_simulation_predictions(rows, fit, seed)
+  random = Random.new(seed)
+  betas = coefficient_draws(fit, POISSON_SIMULATIONS, random)
+  rows.to_h do |row|
+    x = row[:year] - fit[:center]
+    scale = row.fetch(:unit_scale, 100_000.0)
+    simulations = betas.map do |beta|
+      mu = Math.exp(beta[0] + beta[1] * x) * row[:population]
+      poisson_random(random, mu) / row[:population] * scale
+    end.sort
+    lower = simulations[(POISSON_SIMULATIONS * 0.025).floor]
+    upper = simulations[(POISSON_SIMULATIONS * 0.975).floor - 1]
+    expected = Math.exp(fit[:beta][0] + fit[:beta][1] * x) * scale
+    [[row[:year], row[:death_code]], { expected: expected, lower: lower, upper: upper }]
+  end
+end
+
+def canonical_value(value)
+  case value
+  when Hash
+    value.to_h { |key, item| [key.to_s, canonical_value(item)] }.sort.to_h
+  when Array
+    value.map { |item| canonical_value(item) }
+  else
+    value
+  end
+end
+
+def canonical_json(value)
+  JSON.generate(canonical_value(value))
+end
+
+def gzip_write(path, value)
+  temporary = "#{path}.#{Process.pid}.tmp"
+  Zlib::GzipWriter.open(temporary) { |gzip| gzip.write(JSON.generate(value)) }
+  File.rename(temporary, path)
+end
+
+def gzip_read(path)
+  Zlib::GzipReader.open(path) { |gzip| JSON.parse(gzip.read, symbolize_names: true) }
+end
+
+def cache_root
+  ENV.fetch('MEDICALFACTS_CACHE_ROOT', File.join(Dir.tmpdir, 'medicalfacts-cache'))
+end
+
+def clean_mortyear_cache(namespace)
+  stamp = File.join(namespace, '.cleanup')
+  return if File.file?(stamp) && Time.now - File.mtime(stamp) < 86_400
+
+  FileUtils.mkdir_p(namespace, mode: 0o700)
+  File.open(File.join(namespace, '.cleanup.lock'), File::RDWR | File::CREAT, 0o600) do |lock|
+    return unless lock.flock(File::LOCK_EX | File::LOCK_NB)
+    now = Time.now
+    entries = Dir.glob(File.join(namespace, '[0-9a-f][0-9a-f]', '[0-9a-f]' * 64)).select { |path| File.directory?(path) }
+    entries.each do |entry|
+      access_files = Dir.glob(File.join(entry, 'access*')).select { |path| File.file?(path) }
+      last_used = access_files.empty? ? File.mtime(entry) : access_files.map { |path| File.mtime(path) }.max
+      FileUtils.rm_r(entry) if now - last_used > CACHE_MAX_AGE
+    end
+    entries = entries.select { |entry| File.directory?(entry) }
+    sizes = entries.to_h do |entry|
+      [entry, Dir.glob(File.join(entry, '**', '*'), File::FNM_DOTMATCH).sum { |path| File.file?(path) ? File.size(path) : 0 }]
+    end
+    total = sizes.values.sum
+    if total > CACHE_MAX_BYTES
+      entries.sort_by do |entry|
+        access_files = Dir.glob(File.join(entry, 'access*')).select { |path| File.file?(path) }
+        access_files.empty? ? File.mtime(entry) : access_files.map { |path| File.mtime(path) }.max
+      end.each do |entry|
+        break if total <= CACHE_MAX_BYTES
+        total -= sizes.fetch(entry)
+        FileUtils.rm_r(entry)
+      end
+    end
+    FileUtils.touch(stamp)
+  end
+end
+
+def cached_scenarios(rows, series_key, label)
+  input = rows.map { |row| canonical_value(row) }
+  input_json = canonical_json(input)
+  input_digest = Digest::SHA256.hexdigest(input_json)
+  key_material = canonical_value(
+    cache_schema: CACHE_SCHEMA,
+    algorithm: 'poisson-linear-trend-simulation-v1',
+    simulations: POISSON_SIMULATIONS,
+    series_key: series_key,
+    label: label,
+    input_digest: input_digest,
+    seed_method: 'sha256-series-cutoff-v1'
+  )
+  key_json = canonical_json(key_material)
+  digest = Digest::SHA256.hexdigest(key_json)
+  namespace = File.join(cache_root, "mortyear-v#{CACHE_SCHEMA}")
+  directory = File.join(namespace, digest[0, 2], digest)
+  FileUtils.mkdir_p(directory, mode: 0o700)
+
+  File.open(File.join(directory, 'lock'), File::RDWR | File::CREAT, 0o600) do |lock|
+    lock.flock(File::LOCK_EX)
+    metadata_path = File.join(directory, 'metadata.json')
+    suffix = ''
+    if File.file?(metadata_path)
+      saved = JSON.parse(File.read(metadata_path))
+      suffix = "-#{Digest::SHA512.hexdigest(key_json)}" unless saved['key_material'] == key_material
+    end
+    metadata_path = File.join(directory, "metadata#{suffix}.json")
+    input_path = File.join(directory, "input#{suffix}.json.gz")
+    result_path = File.join(directory, "result#{suffix}.json.gz")
+    access_path = File.join(directory, "access#{suffix}")
+    if File.file?(metadata_path) && File.file?(input_path) && File.file?(result_path)
+      saved = JSON.parse(File.read(metadata_path))
+      if saved['key_material'] == key_material && Digest::SHA256.hexdigest(canonical_json(gzip_read(input_path))) == input_digest
+        FileUtils.touch(access_path)
+        return gzip_read(result_path)
+      end
+    end
+
+    result = yield
+    metadata = {
+      cache_schema: CACHE_SCHEMA, created_at: Time.now.utc.iso8601,
+      key: digest, collision_suffix: suffix.empty? ? nil : suffix.delete_prefix('-'),
+      key_material: key_material
+    }
+    temporary = "#{metadata_path}.#{Process.pid}.tmp"
+    File.write(temporary, JSON.pretty_generate(metadata))
+    File.rename(temporary, metadata_path)
+    gzip_write(input_path, input)
+    gzip_write(result_path, result)
+    FileUtils.touch(access_path)
+    clean_mortyear_cache(namespace)
+    result
+  end
+end
+
 # 日本語: 完全な暦年について週次の実数を日数按分して合計する。
 # English: Prorate weekly counts by days and sum complete calendar years.
 def annualize_weekly_counts(rows, age)
@@ -293,7 +482,7 @@ end
 
 # 日本語: 学習終了年ごとの計算済み系列を生成し、ブラウザは選択だけを行う。
 # English: Precompute every training-cutoff scenario so the browser only switches views.
-def build_scenarios(rows, series_key, label)
+def compute_scenarios(rows, series_key, label)
   return [] if rows.empty?
 
   last_year = rows.map { |row| row[:year] }.max
@@ -305,10 +494,16 @@ def build_scenarios(rows, series_key, label)
   candidates.flat_map do |cutoff|
     training = rows.select { |row| row[:year].between?(2000, cutoff) }
     fit = poisson_fit(training)
+    seed = Digest::SHA256.hexdigest("#{series_key}:#{cutoff}:#{POISSON_SIMULATIONS}")[0, 8].to_i(16)
+    poisson_predictions = poisson_simulation_predictions(rows, fit, seed)
     %w[poisson quasi_poisson].flat_map do |model|
       variance_scale = model == 'quasi_poisson' ? [fit[:dispersion].to_f, 1.0].max : 1.0
       rows.map do |row|
-        prediction = poisson_prediction(row, fit, variance_scale)
+        prediction = if model == 'poisson'
+                       poisson_predictions.fetch([row[:year], row[:death_code]])
+                     else
+                       poisson_prediction(row, fit, variance_scale)
+                     end
         {
           series: series_key, label: label, model: model, train_to: cutoff,
           year: row[:year], observed: row[:observed],
@@ -323,6 +518,12 @@ def build_scenarios(rows, series_key, label)
   end
 end
 
+def build_scenarios(rows, series_key, label, use_cache:)
+  return compute_scenarios(rows, series_key, label) unless use_cache
+
+  cached_scenarios(rows, series_key, label) { compute_scenarios(rows, series_key, label) }
+end
+
 fixture_data = if opts[:fixture]
                  parsed = JSON.parse(File.read(opts[:fixture]), symbolize_names: true)
                  parsed = parsed.dig(:hits, :hits).map { |hit| hit.fetch(:_source) } if parsed.is_a?(Hash) && parsed[:hits]
@@ -330,6 +531,7 @@ fixture_data = if opts[:fixture]
                end
 location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
 metric_locations = location_rates.select { |code, rates| metric_available?(code, rates, selected_metric) }.keys.sort
+metric_locations |= ['USA'] if selected_metric == 'birth_rate' && location_rates.key?('USA')
 available_locations = location_rates.keys.sort
 selected_locations = requested_locations.select { |code| available_locations.include?(code) }
 selected_locations &= metric_locations
@@ -342,10 +544,10 @@ selected_causes = requested_causes.select { |code| available_causes.include?(cod
 selected_causes = ['00000'].select { |code| available_causes.include?(code) } if selected_causes.empty?
 selected_causes = [available_causes.first].compact if selected_causes.empty?
 selected_causes = [selected_causes.first] if mode == 'country'
-if selected_metric == 'deaths' && selected_locations.include?('USA')
-  available_causes |= SPECIAL_CAUSES.keys
+if selected_metric == 'birth_rate' && selected_locations.include?('USA')
+  available_causes = SPECIAL_CAUSES.keys
   selected_causes = requested_causes.select { |code| available_causes.include?(code) }
-  selected_causes = ['00000'] if selected_causes.empty?
+  selected_causes = ['INFANT'] if selected_causes.empty?
   selected_causes = [selected_causes.first] if mode == 'country'
 end
 
@@ -429,8 +631,9 @@ us_special_rows = if File.file?(us_series_file)
                         next unless value
                         urls = row['src_url'].to_s.split('|')
                         urls = urls.take(1) if cause == 'INFANT'
+                        births = row['births'].to_f
                         { loc_code: 'USA', sex: 'both', death_code: cause, year: row['year'].to_i,
-                          deaths: value, population: 1.0, observed: value, unit_scale: 1.0,
+                          deaths: value, population: births, observed: value / births * 1000.0, unit_scale: 1000.0,
                           src_url: urls }
                       end.compact
                     end
@@ -445,7 +648,8 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label|
          else
            annual_by_age.fetch(age).select { |row| row[:loc_code] == loc && row[:death_code] == cause }
          end
-  build_scenarios(rows, series_key, label)
+  build_scenarios(rows, series_key, label,
+                  use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1')
 end
 
 cutoffs = chart_data.map { |row| row[:train_to] }.uniq.sort
@@ -463,12 +667,17 @@ if opts[:summary]
   summary = available_specs.to_h do |key, _age, _cause, label|
     values = chart_data.select { |row| row[:series] == key }
     last_cutoff = values.map { |row| row[:train_to] }.max
+    requested_summary_cutoff = values.map { |row| row[:train_to] }.include?(default_cutoff) ? default_cutoff : last_cutoff
+    poisson_latest = values.select { |row| row[:model] == 'poisson' && row[:train_to] == requested_summary_cutoff }.
+                     max_by { |row| row[:year] }
     latest = values.select { |row| row[:model] == 'quasi_poisson' && row[:train_to] == last_cutoff }.
              max_by { |row| row[:year] }
     [label, {
       years: values.map { |row| row[:year] }.uniq.minmax,
       training_cutoffs: values.map { |row| row[:train_to] }.uniq.sort,
       complete_years: values.map { |row| row[:year] }.uniq.length,
+      poisson: poisson_latest && poisson_latest.slice(:train_to, :year, :observed, :expected, :pi_lower, :pi_upper),
+      poisson_simulations: POISSON_SIMULATIONS,
       latest_quasi_poisson: latest && latest.slice(:year, :observed, :expected, :pi_lower, :pi_upper, :dispersion),
       source_urls: values.flat_map { |row| row[:src_url] }.uniq
     }]
@@ -625,6 +834,8 @@ if chart_data.empty?
 else
   y_axis_title = metric_label
   count_metric = %w[deaths std_deaths].include?(selected_metric)
+  birth_metric = selected_metric == 'birth_rate'
+  denominator_title = birth_metric ? ($l == :ja ? '出生数（近似分母を含む）' : 'Births (including approximate denominator)') : ($l == :ja ? '年平均人口' : 'Mean population')
   approximation_note = if selected_causes.include?('PERINATAL')
                          $l == :ja ? ' 米国の周産期死亡数は、丸められた公表率と出生数から逆算した近似値です。2006年と2010年は欠測のままです。' : ' U.S. perinatal death counts are approximate values reconstructed from rounded published rates and births; 2006 and 2010 remain missing.'
                        else
@@ -663,7 +874,7 @@ else
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   puts <<~HTML
     <p class="mortyear-note">
-      #{ ($l == :ja ? (count_metric ? '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分しました。' : '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分し、人口は週死亡数と年率換算死亡率から逆算した週人口の時間加重平均です。') + ' 青帯は観測分散と回帰係数の不確実性を含む近似95%予測区間です。' : (count_metric ? 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks were prorated by days.' : 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks are prorated by days; annual population is the time-weighted mean of weekly populations inferred from deaths and annualized rates.') + ' The blue band is an approximate 95% prediction interval including observation variance and coefficient uncertainty.') + approximation_note }
+      #{ ($l == :ja ? (birth_metric ? '出生数をoffsetとしたPoisson回帰で、出生1,000当たりを表示しています。' : count_metric ? '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分しました。' : '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分し、人口は週死亡数と年率換算死亡率から逆算した週人口の時間加重平均です。') : (birth_metric ? 'Poisson regression uses births as the offset and displays rates per 1,000 births.' : count_metric ? 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks were prorated by days.' : 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks are prorated by days; annual population is the time-weighted mean of weekly populations inferred from deaths and annualized rates.')) + ($l == :ja ? ' Poissonの青帯は回帰係数と観測変動を含む10,000回シミュレーションによる95%予測区間です。準Poissonは過分散補正による近似95%予測区間です。' : ' The Poisson band is a 95% prediction interval from 10,000 simulations including coefficient and observation uncertainty. The quasi-Poisson band is an approximate overdispersion-adjusted 95% prediction interval.') + approximation_note }
     </p>
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '学習終了年' : 'Training end' }
@@ -673,8 +884,8 @@ else
       &nbsp;
       <label>#{ $l == :ja ? 'モデル' : 'Model' }
         <select id="model-selector">
-          <option value="quasi_poisson">#{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }</option>
-          <option value="poisson">Poisson</option>
+          <option value="poisson">#{ $l == :ja ? 'Poisson（標準）' : 'Poisson (standard)' }</option>
+          <option value="quasi_poisson">#{ $l == :ja ? '準Poisson（感度分析）' : 'Quasi-Poisson (sensitivity)' }</option>
         </select>
       </label>
       &nbsp;
@@ -710,7 +921,7 @@ else
             {field:"pi_lower", type:"quantitative", format:".2f", title:"PI lower"},
             {field:"pi_upper", type:"quantitative", format:".2f", title:"PI upper"},
             {field:"deaths", type:"quantitative", format:",.2f", title:#{JSON.generate($l == :ja ? '年境界按分後死亡数' : 'Prorated deaths')}},
-            {field:"population", type:"quantitative", format:",d", title:#{JSON.generate($l == :ja ? '年平均人口' : 'Mean population')}}
+            {field:"population", type:"quantitative", format:",d", title:#{JSON.generate(denominator_title)}}
             ,{field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}}
           ]}},
           {transform:[{filter:"datum.outside_pi"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
@@ -722,7 +933,7 @@ else
         data: {values},
         params: [
           {name:"train_to", value:trainDefault},
-          {name:"model", value:"quasi_poisson"},
+          {name:"model", value:"poisson"},
           {name:"zero_base", value:false}
         ],
         vconcat: panelSpecs,
