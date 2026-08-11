@@ -29,6 +29,7 @@
       "death_cause": { "type": "keyword" },
       "algo":        { "type": "keyword" },
       "type":        { "type": "keyword" },
+      "src_url":     { "type": "keyword", "index": false, "doc_values": false },
       "date":        { "type": "date", "format": "yyyy-MM-dd" },
       "@timestamp":  { "type": "date" },
       "year":        { "type": "integer" },

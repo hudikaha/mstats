@@ -21,12 +21,12 @@ module Mstats2026
 
   FIELDS = (%w[
     id loc_code location yearmonth category rate death_code death_cause
-    algo type date year month sex
+    algo type src_url date year month sex
   ] + AGE_FIELDS).freeze
 
   WEEKLY_FIELDS = (%w[
     id loc_code location yearweek category rate death_code death_cause
-    algo type date year week sex
+    algo type src_url date year week sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
 
   # フィールド順を固定し、空値を保ったままCSVを出力する。

@@ -24,7 +24,7 @@ mstats = [
 ].find { |path| File.file?(path) }
 abort 'mstats.rb not found' unless mstats
 require mstats
-require './mort-vars.rb'
+require_relative 'mort-vars'
 
 #
 # Debug opttion
