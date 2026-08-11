@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require 'cgi'
+require 'csv'
 require 'date'
 require 'json'
 require 'matrix'
@@ -40,6 +41,10 @@ METRICS = {
   'std_deaths' => { ja: '標準人口換算死亡数', en: 'Deaths standardized to the reference population' },
   'crude_rate' => { ja: '粗死亡率', en: 'Crude mortality rate' },
   'asr' => { ja: '年齢調整死亡率', en: 'Age-standardized mortality rate' }
+}.freeze
+SPECIAL_CAUSES = {
+  'INFANT' => { ja: '乳児死亡', en: 'Infant deaths' },
+  'PERINATAL' => { ja: '周産期死亡（近似）', en: 'Perinatal deaths (approximate)' }
 }.freeze
 
 HMD_URL = 'https://www.mortality.org/Data/STMF'
@@ -337,6 +342,12 @@ selected_causes = requested_causes.select { |code| available_causes.include?(cod
 selected_causes = ['00000'].select { |code| available_causes.include?(code) } if selected_causes.empty?
 selected_causes = [available_causes.first].compact if selected_causes.empty?
 selected_causes = [selected_causes.first] if mode == 'country'
+if selected_metric == 'deaths' && selected_locations.include?('USA')
+  available_causes |= SPECIAL_CAUSES.keys
+  selected_causes = requested_causes.select { |code| available_causes.include?(code) }
+  selected_causes = ['00000'] if selected_causes.empty?
+  selected_causes = [selected_causes.first] if mode == 'country'
+end
 
 locations_for_query = selected_locations.map(&:downcase)
 ages_for_query = mode == 'country' ? [selected_age] : selected_series
@@ -345,7 +356,7 @@ common_filters = [
   { 'term' => { 'category' => 'death' } },
   { 'terms' => { 'loc_code' => locations_for_query } },
   { 'term' => { 'sex' => selected_sex } },
-  { 'terms' => { 'death_code' => selected_causes } },
+  { 'terms' => { 'death_code' => selected_causes.reject { |code| SPECIAL_CAUSES.key?(code) }.yield_self { |codes| codes.empty? ? ['__none__'] : codes } } },
   { 'exists' => { 'field' => 'yearweek' } }
 ]
 
@@ -389,13 +400,13 @@ end
 series_specs = if mode == 'country'
                  selected_locations.map do |loc|
                    cause = selected_causes.first
-                   cause_label = Death_codes.fetch(cause, { ja: cause, en: cause }).fetch($l)
+                   cause_label = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
                    [loc, selected_age, cause, "#{location_names(loc).fetch($l)} — #{cause_label}"]
                  end
                else
                  selected_causes.map do |cause|
                    key = "#{selected_locations.first}-#{selected_age}-#{cause}"
-                   label = Death_codes.fetch(cause, { ja: cause, en: cause }).fetch($l)
+                   label = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
                    [key, selected_age, cause, label]
                  end
                end
@@ -409,9 +420,31 @@ annual_by_age = AGES.keys.to_h do |age|
   [age, annual]
 end
 
+us_series_file = File.expand_path('data/mortyear-us-series.csv', __dir__)
+us_special_rows = if File.file?(us_series_file)
+                    CSV.read(us_series_file, headers: true).flat_map do |row|
+                      SPECIAL_CAUSES.keys.map do |cause|
+                        field = cause == 'INFANT' ? 'infant_deaths' : 'perinatal_deaths'
+                        value = row[field].to_s.match?(/\A(?:|NA|\.)\z/) ? nil : row[field].to_f
+                        next unless value
+                        urls = row['src_url'].to_s.split('|')
+                        urls = urls.take(1) if cause == 'INFANT'
+                        { loc_code: 'USA', sex: 'both', death_code: cause, year: row['year'].to_i,
+                          deaths: value, population: 1.0, observed: value, unit_scale: 1.0,
+                          src_url: urls }
+                      end.compact
+                    end
+                  else
+                    []
+                  end
+
 chart_data = series_specs.flat_map do |series_key, age, cause, label|
   loc = mode == 'country' ? series_key : selected_locations.first
-  rows = annual_by_age.fetch(age).select { |row| row[:loc_code] == loc && row[:death_code] == cause }
+  rows = if SPECIAL_CAUSES.key?(cause)
+           us_special_rows.select { |row| row[:loc_code] == loc && row[:death_code] == cause }
+         else
+           annual_by_age.fetch(age).select { |row| row[:loc_code] == loc && row[:death_code] == cause }
+         end
   build_scenarios(rows, series_key, label)
 end
 
@@ -503,10 +536,10 @@ AGES.each do |age, names|
 end
 puts <<~HTML
     </fieldset><br>
-    <fieldset><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+    <fieldset id="cause-fieldset" style="#{available_causes.length <= 1 ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
 HTML
 available_causes.each do |cause|
-  names = Death_codes.fetch(cause, { ja: cause, en: cause })
+  names = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause }))
   type = mode == 'country' ? 'radio' : 'checkbox'
   puts %(<label><input class="cause-option" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
@@ -592,6 +625,11 @@ if chart_data.empty?
 else
   y_axis_title = metric_label
   count_metric = %w[deaths std_deaths].include?(selected_metric)
+  approximation_note = if selected_causes.include?('PERINATAL')
+                         $l == :ja ? ' 米国の周産期死亡数は、丸められた公表率と出生数から逆算した近似値です。2006年と2010年は欠測のままです。' : ' U.S. perinatal death counts are approximate values reconstructed from rounded published rates and births; 2006 and 2010 remain missing.'
+                       else
+                         ''
+                       end
   sources_by_location = available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
     loc = mode == 'country' ? key : selected_locations.first
     urls = chart_data.select { |row| row[:series] == key }.flat_map { |row| row[:src_url] }.uniq
@@ -625,7 +663,7 @@ else
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   puts <<~HTML
     <p class="mortyear-note">
-      #{ $l == :ja ? (count_metric ? '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分しました。' : '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分し、人口は週死亡数と年率換算死亡率から逆算した週人口の時間加重平均です。') + ' 青帯は観測分散と回帰係数の不確実性を含む近似95%予測区間です。' : (count_metric ? 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks were prorated by days.' : 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks are prorated by days; annual population is the time-weighted mean of weekly populations inferred from deaths and annualized rates.') + ' The blue band is an approximate 95% prediction interval including observation variance and coefficient uncertainty.' }
+      #{ ($l == :ja ? (count_metric ? '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分しました。' : '横軸は2000年以降の完全な暦年だけです。年境界週の死亡数は日数按分し、人口は週死亡数と年率換算死亡率から逆算した週人口の時間加重平均です。') + ' 青帯は観測分散と回帰係数の不確実性を含む近似95%予測区間です。' : (count_metric ? 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks were prorated by days.' : 'Only complete calendar years since 2000 are shown. Deaths in boundary weeks are prorated by days; annual population is the time-weighted mean of weekly populations inferred from deaths and annualized rates.') + ' The blue band is an approximate 95% prediction interval including observation variance and coefficient uncertainty.') + approximation_note }
     </p>
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '学習終了年' : 'Training end' }
