@@ -68,6 +68,7 @@ selected_series = cgi.params.fetch('series', []).flat_map { |value| value.split(
 selected_series = %w[age_all age_00_14 age_65_74 age_85over] if selected_series.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
+requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.uniq
 
 def location_names(code)
   Locs[code] || { ja: code, en: code }
@@ -124,6 +125,30 @@ def metric_available?(code, rates, metric)
   when 'asr' then code == 'JPN' && rates.include?('adj') && rates.include?('amr')
   else false
   end
+end
+
+def available_death_codes(index:, fixture:, locations:, metric:)
+  wanted_rate = %w[std_deaths asr].include?(metric) ? 'adj' : ''
+  if fixture
+    return fixture.select do |row|
+      locations.include?(row[:loc_code].to_s.upcase) && row[:yearweek] && row[:rate].to_s == wanted_rate
+    end.map { |row| row[:death_code].to_s }.uniq.sort
+  end
+  public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
+  uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
+  request = Net::HTTP::Post.new(uri)
+  request.content_type = 'application/json'
+  elastic_basic_auth(request) unless public_index
+  rate_filter = wanted_rate.empty? ? {
+    bool: { should: [{ term: { rate: '' } }, { bool: { must_not: [{ exists: { field: 'rate' } }] } }], minimum_should_match: 1 }
+  } : { term: { rate: wanted_rate } }
+  request.body = JSON.generate(size: 0, query: { bool: { filter: [
+    { term: { category: 'death' } }, { terms: { loc_code: locations.map(&:downcase) } },
+    { exists: { field: 'yearweek' } }, rate_filter
+  ] } }, aggs: { codes: { terms: { field: 'death_code', size: 1000 } } })
+  response = Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(request) }
+  raise "Elasticsearch cause aggregation failed: HTTP #{response.code}: #{response.body}" unless response.is_a?(Net::HTTPSuccess)
+  JSON.parse(response.body).dig('aggregations', 'codes', 'buckets').map { |bucket| bucket['key'] }.sort
 end
 
 # 日本語: 2x2行列の逆行列を、回帰処理で外部gemなしに利用する。
@@ -201,17 +226,17 @@ def annualize_weekly_counts(rows, age)
     next if value.nil?
     week_end = Date.parse(row[:date].to_s)
     (week_end - 6..week_end).group_by(&:year).each do |year, dates|
-      target = annual[[row[:loc_code], row[:sex], year]]
+      target = annual[[row[:loc_code], row[:sex], row[:death_code], year]]
       target[:value] += value.to_f * dates.length / 7.0
       dates.each { |date| target[:covered_days][date] = true }
       target[:src_url] |= Array(row[:src_url]).compact
     end
   end
-  annual.map do |(loc_code, sex, year), values|
+  annual.map do |(loc_code, sex, death_code, year), values|
     required_days = Date.leap?(year) ? 366 : 365
     next unless year >= 2000 && values[:covered_days].length == required_days
     {
-      loc_code: loc_code.upcase, sex: sex, year: year,
+      loc_code: loc_code.upcase, sex: sex, death_code: death_code, year: year,
       deaths: values[:value], population: 1.0, observed: values[:value], unit_scale: 1.0,
       src_url: values[:src_url].empty? ? default_source_urls(loc_code) : values[:src_url]
     }
@@ -221,14 +246,14 @@ end
 # 日本語: 週の7日を暦年へ配分する。死亡数だけを日数按分し、人口は週率から逆算する。
 # English: Split a seven-day week across calendar years; prorate deaths only and infer weekly population from the annualized rate.
 def annualize_weekly(count_rows, rate_rows, age)
-  rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex]], row] }
+  rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
   annual = Hash.new do |hash, key|
     hash[key] = { deaths: 0.0, population_days: 0.0, covered_days: {}, src_url: [] }
   end
 
   count_rows.each do |count|
     value = count[age.to_sym]
-    rate = rates[[count[:loc_code], count[:yearweek], count[:sex]]]
+    rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
     rate_value = rate && rate[age.to_sym]
     next if value.nil? || rate_value.nil? || rate_value.to_f <= 0
 
@@ -236,7 +261,7 @@ def annualize_weekly(count_rows, rate_rows, age)
     week_start = week_end - 6
     weekly_population = value.to_f * DAYS_PER_YEAR * 100_000 / (7 * rate_value.to_f)
     (week_start..week_end).group_by(&:year).each do |year, dates|
-      target = annual[[count[:loc_code], count[:sex], year]]
+      target = annual[[count[:loc_code], count[:sex], count[:death_code], year]]
       target[:deaths] += value.to_f * dates.length / 7.0
       target[:population_days] += weekly_population * dates.length
       dates.each { |date| target[:covered_days][date] = true }
@@ -245,7 +270,7 @@ def annualize_weekly(count_rows, rate_rows, age)
     end
   end
 
-  annual.map do |(loc_code, sex, year), values|
+  annual.map do |(loc_code, sex, death_code, year), values|
     required_days = Date.leap?(year) ? 366 : 365
     next unless year >= 2000 && values[:covered_days].length == required_days
 
@@ -253,7 +278,7 @@ def annualize_weekly(count_rows, rate_rows, age)
     next unless population.positive?
 
     {
-      loc_code: loc_code.upcase, sex: sex, year: year,
+      loc_code: loc_code.upcase, sex: sex, death_code: death_code, year: year,
       deaths: values[:deaths], population: population,
       observed: values[:deaths] / population * 100_000, unit_scale: 100_000.0,
       src_url: values[:src_url].empty? ? default_source_urls(loc_code) : values[:src_url]
@@ -306,6 +331,12 @@ selected_locations &= metric_locations
 selected_locations = %w[DEU SWE ENG].select { |code| metric_locations.include?(code) } if selected_locations.empty?
 selected_locations = [metric_locations.first].compact if selected_locations.empty?
 selected_locations = [selected_locations.first] if mode == 'series'
+available_causes = available_death_codes(index: opts[:index], fixture: fixture_data,
+                                         locations: selected_locations, metric: selected_metric)
+selected_causes = requested_causes.select { |code| available_causes.include?(code) }
+selected_causes = ['00000'].select { |code| available_causes.include?(code) } if selected_causes.empty?
+selected_causes = [available_causes.first].compact if selected_causes.empty?
+selected_causes = [selected_causes.first] if mode == 'country'
 
 locations_for_query = selected_locations.map(&:downcase)
 ages_for_query = mode == 'country' ? [selected_age] : selected_series
@@ -314,7 +345,7 @@ common_filters = [
   { 'term' => { 'category' => 'death' } },
   { 'terms' => { 'loc_code' => locations_for_query } },
   { 'term' => { 'sex' => selected_sex } },
-  { 'term' => { 'death_code' => '00000' } },
+  { 'terms' => { 'death_code' => selected_causes } },
   { 'exists' => { 'field' => 'yearweek' } }
 ]
 
@@ -322,7 +353,7 @@ if opts[:fixture]
   fixture = fixture_data.dup
   fixture.select! do |row|
     locations_for_query.include?(row[:loc_code].to_s.downcase) &&
-      row[:category] == 'death' && row[:death_code] == '00000' &&
+      row[:category] == 'death' && selected_causes.include?(row[:death_code]) &&
       row[:sex] == selected_sex && row[:yearweek]
   end
   count_rate = %w[std_deaths asr].include?(selected_metric) ? 'adj' : ''
@@ -357,12 +388,15 @@ end
 
 series_specs = if mode == 'country'
                  selected_locations.map do |loc|
-                   [loc, selected_age, location_names(loc).fetch($l)]
+                   cause = selected_causes.first
+                   cause_label = Death_codes.fetch(cause, { ja: cause, en: cause }).fetch($l)
+                   [loc, selected_age, cause, "#{location_names(loc).fetch($l)} — #{cause_label}"]
                  end
                else
-                 selected_series.map do |age|
-                   key = "#{selected_locations.first}-#{age}"
-                   [key, age, AGES.fetch(age).fetch($l)]
+                 selected_causes.map do |cause|
+                   key = "#{selected_locations.first}-#{selected_age}-#{cause}"
+                   label = Death_codes.fetch(cause, { ja: cause, en: cause }).fetch($l)
+                   [key, selected_age, cause, label]
                  end
                end
 
@@ -375,9 +409,9 @@ annual_by_age = AGES.keys.to_h do |age|
   [age, annual]
 end
 
-chart_data = series_specs.flat_map do |series_key, age, label|
+chart_data = series_specs.flat_map do |series_key, age, cause, label|
   loc = mode == 'country' ? series_key : selected_locations.first
-  rows = annual_by_age.fetch(age).select { |row| row[:loc_code] == loc }
+  rows = annual_by_age.fetch(age).select { |row| row[:loc_code] == loc && row[:death_code] == cause }
   build_scenarios(rows, series_key, label)
 end
 
@@ -390,10 +424,10 @@ default_cutoff = if cutoffs.include?(requested_cutoff)
                  else
                    cutoffs.last
                  end
-available_specs = series_specs.select { |key, _age, _label| chart_data.any? { |row| row[:series] == key } }
+available_specs = series_specs.select { |key, _age, _cause, _label| chart_data.any? { |row| row[:series] == key } }
 
 if opts[:summary]
-  summary = available_specs.to_h do |key, _age, label|
+  summary = available_specs.to_h do |key, _age, _cause, label|
     values = chart_data.select { |row| row[:series] == key }
     last_cutoff = values.map { |row| row[:train_to] }.max
     latest = values.select { |row| row[:model] == 'quasi_poisson' && row[:train_to] == last_cutoff }.
@@ -433,6 +467,10 @@ puts <<~HTML
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
     <input id="train-to-hidden" type="hidden" name="train_to" value="#{default_cutoff}">
+    <p>
+      <button class="language-button" type="button" data-language="ja">日本語</button>
+      <button class="language-button" type="button" data-language="en">English</button>
+    </p>
     <fieldset><legend>#{ $l == :ja ? '比較方法' : 'Comparison mode' }</legend>
       <label><input class="comparison-mode" type="radio" name="mode" value="country" #{checked(mode == 'country')}>#{ $l == :ja ? '複数国・共通条件' : 'Countries, common condition' }</label>
       <label><input class="comparison-mode" type="radio" name="mode" value="series" #{checked(mode == 'series')}>#{ $l == :ja ? '一国・複数系列' : 'One country, multiple series' }</label>
@@ -461,10 +499,16 @@ puts <<~HTML
     <fieldset><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
 HTML
 AGES.each do |age, names|
-  name = mode == 'country' ? 'age' : 'series'
+  puts %(<label><input class="age-option" type="radio" name="age" value="#{age}" #{checked(selected_age == age)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+end
+puts <<~HTML
+    </fieldset><br>
+    <fieldset><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+HTML
+available_causes.each do |cause|
+  names = Death_codes.fetch(cause, { ja: cause, en: cause })
   type = mode == 'country' ? 'radio' : 'checkbox'
-  selected = mode == 'country' ? selected_age == age : selected_series.include?(age)
-  puts %(<label><input class="age-option" type="#{type}" name="#{name}" value="#{age}" #{checked(selected)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  puts %(<label><input class="cause-option" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts <<~HTML
     </fieldset><br>
@@ -489,13 +533,13 @@ puts <<~HTML
       function syncComparisonMode() {
         const selected = document.querySelector('.comparison-mode:checked').value;
         const locations = Array.from(document.querySelectorAll('.location-option'));
-        const ages = Array.from(document.querySelectorAll('.age-option'));
+        const causes = Array.from(document.querySelectorAll('.cause-option'));
         if (selected === 'country') {
           setInputMode(locations, 'checkbox', 'c');
-          setInputMode(ages, 'radio', 'age');
+          setInputMode(causes, 'radio', 'death_codes');
         } else {
           setInputMode(locations, 'radio', 'c');
-          setInputMode(ages, 'checkbox', 'series');
+          setInputMode(causes, 'checkbox', 'death_codes');
         }
       }
       const storageKey = "mortyear-location-selection";
@@ -524,6 +568,13 @@ puts <<~HTML
       document.querySelectorAll('.comparison-mode').forEach(input => {
         input.addEventListener('change', syncComparisonMode);
       });
+      document.querySelectorAll('.language-button').forEach(button => {
+        button.addEventListener('click', () => {
+          const form = button.closest('form');
+          form.querySelector('input[name="l"]').value = button.dataset.language;
+          form.submit();
+        });
+      });
       document.querySelectorAll('.location-option').forEach(input => input.addEventListener('change', rememberLocations));
       document.querySelectorAll('.metric-option').forEach(input => input.addEventListener('change', () => {
         rememberLocations();
@@ -541,7 +592,7 @@ if chart_data.empty?
 else
   y_axis_title = metric_label
   count_metric = %w[deaths std_deaths].include?(selected_metric)
-  sources_by_location = available_specs.each_with_object({}) do |(key, _age, _label), sources|
+  sources_by_location = available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
     loc = mode == 'country' ? key : selected_locations.first
     urls = chart_data.select { |row| row[:series] == key }.flat_map { |row| row[:src_url] }.uniq
     sources[loc] ||= []
@@ -599,7 +650,7 @@ else
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
-      const panels = #{JSON.generate(available_specs.map { |key, _age, label| [key, label] })};
+      const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const panelSpecs = panels.map(([key, label]) => ({
         title: {text: label, anchor: "start"},
         width: "container", height: 260,
