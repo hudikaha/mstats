@@ -64,6 +64,15 @@ AGES = {
   'age_100over' => { ja: '100+', en: '100+' }
 }.freeze
 STANDARD_AGES = AGES.keys.grep(/age_(?:\d{2}_\d{2}|100over)/).freeze
+WHO_WORLD_STANDARD = {
+  'age_00_04' => 8.86, 'age_05_09' => 8.69, 'age_10_14' => 8.60,
+  'age_15_19' => 8.47, 'age_20_24' => 8.22, 'age_25_29' => 7.93,
+  'age_30_34' => 7.61, 'age_35_39' => 7.15, 'age_40_44' => 6.59,
+  'age_45_49' => 6.04, 'age_50_54' => 5.37, 'age_55_59' => 4.55,
+  'age_60_64' => 3.72, 'age_65_69' => 2.96, 'age_70_74' => 2.21,
+  'age_75_79' => 1.52, 'age_80_84' => 0.91, 'age_85_89' => 0.44,
+  'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100over' => 0.005
+}.freeze
 
 METRICS = {
   'deaths' => { ja: '実死亡数', en: 'Observed deaths' },
@@ -94,7 +103,7 @@ DAYS_PER_YEAR = 365.2425
 Z95 = 1.959963984540054
 MIN_TRAINING_YEARS = 4
 POISSON_SIMULATIONS = 10_000
-CACHE_SCHEMA = 1
+CACHE_SCHEMA = 2
 CACHE_MAX_BYTES = 1024 * 1024 * 1024
 CACHE_MAX_AGE = 30 * 24 * 60 * 60
 
@@ -495,7 +504,9 @@ def cached_scenarios(rows, series_key, label)
   )
   key_json = canonical_json(key_material)
   digest = Digest::SHA256.hexdigest(key_json)
-  namespace = File.join(cache_root, "mortyear-v#{CACHE_SCHEMA}")
+  # 日本語: schemaはcache keyに含め、実行userが変わっても既存namespaceを共有する。
+  # English: Keep schema in the cache key and reuse the writable namespace across execution users.
+  namespace = File.join(cache_root, 'mortyear-v1')
   directory = File.join(namespace, digest[0, 2], digest)
   FileUtils.mkdir_p(directory, mode: 0o700)
 
@@ -671,6 +682,51 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
   end.sort_by { |row| [row[:loc_code], row[:year]] }
 end
 
+# 日本語: 年齢階級別の死亡数と人口を組み合わせ、ASR回帰用の入力を作る。
+# 同じ階級に各国公式値があればWPPより優先し、人口はWPPではpopulation exposureを使う。
+# English: Build ASR regression inputs from age-specific deaths and populations.
+# Prefer national values for each stratum and use WPP population exposure as the fallback denominator.
+def stratified_asr_rows(records, locations, sex, causes)
+  relevant = records.select do |row|
+    locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
+      !row[:type].to_s.include?('projection')
+  end
+  source_rank = lambda do |row, population: false|
+    wpp = row[:algo].to_s.start_with?('un_wpp2024')
+    exposure = row[:type].to_s.start_with?('exposure_')
+    wpp ? (population && exposure ? 1 : 2) : 0
+  end
+  death_groups = relevant.select do |row|
+    row[:category] == 'death' && row[:rate].to_s.empty? && causes.include?(row[:death_code].to_s)
+  end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+  population_groups = relevant.select { |row| row[:category] == 'pop' }.
+                      group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i] }
+  weight_total = WHO_WORLD_STANDARD.values.sum
+
+  death_groups.filter_map do |(loc, year, cause), death_candidates|
+    population_candidates = population_groups.fetch([loc, year], [])
+    strata = WHO_WORLD_STANDARD.filter_map do |age, weight|
+      death_row = death_candidates.select { |row| !row[age.to_sym].nil? }.min_by { |row| source_rank.call(row) }
+      population_row = population_candidates.select { |row| !row[age.to_sym].nil? }.
+                       min_by { |row| source_rank.call(row, population: true) }
+      next unless death_row && population_row
+      deaths = death_row[age.to_sym].to_f
+      population = population_row[age.to_sym].to_f
+      next unless population.positive?
+      { age: age, deaths: deaths, population: population, weight: weight / weight_total,
+        src_url: (Array(death_row[:src_url]) + Array(population_row[:src_url])).compact.uniq }
+    end
+    next unless strata.length == WHO_WORLD_STANDARD.length
+
+    {
+      loc_code: loc, sex: sex, death_code: cause, year: year, strata: strata,
+      deaths: strata.sum { |item| item[:deaths] }, population: strata.sum { |item| item[:population] },
+      observed: strata.sum { |item| item[:deaths] / item[:population] * 100_000.0 * item[:weight] },
+      unit_scale: 100_000.0, src_url: strata.flat_map { |item| item[:src_url] }.uniq
+    }
+  end.sort_by { |row| [row[:loc_code], row[:year]] }
+end
+
 # 日本語: 学習終了年ごとの計算済み系列を生成し、ブラウザは選択だけを行う。
 # English: Precompute every training-cutoff scenario so the browser only switches views.
 def compute_scenarios(rows, series_key, label)
@@ -709,10 +765,82 @@ def compute_scenarios(rows, series_key, label)
   end
 end
 
-def build_scenarios(rows, series_key, label, use_cache:)
-  return compute_scenarios(rows, series_key, label) unless use_cache
+# 日本語: 年齢階級別回帰の予測率をWHO標準人口で直接法により合成する。
+# English: Combine age-specific regression predictions by direct WHO-standard weighting.
+def compute_stratified_asr_scenarios(rows, series_key, label)
+  return [] if rows.empty?
 
-  cached_scenarios(rows, series_key, label) { compute_scenarios(rows, series_key, label) }
+  last_year = rows.map { |row| row[:year] }.max
+  candidates = (2015..(last_year - 2)).select do |cutoff|
+    rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+  end
+  candidates.flat_map do |cutoff|
+    training = rows.select { |row| row[:year].between?(2000, cutoff) }
+    fits = WHO_WORLD_STANDARD.keys.to_h do |age|
+      age_rows = training.map do |row|
+        stratum = row[:strata].find { |item| item[:age] == age }
+        { year: row[:year], deaths: stratum[:deaths], population: stratum[:population] }
+      end
+      [age, poisson_fit(age_rows)]
+    end
+    residual_df = [training.length - 2, 0].max
+    total_df = residual_df * fits.length
+    dispersion = if total_df.positive?
+                   fits.values.sum { |fit| fit[:dispersion].to_f * residual_df } / total_df
+                 end
+    predictions = rows.to_h do |row|
+      expected = 0.0
+      poisson_variance = 0.0
+      row[:strata].each do |stratum|
+        fit = fits.fetch(stratum[:age])
+        x = row[:year] - fit[:center]
+        population = stratum[:population]
+        weight = stratum[:weight]
+        eta = fit[:beta][0] + fit[:beta][1] * x
+        mu = Math.exp(eta) * population
+        rate = mu / population * 100_000.0
+        expected += weight * rate
+        var_eta = 2.times.sum do |i|
+          xi = i.zero? ? 1.0 : x
+          2.times.sum do |j|
+            xj = j.zero? ? 1.0 : x
+            xi * fit[:covariance][i][j] * xj
+          end
+        end
+        poisson_variance += weight * weight * (mu + mu * mu * var_eta) /
+                            (population * population) * 100_000.0**2
+      end
+      poisson_se = Math.sqrt(poisson_variance)
+      poisson = { expected: expected, lower: [0.0, expected - Z95 * poisson_se].max,
+                  upper: expected + Z95 * poisson_se }
+      quasi_se = Math.sqrt([dispersion.to_f, 1.0].max * poisson_variance)
+      quasi = { expected: expected, lower: [0.0, expected - Z95 * quasi_se].max,
+                upper: expected + Z95 * quasi_se }
+      [row[:year], { poisson: poisson, quasi_poisson: quasi }]
+    end
+
+    %w[poisson quasi_poisson].flat_map do |model|
+      rows.map do |row|
+        prediction = predictions.fetch(row[:year]).fetch(model.to_sym)
+        {
+          series: series_key, label: label, model: model, train_to: cutoff,
+          year: row[:year], observed: row[:observed], expected: prediction[:expected],
+          pi_lower: prediction[:lower], pi_upper: prediction[:upper],
+          outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
+          period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
+          dispersion: dispersion&.round(4), deaths: row[:deaths].round(2),
+          population: row[:population].round, src_url: row[:src_url]
+        }
+      end
+    end
+  end
+end
+
+def build_scenarios(rows, series_key, label, use_cache:)
+  calculator = rows.first&.key?(:strata) ? method(:compute_stratified_asr_scenarios) : method(:compute_scenarios)
+  return calculator.call(rows, series_key, label) unless use_cache
+
+  cached_scenarios(rows, series_key, label) { calculator.call(rows, series_key, label) }
 end
 
 fixture_data = if opts[:fixture]
@@ -837,7 +965,9 @@ series_specs = if mode == 'country'
                end
 
 annual_by_age = { selected_ages => begin
-  annual = if selected_metric != 'std_deaths'
+  annual = if selected_metric == 'asr'
+             stratified_asr_rows(annual_records_all, selected_locations, selected_sex, selected_causes)
+           elsif selected_metric != 'std_deaths'
              annual_record_rows(annual_records_all, selected_locations, selected_sex,
                                 selected_causes, selected_metric, selected_ages)
            elsif %w[deaths std_deaths].include?(selected_metric)
@@ -960,7 +1090,9 @@ puts <<~HTML
     #age-options { display:flex; flex-wrap:nowrap; gap:.55em; align-items:flex-start; }
     #age-options label { display:inline-flex; flex-direction:column; align-items:center; margin:0; }
     #age-options .age-special { margin-left:.8em; }
+    #age-slider-row { display:flex; align-items:center; gap:.7em; }
     #age-range-slider { position:relative; height:28px; }
+    #age-range-output { min-width:5.2em; white-space:nowrap; font-variant-numeric:tabular-nums; }
     #age-range-slider.unmatched { opacity:.32; }
     #age-range-slider::before { content:""; position:absolute; left:0; right:0; top:13px; height:3px; background:#9aa0aa; }
     #age-range-slider input { position:absolute; left:-8px; top:0; width:calc(100% + 16px); height:28px; margin:0; appearance:none; -webkit-appearance:none; background:transparent; pointer-events:none; }
@@ -1017,13 +1149,13 @@ puts <<~HTML
     </fieldset><br>
     <fieldset id="age-fieldset"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
       <div class="age-scroll"><div id="age-scale">
-        <div id="age-range-slider"><input id="age-start" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"><input id="age-end" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"></div>
+        <div id="age-slider-row"><div id="age-range-slider"><input id="age-start" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"><input id="age-end" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"></div><output id="age-range-output"></output></div>
         <div id="age-options">
 HTML
-STANDARD_AGES.each do |age|
-  names = AGES.fetch(age)
+STANDARD_AGES.each_with_index do |age, index|
   active = selected_ages.include?('age_all') || selected_ages.include?(age)
-  puts %(<label><input class="age-option age-standard" type="checkbox" name="age" value="#{age}" #{checked(active)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  short_label = index == STANDARD_AGES.length - 1 ? '100+' : format('%02d', index * 5)
+  puts %(<label><input class="age-option age-standard" type="checkbox" name="age" value="#{age}" #{checked(active)}>#{short_label}</label>)
 end
 %w[age_0 age_all].each do |age|
   names = AGES.fetch(age)
@@ -1117,6 +1249,12 @@ puts <<~HTML
       const ageStart = document.getElementById('age-start');
       const ageEnd = document.getElementById('age-end');
       const ageSlider = document.getElementById('age-range-slider');
+      const ageRangeOutput = document.getElementById('age-range-output');
+      function ageRangeText(start, finish) {
+        const lower = String(start * 5).padStart(2, '0');
+        const upper = finish === standardAges.length - 1 ? '100+' : String(finish * 5 + 4).padStart(2, '0');
+        return `${lower}-${upper}`;
+      }
       function standardInputs() {
         return standardAges.map(value => document.querySelector(`.age-standard[value="${value}"]`));
       }
@@ -1135,6 +1273,9 @@ puts <<~HTML
         const age0 = document.querySelector('.age-special-option[value="age_0"]').checked;
         if (contiguous && !age0) {
           ageStart.value = selected[0]; ageEnd.value = selected.at(-1);
+          ageRangeOutput.value = ageRangeText(selected[0], selected.at(-1));
+        } else {
+          ageRangeOutput.value = '';
         }
         ageSlider.classList.toggle('unmatched', !contiguous || age0);
         requestAnimationFrame(alignAgeSlider);
@@ -1146,6 +1287,7 @@ puts <<~HTML
         document.querySelector('.age-special-option[value="age_0"]').checked = false;
         document.querySelector('.age-special-option[value="age_all"]').checked = start === 0 && finish === standardAges.length - 1;
         ageSlider.classList.remove('unmatched');
+        ageRangeOutput.value = ageRangeText(start, finish);
         alignAgeSlider();
       }
       document.querySelectorAll('.age-standard').forEach(input => input.addEventListener('change', () => {
@@ -1265,7 +1407,11 @@ else
   end
   source_items = []
   if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
-    method = if $l == :ja
+    method = if selected_metric == 'asr' && $l == :ja
+               'e-Statの年齢階級別死亡数・人口を優先し、不足階級はUN WPP 2024で補完。WHO世界標準人口で直接法により年齢調整している。'
+             elsif selected_metric == 'asr'
+               'Age-specific e-Stat deaths and populations take priority, with UN WPP 2024 filling unavailable strata; direct standardization uses the WHO world standard population.'
+             elsif $l == :ja
                'e-Statの月次死亡数と月次人口が原資料。既存の月次→週次変換による派生系列を年次へ再集計している。年齢調整には日本の最新確定人口を標準人口として使用。'
              else
                'Source data are monthly deaths and population from e-Stat. The current implementation reaggregates the derived monthly-to-weekly series into annual values.'
@@ -1286,9 +1432,20 @@ else
   end
   source_items = source_items.join("\n")
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
+  interval_note = if selected_metric == 'asr'
+                    if $l == :ja
+                      ' Poissonの青帯は年齢階級別の回帰係数分散と観測分散をWHO標準人口weightで合成した近似95%予測区間です。準Poissonは全階級の残差から推定した過分散を反映します。'
+                    else
+                      ' The Poisson band is an approximate 95% prediction interval combining age-specific coefficient and observation variance with WHO standard-population weights. Quasi-Poisson reflects overdispersion estimated across all strata.'
+                    end
+                  elsif $l == :ja
+                    ' Poissonの青帯は回帰係数と観測変動を含む10,000回シミュレーションによる95%予測区間です。準Poissonは過分散補正による近似95%予測区間です。'
+                  else
+                    ' The Poisson band is a 95% prediction interval from 10,000 simulations including coefficient and observation uncertainty. The quasi-Poisson band is an approximate overdispersion-adjusted 95% prediction interval.'
+                  end
   puts <<~HTML
     <p class="mortyear-note">
-      #{ ($l == :ja ? (birth_metric ? '出生数をoffsetとしたPoisson回帰で、出生1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '月・週へ再集計せず、年次recordを直接表示しています。各国公式系列がある指標はWPPより優先します。') : (birth_metric ? 'Poisson regression uses births as the offset and displays rates per 1,000 births.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Annual records are displayed directly without monthly or weekly reaggregation. National series take priority over WPP for the same measure.')) + ($l == :ja ? ' Poissonの青帯は回帰係数と観測変動を含む10,000回シミュレーションによる95%予測区間です。準Poissonは過分散補正による近似95%予測区間です。' : ' The Poisson band is a 95% prediction interval from 10,000 simulations including coefficient and observation uncertainty. The quasi-Poisson band is an approximate overdispersion-adjusted 95% prediction interval.') + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
+      #{ ($l == :ja ? (birth_metric ? '出生数をoffsetとしたPoisson回帰で、出生1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '月・週へ再集計せず、年次recordを直接表示しています。各国公式系列がある指標はWPPより優先します。') : (birth_metric ? 'Poisson regression uses births as the offset and displays rates per 1,000 births.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Annual records are displayed directly without monthly or weekly reaggregation. National series take priority over WPP for the same measure.')) + interval_note + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
     </p>
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
