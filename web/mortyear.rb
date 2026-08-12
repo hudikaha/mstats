@@ -1198,7 +1198,14 @@ puts <<~HTML
         </div>
       </div></div>
     </fieldset><br>
-    <fieldset id="cause-fieldset" style="#{selected_locations.length != 1 || !((selected_locations.first == 'JPN' && selected_metric != 'birth_rate') || (%w[JPN USA].include?(selected_locations.first) && selected_metric == 'birth_rate')) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+HTML
+show_cause_fieldset = if selected_metric == 'birth_rate'
+                        selected_locations.any? && (selected_locations - %w[JPN USA]).empty?
+                      else
+                        selected_locations == ['JPN']
+                      end
+puts <<~HTML
+    <fieldset id="cause-fieldset" style="#{show_cause_fieldset ? '' : 'display:none'}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
 HTML
 japan_causes = annual_catalog.dig('JPN', :death_codes).to_a.select { |cause| cause.match?(/\A\d{5}\z/) }
 japan_causes.each do |cause|
@@ -1280,8 +1287,9 @@ puts <<~HTML
         const causes = Array.from(document.querySelectorAll('.cause-option'));
         const selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
         const metric = document.querySelector('input[name="metric"]:checked').value;
+        const birthLocations = selectedLocations.length > 0 && selectedLocations.every(location => ['JPN', 'USA'].includes(location));
         const scope = selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
-          selectedLocations.length === 1 && ['JPN', 'USA'].includes(selectedLocations[0]) && metric === 'birth_rate' ? 'birth' : null;
+          birthLocations && metric === 'birth_rate' ? 'birth' : null;
         const hidden = scope === null;
         fieldset.style.display = hidden ? 'none' : '';
         causes.forEach(input => {
