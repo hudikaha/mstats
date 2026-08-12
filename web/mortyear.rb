@@ -1197,7 +1197,7 @@ WORLD_REGIONS.each do |region, region_names|
 end
 puts <<~HTML
     </fieldset><br>
-    <fieldset id="age-fieldset"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
+    <fieldset id="age-fieldset" style="#{selected_metric == 'birth_rate' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
       <div class="age-scroll"><div id="age-scale">
         <div id="age-slider-row"><div id="age-range-slider"><input id="age-start" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"><input id="age-end" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"></div><output id="age-range-output"></output></div>
         <div id="age-options">
@@ -1453,6 +1453,7 @@ puts <<~HTML
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
         const fixedAllAges = metric === 'asr' || metric === 'birth_rate';
+        document.getElementById('age-fieldset').style.display = metric === 'birth_rate' ? 'none' : '';
         document.querySelectorAll('.age-option').forEach(input => {
           input.disabled = metric === 'birth_rate' || (metric === 'asr' && input.value !== 'age_all');
           if (fixedAllAges) input.checked = input.value === 'age_all';
