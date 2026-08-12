@@ -549,6 +549,11 @@ if selected_metric == 'birth_rate' && selected_locations.include?('USA')
   selected_causes = ['INFANT'] if selected_causes.empty?
   selected_causes = [selected_causes.first] if mode == 'country'
 end
+# 日本語: 複数国比較では死因選択を使わず、共通の全死因へ固定する。
+# English: Multi-country comparisons use the common all-cause series without a cause selector.
+if mode == 'country' && selected_locations.length > 1 && available_causes.include?('00000')
+  selected_causes = ['00000']
+end
 
 locations_for_query = selected_locations.map(&:downcase)
 ages_for_query = mode == 'country' ? [selected_age] : selected_series
@@ -722,7 +727,9 @@ puts <<~HTML
     .mortyear-form fieldset { display:inline-block; vertical-align:top; margin:.3em; }
     .mortyear-form label { margin-right:.7em; white-space:nowrap; }
     .mortyear-note { text-align:left; background:#f5f7f8; padding:.8em 1em; }
-    #mortyear-vis { width:95%; }
+    #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
+    #mortyear-vis .vega-embed, #mortyear-vis .vega-embed > div { width:100%; max-width:100%; }
+    #mortyear-vis svg { display:block; max-width:100%; height:auto; }
   </style>
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
@@ -763,7 +770,7 @@ AGES.each do |age, names|
 end
 puts <<~HTML
     </fieldset><br>
-    <fieldset id="cause-fieldset" style="#{available_causes.length <= 1 ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+    <fieldset id="cause-fieldset" data-single-option="#{available_causes.length <= 1}" style="#{available_causes.length <= 1 || (mode == 'country' && selected_locations.length > 1) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
 HTML
 available_causes.each do |cause|
   names = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause }))
@@ -801,13 +808,25 @@ puts <<~HTML
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'death_codes');
         }
+        syncCauseVisibility();
+      }
+      function syncCauseVisibility() {
+        const fieldset = document.getElementById('cause-fieldset');
+        const causes = Array.from(document.querySelectorAll('.cause-option'));
+        const countryMode = document.querySelector('.comparison-mode:checked').value === 'country';
+        const locationCount = document.querySelectorAll('.location-option:checked:not(:disabled)').length;
+        const hidden = fieldset.dataset.singleOption === 'true' || (countryMode && locationCount > 1);
+        fieldset.style.display = hidden ? 'none' : '';
+        causes.forEach(input => { input.disabled = hidden; });
       }
       const storageKey = "mortyear-location-selection";
+      const hasRequestedLocations = #{requested_locations.empty? ? 'false' : 'true'};
       function rememberLocations() {
         const values = Array.from(document.querySelectorAll('.location-option:checked')).map(input => input.value);
         sessionStorage.setItem(storageKey, JSON.stringify(values));
       }
       function restoreLocations() {
+        if (hasRequestedLocations) return;
         let values = [];
         try { values = JSON.parse(sessionStorage.getItem(storageKey) || "[]"); } catch (_error) {}
         document.querySelectorAll('.location-option').forEach(input => {
@@ -835,7 +854,10 @@ puts <<~HTML
           form.submit();
         });
       });
-      document.querySelectorAll('.location-option').forEach(input => input.addEventListener('change', rememberLocations));
+      document.querySelectorAll('.location-option').forEach(input => input.addEventListener('change', () => {
+        rememberLocations();
+        syncCauseVisibility();
+      }));
       document.querySelectorAll('.metric-option').forEach(input => input.addEventListener('change', () => {
         rememberLocations();
         syncMetric();
@@ -914,6 +936,7 @@ else
     <div id="mortyear-vis"></div>
     <script>
       const values = #{JSON.generate(chart_data)};
+      const displayYearMin = #{chart_data.map { |row| row[:year] }.min};
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
@@ -927,7 +950,7 @@ else
           {filter: "datum.model == model"}
         ],
         encoding: {
-          x: {field: "year", type: "quantitative", scale: {domain: [2000, #{display_year_max}], nice: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
+          x: {field: "year", type: "quantitative", scale: {domain: [displayYearMin, #{display_year_max}], nice: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer: [
           {mark: {type: "area", color: "#dceaf5"}, encoding: {y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
@@ -955,6 +978,7 @@ else
           {name:"zero_base", value:false}
         ],
         vconcat: panelSpecs,
+        autosize: {type:"fit-x", contains:"padding", resize:true},
         resolve: {scale: {y: "independent"}},
         config: {view:{stroke:null}, axis:{labelFontSize:12,titleFontSize:13}, axisY:{minExtent:72,maxExtent:72}, title:{fontSize:15}}
       };
