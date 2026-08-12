@@ -22,6 +22,15 @@ mfacts = [
 abort 'lib/mfacts.rb not found' unless mfacts
 require mfacts
 
+country_names_library = [
+  File.expand_path('mstats.rb', __dir__),
+  File.expand_path('../vdeath/lib/mstats.rb', __dir__)
+].find { |path| File.file?(path) }
+abort 'country-name source mstats.rb not found' unless country_names_library
+require country_names_library
+COUNTRY_NAMES = Locs.transform_values(&:dup).freeze
+Object.send(:remove_const, :Locs)
+
 mort_vars = [
   File.expand_path('mort-vars.rb', __dir__),
   File.expand_path('../../../web/mort-vars.rb', __dir__)
@@ -30,29 +39,29 @@ abort 'web/mort-vars.rb not found' unless mort_vars
 require mort_vars
 
 AGES = {
-  'age_all' => { ja: '全年齢', en: 'All ages' },
-  'age_0' => { ja: '0歳', en: 'Age 0' },
-  'age_00_04' => { ja: '0～4歳', en: 'Ages 0–4' },
-  'age_05_09' => { ja: '5～9歳', en: 'Ages 5–9' },
-  'age_10_14' => { ja: '10～14歳', en: 'Ages 10–14' },
-  'age_15_19' => { ja: '15～19歳', en: 'Ages 15–19' },
-  'age_20_24' => { ja: '20～24歳', en: 'Ages 20–24' },
-  'age_25_29' => { ja: '25～29歳', en: 'Ages 25–29' },
-  'age_30_34' => { ja: '30～34歳', en: 'Ages 30–34' },
-  'age_35_39' => { ja: '35～39歳', en: 'Ages 35–39' },
-  'age_40_44' => { ja: '40～44歳', en: 'Ages 40–44' },
-  'age_45_49' => { ja: '45～49歳', en: 'Ages 45–49' },
-  'age_50_54' => { ja: '50～54歳', en: 'Ages 50–54' },
-  'age_55_59' => { ja: '55～59歳', en: 'Ages 55–59' },
-  'age_60_64' => { ja: '60～64歳', en: 'Ages 60–64' },
-  'age_65_69' => { ja: '65～69歳', en: 'Ages 65–69' },
-  'age_70_74' => { ja: '70～74歳', en: 'Ages 70–74' },
-  'age_75_79' => { ja: '75～79歳', en: 'Ages 75–79' },
-  'age_80_84' => { ja: '80～84歳', en: 'Ages 80–84' },
-  'age_85_89' => { ja: '85～89歳', en: 'Ages 85–89' },
-  'age_90_94' => { ja: '90～94歳', en: 'Ages 90–94' },
-  'age_95_99' => { ja: '95～99歳', en: 'Ages 95–99' },
-  'age_100over' => { ja: '100歳以上', en: 'Ages 100+' }
+  'age_all' => { ja: 'all', en: 'all' },
+  'age_0' => { ja: '0', en: '0' },
+  'age_00_04' => { ja: '00-04', en: '00-04' },
+  'age_05_09' => { ja: '05-09', en: '05-09' },
+  'age_10_14' => { ja: '10-14', en: '10-14' },
+  'age_15_19' => { ja: '15-19', en: '15-19' },
+  'age_20_24' => { ja: '20-24', en: '20-24' },
+  'age_25_29' => { ja: '25-29', en: '25-29' },
+  'age_30_34' => { ja: '30-34', en: '30-34' },
+  'age_35_39' => { ja: '35-39', en: '35-39' },
+  'age_40_44' => { ja: '40-44', en: '40-44' },
+  'age_45_49' => { ja: '45-49', en: '45-49' },
+  'age_50_54' => { ja: '50-54', en: '50-54' },
+  'age_55_59' => { ja: '55-59', en: '55-59' },
+  'age_60_64' => { ja: '60-64', en: '60-64' },
+  'age_65_69' => { ja: '65-69', en: '65-69' },
+  'age_70_74' => { ja: '70-74', en: '70-74' },
+  'age_75_79' => { ja: '75-79', en: '75-79' },
+  'age_80_84' => { ja: '80-84', en: '80-84' },
+  'age_85_89' => { ja: '85-89', en: '85-89' },
+  'age_90_94' => { ja: '90-94', en: '90-94' },
+  'age_95_99' => { ja: '95-99', en: '95-99' },
+  'age_100over' => { ja: '100+', en: '100+' }
 }.freeze
 STANDARD_AGES = AGES.keys.grep(/age_(?:\d{2}_\d{2}|100over)/).freeze
 
@@ -113,7 +122,7 @@ requested_start_year = cgi['start_year'].to_i
 default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : 2000
 
 def location_names(code)
-  known = Locs[code]
+  known = COUNTRY_NAMES[code] || Locs[code]
   source_name = $annual_catalog&.dig(code, :location).to_s
   return known if known
   { ja: source_name.empty? ? code : source_name, en: source_name.empty? ? code : source_name }
@@ -860,7 +869,10 @@ annual_records = if opts[:fixture]
 births_by_year = annual_records.select { |row| row[:category] == 'birth' }.
                  to_h { |row| [row[:year].to_i, row] }
 us_special_rows = annual_records.filter_map do |row|
-  cause, value = if row[:category] == 'death' && row[:death_code] == '00000' && row[:rate].to_s.empty?
+  # 日本語: 乳児死亡率は米国公式系列を使い、同じ00000/age_0を持つWPP推計を混ぜない。
+  # English: Use the official U.S. infant series, excluding WPP estimates with the same 00000/age_0 fields.
+  cause, value = if row[:category] == 'death' && row[:death_code] == '00000' &&
+                    row[:rate].to_s.empty? && row[:algo].to_s.empty?
                    ['INFANT', row[:age_0]]
                  elsif row[:category] == 'death' && row[:death_code] == 'PERM' && row[:algo] == 'reconstructed'
                    ['PERINATAL', row[:age_all]]
@@ -948,7 +960,7 @@ puts <<~HTML
     #age-options { display:flex; flex-wrap:nowrap; gap:.55em; align-items:flex-start; }
     #age-options label { display:inline-flex; flex-direction:column; align-items:center; margin:0; }
     #age-options .age-special { margin-left:.8em; }
-    #age-range-slider { position:relative; height:28px; margin-left:.6em; width:42em; max-width:calc(100vw - 5em); }
+    #age-range-slider { position:relative; height:28px; }
     #age-range-slider.unmatched { opacity:.32; }
     #age-range-slider::before { content:""; position:absolute; left:0; right:0; top:13px; height:3px; background:#9aa0aa; }
     #age-range-slider input { position:absolute; left:-8px; top:0; width:calc(100% + 16px); height:28px; margin:0; appearance:none; -webkit-appearance:none; background:transparent; pointer-events:none; }
@@ -1021,7 +1033,7 @@ puts <<~HTML
         </div>
       </div></div>
     </fieldset><br>
-    <fieldset id="cause-fieldset" data-single-option="#{available_causes.length <= 1}" style="#{available_causes.length <= 1 || (mode == 'country' && selected_locations.length > 1) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+    <fieldset id="cause-fieldset" data-single-option="#{available_causes.length <= 1}" style="#{available_causes.length <= 1 || selected_locations.length != 1 || !((selected_locations.first == 'JPN' && selected_metric != 'birth_rate') || (selected_locations.first == 'USA' && selected_metric == 'birth_rate')) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
 HTML
 available_causes.each do |cause|
   next unless cause == '00000'
@@ -1092,9 +1104,12 @@ puts <<~HTML
       function syncCauseVisibility() {
         const fieldset = document.getElementById('cause-fieldset');
         const causes = Array.from(document.querySelectorAll('.cause-option'));
-        const countryMode = document.querySelector('.comparison-mode:checked').value === 'country';
-        const locationCount = document.querySelectorAll('.location-option:checked:not(:disabled)').length;
-        const hidden = fieldset.dataset.singleOption === 'true' || (countryMode && locationCount > 1);
+        const selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
+        const metric = document.querySelector('input[name="metric"]:checked').value;
+        const eligible = selectedLocations.length === 1 &&
+          ((selectedLocations[0] === 'JPN' && metric !== 'birth_rate') ||
+           (selectedLocations[0] === 'USA' && metric === 'birth_rate'));
+        const hidden = fieldset.dataset.singleOption === 'true' || !eligible;
         fieldset.style.display = hidden ? 'none' : '';
         causes.forEach(input => { input.disabled = hidden; });
       }
@@ -1105,6 +1120,15 @@ puts <<~HTML
       function standardInputs() {
         return standardAges.map(value => document.querySelector(`.age-standard[value="${value}"]`));
       }
+      function alignAgeSlider() {
+        const inputs = standardInputs();
+        const boxes = inputs.map(input => input && input.getBoundingClientRect());
+        if (boxes.some(box => !box)) return;
+        const scale = document.getElementById('age-scale').getBoundingClientRect();
+        const centers = boxes.map(box => box.left + box.width / 2);
+        ageSlider.style.marginLeft = `${centers[0] - scale.left}px`;
+        ageSlider.style.width = `${centers.at(-1) - centers[0]}px`;
+      }
       function syncAgeSlider() {
         const selected = standardInputs().map((input, index) => input.checked ? index : null).filter(index => index !== null);
         const contiguous = selected.length && selected.at(-1) - selected[0] + 1 === selected.length;
@@ -1113,6 +1137,7 @@ puts <<~HTML
           ageStart.value = selected[0]; ageEnd.value = selected.at(-1);
         }
         ageSlider.classList.toggle('unmatched', !contiguous || age0);
+        requestAnimationFrame(alignAgeSlider);
       }
       function applyAgeRange() {
         let start = Number(ageStart.value), finish = Number(ageEnd.value);
@@ -1121,6 +1146,7 @@ puts <<~HTML
         document.querySelector('.age-special-option[value="age_0"]').checked = false;
         document.querySelector('.age-special-option[value="age_all"]').checked = start === 0 && finish === standardAges.length - 1;
         ageSlider.classList.remove('unmatched');
+        alignAgeSlider();
       }
       document.querySelectorAll('.age-standard').forEach(input => input.addEventListener('change', () => {
         document.querySelector('.age-special-option[value="age_0"]').checked = false;
@@ -1207,6 +1233,7 @@ puts <<~HTML
       restoreLocations();
       syncAgeSlider();
       syncMetric();
+      window.addEventListener('resize', alignAgeSlider);
     }());
   </script>
 HTML
