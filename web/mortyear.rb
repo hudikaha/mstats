@@ -247,7 +247,7 @@ def metric_available?(code, rates, metric)
   when 'std_deaths' then code == 'JPN' && rates.include?('adj')
   when 'crude_rate' then code != 'JPN' && raw && rates.include?('amr')
   when 'asr' then code == 'JPN' && rates.include?('adj') && rates.include?('amr')
-  when 'birth_rate' then %w[JPN USA].include?(code)
+  when 'birth_rate' then true
   else false
   end
 end
@@ -260,7 +260,8 @@ def annual_metric_available?(code, catalog, metric)
   when 'deaths' then categories.include?('death') && codes.include?('00000')
   when 'crude_rate' then rates.include?('crude_rate')
   when 'asr' then rates.include?('asr')
-  when 'birth_rate' then %w[JPN USA].include?(code) && categories.include?('birth')
+  when 'birth_rate'
+    categories.include?('birth') && (codes.include?('INFANT') || codes.include?('PERM'))
   else false
   end
 end
@@ -884,8 +885,11 @@ selected_causes = requested_causes.select { |code| available_causes.include?(cod
 selected_causes = ['00000'].select { |code| available_causes.include?(code) } if selected_causes.empty?
 selected_causes = [available_causes.first].compact if selected_causes.empty?
 selected_causes = [selected_causes.first] if mode == 'country'
-if selected_metric == 'birth_rate' && (selected_locations & %w[JPN USA]).any?
-  available_causes = SPECIAL_CAUSES.keys
+if selected_metric == 'birth_rate'
+  available_causes = SPECIAL_CAUSES.keys.select do |cause|
+    code = cause == 'PERINATAL' ? 'PERM' : cause
+    selected_locations.all? { |loc| annual_catalog.dig(loc, :death_codes).to_a.include?(code) }
+  end
   selected_causes = requested_causes.select { |code| available_causes.include?(code) }
   selected_causes = mode == 'series' ? SPECIAL_CAUSES.keys : ['INFANT'] if selected_causes.empty?
   selected_causes = [selected_causes.first] if mode == 'country'
@@ -1200,7 +1204,7 @@ puts <<~HTML
     </fieldset><br>
 HTML
 show_cause_fieldset = if selected_metric == 'birth_rate'
-                        selected_locations.any? && (selected_locations - %w[JPN USA]).empty?
+                        selected_locations.any?
                       else
                         selected_locations == ['JPN']
                       end
@@ -1217,7 +1221,9 @@ end
 puts %(<details open><summary>#{CGI.escapeHTML($l == :ja ? '出生関連指標' : 'Birth-related measures')}</summary><div class="mortyear-options">)
 SPECIAL_CAUSES.each do |cause, names|
   type = mode == 'country' ? 'radio' : 'checkbox'
-  puts %(<label><input class="cause-option" data-cause-scope="birth" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  code = cause == 'PERINATAL' ? 'PERM' : cause
+  locations = annual_catalog.select { |_loc, catalog| catalog.fetch(:death_codes).include?(code) }.keys
+  puts %(<label><input class="cause-option" data-cause-scope="birth" data-locations="#{locations.join(' ')}" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts %(</div></details>)
 top_causes = japan_causes.select { |cause| cause.match?(/\A\d{2}000\z/) && cause != '00000' }
@@ -1287,13 +1293,19 @@ puts <<~HTML
         const causes = Array.from(document.querySelectorAll('.cause-option'));
         const selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
         const metric = document.querySelector('input[name="metric"]:checked').value;
-        const birthLocations = selectedLocations.length > 0 && selectedLocations.every(location => ['JPN', 'USA'].includes(location));
+        const birthLocations = selectedLocations.length > 0 && selectedLocations.every(location => {
+          const input = document.querySelector(`.location-option[value="${location}"]`);
+          return input && input.closest('label').dataset.metrics.split(' ').includes('birth_rate');
+        });
         const scope = selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
           birthLocations && metric === 'birth_rate' ? 'birth' : null;
         const hidden = scope === null;
         fieldset.style.display = hidden ? 'none' : '';
         causes.forEach(input => {
-          const active = !hidden && input.dataset.causeScope === scope;
+          const supportedLocations = (input.dataset.locations || '').split(' ').filter(Boolean);
+          const supported = input.dataset.causeScope !== 'birth' ||
+            selectedLocations.every(location => supportedLocations.includes(location));
+          const active = !hidden && input.dataset.causeScope === scope && supported;
           input.disabled = !active;
           input.closest('label').style.display = active ? '' : 'none';
         });
@@ -1460,7 +1472,14 @@ else
                       else
                         $l == :ja ? '人口' : 'Population'
                       end
-  approximation_note = if selected_locations.include?('USA') && selected_causes.include?('PERINATAL')
+  oecd_reconstructed = chart_data.any? do |row|
+    urls = Array(row[:src_url])
+    urls.any? { |url| url.to_s.include?('data-explorer.oecd.org') } &&
+      urls.any? { |url| url.to_s.include?('population.un.org') }
+  end
+  approximation_note = if oecd_reconstructed && (selected_locations - %w[JPN USA]).any?
+                         $l == :ja ? ' OECD公表率とUN WPP 2024の出生数から死亡数を逆算した近似系列です。欠測年は補間していません。' : ' Approximate death counts are reconstructed from OECD-published rates and UN WPP 2024 births. Missing years are not interpolated.'
+                       elsif selected_locations.include?('USA') && selected_causes.include?('PERINATAL')
                          $l == :ja ? ' 米国の周産期死亡数は、丸められた公表率と出生数から逆算した近似値です。2006年と2010年は欠測のままです。' : ' U.S. perinatal death counts are approximate values reconstructed from rounded published rates and births; 2006 and 2010 remain missing.'
                        else
                          ''
@@ -1523,6 +1542,12 @@ else
                  '米国CDCの年次出生数と乳児死亡数を使用しています。'
                else
                  'Uses annual birth and infant death counts from the U.S. CDC.'
+               end
+             elsif selected_metric == 'birth_rate' && urls.any? { |url| url.include?('data-explorer.oecd.org') }
+               if $l == :ja
+                 'OECD公表率とUN WPP 2024の出生数から再構成した近似死亡数を使用しています。'
+               else
+                 'Uses approximate death counts reconstructed from OECD-published rates and UN WPP 2024 births.'
                end
              elsif urls.include?(WPP_URL)
                $l == :ja ? 'UN WPP 2024の年次推計値（2023年まで）。' : 'UN WPP 2024 annual estimates through 2023.'

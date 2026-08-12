@@ -44,6 +44,11 @@ IDは原則として地域、期間、category、rate、死因、algo、type、�
 `age_all`へ格納して、`algo=reconstructed`とします。`PERM`はOECDの指標codeであり、
 ICD死因codeではありません。
 
+日本・米国以外のOECD収録国については、OECDの乳児死亡率・周産期死亡率と
+UN WPP 2024の同年の出生数から死亡数を逆算します。これらは`algo=reconstructed`、
+`type=oecd_wpp2024`の近似系列です。OECDの欠測年は補間しません。丸め済み率と
+WPP推計出生数を組み合わせるため、各国公式死亡数による系列より精度が劣ります。
+
 日本の周産期死亡では、分母となる出産数（出生数＋妊娠満22週以後の死産数）を
 `category=delivery`の`age_all`へ格納します。`death_code=PERM`の公式死亡数はこの分母を使い、
 `algo=reconstructed`の近似系列は出生数を分母に使います。

@@ -91,6 +91,9 @@ values. Incomplete years are omitted.
 Generate the U.S. annual birth, infant-death, and reconstructed OECD perinatal
 records separately with `make us-yearly-csv`. Generate Japanese annual records
 with `make jp-yearly-csv` and UN WPP records with `make wpp-yearly-csv`.
+Generate approximate infant and perinatal records for other OECD-covered
+countries with `make oecd-infant-yearly-csv`; this combines OECD-published rates
+with annual births from UN WPP 2024 and does not import the resulting CSV.
 The Makefile keeps the rebuild courses separate: `upload-official` /
 `logstash-official`, `upload-hmd` / `logstash-hmd`, and `upload-wpp` /
 `logstash-wpp`. Every Logstash target requires an explicit physical destination,

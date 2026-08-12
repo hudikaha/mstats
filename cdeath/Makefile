@@ -34,6 +34,9 @@ WPP_DEATH_HIST := $(WPP_DIR)/WPP2024_DeathsBySingleAgeSex_Medium_1950-2023.csv.g
 WPP_DEATH_PROJ := $(WPP_DIR)/WPP2024_DeathsBySingleAgeSex_Medium_2024-2100.csv.gz
 WPP_EXPOSURE_HIST := $(WPP_DIR)/WPP2024_PopulationExposureBySingleAgeSex_Medium_1950-2023.csv.gz
 WPP_EXPOSURE_PROJ := $(WPP_DIR)/WPP2024_PopulationExposureBySingleAgeSex_Medium_2024-2100.csv.gz
+OECD_DIR ?= $(ROOT)/src/oecd
+OECD_MIM_SOURCE ?= $(OECD_DIR)/maternal-infant-mortality.csv
+OECD_MIM_URL := https://sdmx.oecd.org/public/rest/v1/data/OECD.ELS.HD,DSD_HEALTH_STAT@DF_MIM,1.1/.A.INM+PERM..........?startPeriod=2000&dimensionAtObservation=AllDimensions
 DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
 
@@ -48,8 +51,8 @@ LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
 .PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-wpp check csv mort-csv stmf-csv \
-  yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv wpp-yearly-csv validate-csv upload-official \
-  upload-hmd upload-wpp upload-yearly logstash-official logstash-hmd logstash-wpp \
+  yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv validate-csv upload-official \
+  upload-hmd upload-wpp upload-oecd upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd \
   switch-mstats-alias upload logstash cod codtr
 
 define VALIDATE_MONTHS
@@ -121,13 +124,16 @@ help:
 	@echo 'make jp-yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
 	@echo 'make jp-infant-yearly-csv 日本の乳児・周産期死亡の年次CSVを生成（投入しない）'
 	@echo 'make us-yearly-csv 米国の出生・乳児死亡・周産期死亡年次CSVを生成（投入しない）'
+	@echo 'make oecd-infant-yearly-csv OECD率とWPP出生数から各国の近似年次CSVを生成（投入しない）'
 	@echo 'make wpp-yearly-csv UN WPPの人口・死亡・粗死亡率・WHO標準ASRを生成（投入しない）'
 	@echo 'make upload-official 各国公式CSVをserverへ送る（投入しない）'
 	@echo 'make upload-hmd 最新のHMD週次CSVをserverへ送る（投入しない）'
 	@echo 'make upload-wpp 最新のWPP年次CSVをserverへ送る（投入しない）'
+	@echo 'make upload-oecd 最新のOECD乳児・周産期年次CSVをserverへ送る（投入しない）'
 	@echo 'make logstash-official YEARLY_INDEX=mstats20260812 各国公式dataを指定indexへ投入'
 	@echo 'make logstash-hmd YEARLY_INDEX=mstats20260812 HMDを指定indexへ投入'
 	@echo 'make logstash-wpp YEARLY_INDEX=mstats20260812 WPPを指定indexへ投入'
+	@echo 'make logstash-oecd YEARLY_INDEX=mstats20260812 OECD乳児・周産期dataを指定indexへ投入'
 	@echo 'make switch-mstats-alias YEARLY_INDEX=mstats20260812 mstats aliasをatomicに切替え'
 	@echo 'make validate-csv FILES="..." 投入前に期間・ID・値・出典を検査'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
@@ -321,6 +327,17 @@ us-yearly-csv:
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"
 
+oecd-infant-yearly-csv:
+	@mkdir -p "$(OECD_DIR)" "$(DATA_DIR)"; tmp_source="$(OECD_MIM_SOURCE).tmp"; \
+	 if ! curl -fsSL -H 'Accept: text/csv' '$(OECD_MIM_URL)' -o "$$tmp_source"; then rm -f "$$tmp_source"; exit 1; fi; \
+	 if test "$$(head -1 "$$tmp_source")" != 'DATAFLOW,REF_AREA,FREQ,MEASURE,UNIT_MEASURE,AGE,SEX,SOCIO_ECON_STATUS,DEATH_CAUSE,CALC_METHODOLOGY,GESTATION_THRESHOLD,HEALTH_STATUS,DISEASE,CANCER_SITE,TIME_PERIOD,OBS_VALUE,DECIMALS,OBS_STATUS,OBS_STATUS2,OBS_STATUS3,UNIT_MULT'; then rm -f "$$tmp_source"; echo 'unexpected OECD CSV header'; exit 1; fi; \
+	 mv "$$tmp_source" "$(OECD_MIM_SOURCE)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(DATA_DIR)/oecd-infant-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 if ! ruby "$(ROOT)/import/oecd-infant-yearly.rb" "$(OECD_MIM_SOURCE)" "$(WPP_DEMOGRAPHIC)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 mv "$$tmp" "$$out"; echo "created $$out"; \
+	 echo '[oecd-infant-yearly-csv] uploadとElasticsearch投入は行いません。'
+
 jp-infant-yearly-csv:
 	@test -s "$(JP_INFANT_SOURCE)" || { echo "日本乳児死亡sourceがありません: $(JP_INFANT_SOURCE)"; exit 1; }
 	@test -s "$(JP_PERINATAL_SOURCE)" || { echo "日本周産期死亡sourceがありません: $(JP_PERINATAL_SOURCE)"; exit 1; }
@@ -374,12 +391,20 @@ upload-wpp:
 	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
 	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} un-wpp-yearly-mstats2026.csv"
 
+upload-oecd:
+	@files=("$(DATA_DIR)"/oecd-infant-yearly-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	 test -n "$$file" || { echo 'OECD乳児・周産期年次CSVがありません。'; exit 1; }; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
+	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} oecd-infant-yearly-mstats2026.csv"
+
 upload-yearly: upload-official upload-wpp
 
 logstash-official: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-infant-yearly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/us-yearly-mstats2026.csv
 logstash-hmd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/stmf-weekly-mstats2026.csv
 logstash-wpp: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-wpp-yearly-mstats2026.csv
-logstash-official logstash-hmd logstash-wpp:
+logstash-oecd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/oecd-infant-yearly-mstats2026.csv
+logstash-official logstash-hmd logstash-wpp logstash-oecd:
 	@echo '[$@] $(YEARLY_INDEX)へ投入します。'; \
 	 for file in $(IMPORT_FILES); do \
 	   run_id=$$(date +%s); \

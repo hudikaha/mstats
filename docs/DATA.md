@@ -49,6 +49,13 @@ approximate event count reconstructed from the published rounded rate and the
 available birth denominator, and is marked `algo=reconstructed`. `PERM` is an
 OECD indicator code, not an ICD cause code.
 
+For OECD-covered countries other than Japan and the United States, infant and
+perinatal death counts are reconstructed from OECD rates and the matching
+annual births in UN WPP 2024. These approximate series use
+`algo=reconstructed` and `type=oecd_wpp2024`. Missing OECD years are not
+interpolated. Because rounded rates are combined with WPP-estimated births,
+these series are less precise than series based on national official counts.
+
 For Japanese perinatal mortality, deliveries (births plus fetal deaths at 22 completed
 weeks or later) are stored in `category=delivery`, `age_all`. Official `death_code=PERM`
 counts use this denominator, while approximate `algo=reconstructed` series use births.
