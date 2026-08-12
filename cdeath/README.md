@@ -89,10 +89,15 @@ days-in-month-weighted annual mean; annual rates are recalculated from those two
 values. Incomplete years are omitted.
 
 Generate the U.S. annual birth, infant-death, and reconstructed OECD perinatal
-records separately with `make us-yearly-csv`. After validation, use
-`make upload-us-yearly logstash-us-yearly` to add only those annual records to
-the current `mstats` index. `mortyear.rb` reads them from Elasticsearch and does
-not read a Web-local CSV.
+records separately with `make us-yearly-csv`. Generate Japanese annual records
+with `make jp-yearly-csv` and UN WPP records with `make wpp-yearly-csv`.
+The Makefile keeps the rebuild courses separate: `upload-official` /
+`logstash-official`, `upload-hmd` / `logstash-hmd`, and `upload-wpp` /
+`logstash-wpp`. Every Logstash target requires an explicit physical destination,
+whose default is `YEARLY_INDEX=mstats20260812`. After validation, switch the
+public logical name atomically with
+`make switch-mstats-alias YEARLY_INDEX=mstats20260812`. `mortyear.rb` reads
+annual records from Elasticsearch and does not read a Web-local CSV.
 
 Monthly and weekly cause-of-death CSVs in one pass:
 

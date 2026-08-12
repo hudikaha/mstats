@@ -109,6 +109,8 @@ selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
 selected_ages = ['age_all'] if selected_metric == 'asr' || selected_metric == 'birth_rate'
 requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.uniq
+requested_start_year = cgi['start_year'].to_i
+default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : 2000
 
 def location_names(code)
   known = Locs[code]
@@ -689,7 +691,7 @@ def compute_scenarios(rows, series_key, label)
           year: row[:year], observed: row[:observed],
           expected: prediction[:expected], pi_lower: prediction[:lower],
           pi_upper: prediction[:upper], outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
-          period: row[:year] <= cutoff ? 'training' : 'prediction',
+          period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
           dispersion: fit[:dispersion]&.round(4), deaths: row[:deaths].round(2),
           population: row[:population].round, src_url: row[:src_url]
         }
@@ -961,6 +963,7 @@ puts <<~HTML
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
     <input id="train-to-hidden" type="hidden" name="train_to" value="#{default_cutoff}">
+    <input id="start-year-hidden" type="hidden" name="start_year" value="#{default_start_year}">
     <p>
       <button class="language-button" type="button" data-language="ja">日本語</button>
       <button class="language-button" type="button" data-language="en">English</button>
@@ -1261,6 +1264,11 @@ else
       #{ ($l == :ja ? (birth_metric ? '出生数をoffsetとしたPoisson回帰で、出生1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '月・週へ再集計せず、年次recordを直接表示しています。各国公式系列がある指標はWPPより優先します。') : (birth_metric ? 'Poisson regression uses births as the offset and displays rates per 1,000 births.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Annual records are displayed directly without monthly or weekly reaggregation. National series take priority over WPP for the same measure.')) + ($l == :ja ? ' Poissonの青帯は回帰係数と観測変動を含む10,000回シミュレーションによる95%予測区間です。準Poissonは過分散補正による近似95%予測区間です。' : ' The Poisson band is a 95% prediction interval from 10,000 simulations including coefficient and observation uncertainty. The quasi-Poisson band is an approximate overdispersion-adjusted 95% prediction interval.') + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
     </p>
     <p id="mortyear-controls" style="text-align:left">
+      <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
+        <input id="start-year-slider" type="range" min="1950" max="2015" step="1" value="#{default_start_year}">
+        <output id="start-year-output">#{default_start_year}</output>
+      </label>
+      &nbsp;
       <label>#{ $l == :ja ? '学習終了年' : 'Training end' }
         <input id="train-to-slider" type="range" min="#{cutoffs.min}" max="#{cutoffs.max}" step="1" value="#{default_cutoff}">
         <output id="train-to-output">#{default_cutoff}</output>
@@ -1280,7 +1288,7 @@ else
     <div id="mortyear-vis"></div>
     <script>
       const values = #{JSON.generate(chart_data)};
-      const displayYearMin = #{chart_data.map { |row| row[:year] }.min};
+      const displayStartDefault = #{default_start_year};
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
@@ -1290,11 +1298,12 @@ else
         width: "container", height: 260,
         transform: [
           {filter: `datum.series == '${key}'`},
+          {filter: "datum.year >= display_start"},
           {filter: "datum.train_to == train_to"},
           {filter: "datum.model == model"}
         ],
         encoding: {
-          x: {field: "year", type: "quantitative", scale: {domain: [displayYearMin, #{display_year_max}], nice: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
+          x: {field: "year", type: "quantitative", scale: {domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer: [
           {mark: {type: "area", color: "#dceaf5"}, encoding: {y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
@@ -1317,6 +1326,7 @@ else
         $schema: "https://vega.github.io/schema/vega-lite/v5.json",
         data: {values},
         params: [
+          {name:"display_start", value:displayStartDefault},
           {name:"train_to", value:trainDefault},
           {name:"model", value:"poisson"},
           {name:"zero_base", value:false}
@@ -1328,9 +1338,17 @@ else
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         const slider = document.getElementById("train-to-slider");
+        const startSlider = document.getElementById("start-year-slider");
+        const startOutput = document.getElementById("start-year-output");
         const output = document.getElementById("train-to-output");
         const model = document.getElementById("model-selector");
         const zeroBase = document.getElementById("zero-base-checkbox");
+        startSlider.addEventListener("input", () => {
+          const value = Number(startSlider.value);
+          startOutput.value = value;
+          document.getElementById("start-year-hidden").value = value;
+          result.view.signal("display_start", value).runAsync();
+        });
         slider.addEventListener("input", () => {
           const value = Number(slider.value);
           output.value = value;
