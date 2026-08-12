@@ -1537,6 +1537,21 @@ else
                end
              end
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
+  standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
+  selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
+  default_model = if selected_ages.include?('age_all') || selected_80_plus || standard_age_indexes.length * 5 >= 35
+                    'quasi_poisson'
+                  else
+                    'poisson'
+                  end
+  dispersion_labels = available_specs.to_h do |key, _age, cause, _label|
+    short_label = if mode == 'country'
+                    location_names(key).fetch($l)
+                  else
+                    SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
+                  end
+    [key, short_label]
+  end
   interval_note = if selected_metric == 'asr'
                     if $l == :ja
                       ' Poissonの青帯は年齢階級別の回帰係数分散と観測分散をWHO標準人口weightで合成した近似95%予測区間です。準Poissonは全階級の残差から推定した過分散を反映します。'
@@ -1565,10 +1580,11 @@ else
       &nbsp;
       <label>#{ $l == :ja ? 'モデル' : 'Model' }
         <select id="model-selector">
-          <option value="poisson">Poisson</option>
-          <option value="quasi_poisson">#{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }</option>
+          <option value="poisson" #{'selected' if default_model == 'poisson'}>Poisson</option>
+          <option value="quasi_poisson" #{'selected' if default_model == 'quasi_poisson'}>#{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }</option>
         </select>
       </label>
+      <output id="dispersion-output"></output>
       &nbsp;
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
@@ -1581,7 +1597,9 @@ else
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
+      const modelDefault = #{JSON.generate(default_model)};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
+      const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const panelSpecs = panels.map(([key, label]) => ({
         title: {text: label, anchor: "start"},
         width: "container", height: 260,
@@ -1617,7 +1635,7 @@ else
         params: [
           {name:"display_start", value:displayStartDefault},
           {name:"train_to", value:trainDefault},
-          {name:"model", value:"poisson"},
+          {name:"model", value:modelDefault},
           {name:"zero_base", value:false}
         ],
         vconcat: panelSpecs,
@@ -1631,7 +1649,16 @@ else
         const startOutput = document.getElementById("start-year-output");
         const output = document.getElementById("train-to-output");
         const model = document.getElementById("model-selector");
+        const dispersionOutput = document.getElementById("dispersion-output");
         const zeroBase = document.getElementById("zero-base-checkbox");
+        function updateDispersion(value) {
+          const parts = panels.map(([key]) => {
+            const row = values.find(item => item.series === key && item.train_to === value && item.model === "quasi_poisson");
+            return row && row.dispersion != null ? `${dispersionLabels[key]} ${Number(row.dispersion).toFixed(2)}` : null;
+          }).filter(Boolean);
+          dispersionOutput.value = parts.length ? `#{ $l == :ja ? '推定φ' : 'Estimated φ' }: ${parts.join(' / ')}` : '';
+        }
+        updateDispersion(trainDefault);
         startSlider.addEventListener("input", () => {
           const value = Number(startSlider.value);
           startOutput.value = value;
@@ -1641,6 +1668,7 @@ else
         slider.addEventListener("input", () => {
           const value = Number(slider.value);
           output.value = value;
+          updateDispersion(value);
           result.view.signal("train_to", value).runAsync();
         });
         model.addEventListener("change", () => {
