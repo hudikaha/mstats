@@ -23,7 +23,7 @@
 | `death_code` | keyword | 死因code。全死因は`00000` |
 | `death_cause` | keyword | 死因名 |
 | `sex` | keyword | `male`、`female`、`both`など |
-| `rate` | keyword | 空欄は元の値、`adj`は年齢補正系列、`amr`は年齢調整した年換算死亡率系列 |
+| `rate` | keyword | 空欄は件数、`crude_rate`は粗死亡率、`asr`は直接法による年齢調整死亡率。`adj`、`amr`などの旧系列もある |
 | `algo` | keyword | 比較・派生系列の計算法。元の値では空欄 |
 | `type` | keyword | 人口系列の区分。`conf`、`est`、`jpns`など |
 | `age_all` | scaled_float | 全年齢の値 |
@@ -42,6 +42,16 @@ IDは原則として地域、期間、category、rate、死因、algo、type、�
 `death_code=PERM`を使い、公表された丸め済み率と利用可能な出生分母から逆算した近似件数を
 `age_all`へ格納して、`algo=reconstructed`とします。`PERM`はOECDの指標codeであり、
 ICD死因codeではありません。
+
+UN World Population Prospects 2024の年次recordは`algo=un_wpp2024`を使い、
+1950～2100年を収録します。2023年以前は`type=estimate`、2024年以降の中位推計は
+`type=projection_medium`です。このtypeの人口は7月1日人口です。死亡率の分母に使う年間
+population exposureは、別の人口recordとして`exposure_estimate`または
+`exposure_projection_medium`に格納します。全死因死亡数は`death_code=00000`、
+`rate=crude_rate`は人口10万人当たりです。`rate=asr`はWHO世界標準人口
+（2000～2025年世界平均）への直接法による年齢調整死亡率を`age_all`へ格納し、
+`algo=un_wpp2024_who_standard`で区別します。WPPの値は国連推計・予測であり、各国が報告した
+人口動態登録死亡数ではありません。
 
 ## kcor / CUMD-WK（公開CSV: [kkcor公開ディレクトリ](https://fujikawa.org/pub/kkcor/) の `*-CUMD-WK.csv.xz`）
 

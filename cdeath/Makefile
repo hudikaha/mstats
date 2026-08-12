@@ -24,6 +24,13 @@ DCAUSE_SOURCE_DIR ?= $(ROOT)/src/causejp
 STMF_DIR ?= $(ROOT)/src/stmf
 STMF_SOURCE ?= $(STMF_DIR)/stmf.csv
 US_MORTYEAR_SOURCE ?= $(ROOT)/import/us-mortyear-series.csv
+WPP_DIR ?= $(ROOT)/src/wpp
+WPP_BASE_URL := https://population.un.org/wpp/assets/Excel%20Files/1_Indicator%20(Standard)/CSV_FILES
+WPP_DEMOGRAPHIC := $(WPP_DIR)/WPP2024_Demographic_Indicators_Medium.csv.gz
+WPP_DEATH_HIST := $(WPP_DIR)/WPP2024_DeathsBySingleAgeSex_Medium_1950-2023.csv.gz
+WPP_DEATH_PROJ := $(WPP_DIR)/WPP2024_DeathsBySingleAgeSex_Medium_2024-2100.csv.gz
+WPP_EXPOSURE_HIST := $(WPP_DIR)/WPP2024_PopulationExposureBySingleAgeSex_Medium_1950-2023.csv.gz
+WPP_EXPOSURE_PROJ := $(WPP_DIR)/WPP2024_PopulationExposureBySingleAgeSex_Medium_2024-2100.csv.gz
 DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
 
@@ -36,8 +43,8 @@ SERVER_WEB_DIR ?= fujikawa/covid19
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all fetch fetch-pop fetch-death fetch-stmf check csv mort-csv stmf-csv \
-  yearly-csv jp-yearly-csv us-yearly-csv validate-csv upload logstash cod codtr
+.PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-wpp check csv mort-csv stmf-csv \
+  yearly-csv jp-yearly-csv us-yearly-csv wpp-yearly-csv validate-csv upload logstash cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -99,6 +106,7 @@ help:
 	@echo 'make fetch-pop   Codexで人口の新規原CSVを取得'
 	@echo 'make fetch-death Codexで死因の新規原CSVを取得'
 	@echo 'make fetch-stmf HMD認証情報を環境変数から読みSTMF pooled CSVを取得'
+	@echo 'make fetch-wpp UN WPP 2024の人口・単年齢死亡・population exposureを取得'
 	@echo 'make all      Codexで取得後、CSV生成・必要時のみ投入'
 	@echo 'make csv      原CSV更新時に月次・週次の日時付き累積CSVを同時生成'
 	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
@@ -106,6 +114,7 @@ help:
 	@echo 'make yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
 	@echo 'make jp-yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
 	@echo 'make us-yearly-csv 米国の出生・乳児死亡・周産期死亡年次CSVを生成（投入しない）'
+	@echo 'make wpp-yearly-csv UN WPPの人口・死亡・粗死亡率・WHO標準ASRを生成（投入しない）'
 	@echo 'make validate-csv FILES="..." 投入前に期間・ID・値・出典を検査'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
 	@echo 'make codtr    make codと同じデータ更新（codtr.rbは年未完の月も表示）'
@@ -163,6 +172,21 @@ fetch-stmf:
 	 if ! ruby "$(ROOT)/import/fetch-stmf.rb" "$$out"; then rm -f "$$out"; exit 1; fi; \
 	 ln -sfn "$${out:t}" "$(STMF_SOURCE)"; \
 	 echo "updated $(STMF_SOURCE) -> $${out:t}"
+
+fetch-wpp:
+	@mkdir -p "$(WPP_DIR)"; \
+	 for name in \
+	   WPP2024_Demographic_Indicators_Medium.csv.gz \
+	   WPP2024_DeathsBySingleAgeSex_Medium_1950-2023.csv.gz \
+	   WPP2024_DeathsBySingleAgeSex_Medium_2024-2100.csv.gz \
+	   WPP2024_PopulationExposureBySingleAgeSex_Medium_1950-2023.csv.gz \
+	   WPP2024_PopulationExposureBySingleAgeSex_Medium_2024-2100.csv.gz; do \
+	   dst="$(WPP_DIR)/$$name"; tmp="$$dst.tmp"; \
+	   echo "[fetch-wpp] $$name"; \
+	   curl -L --fail --retry 8 --retry-all-errors --silent --show-error \
+	     "$(WPP_BASE_URL)/$$name" -o "$$tmp"; \
+	   gzip -t "$$tmp"; mv "$$tmp" "$$dst"; \
+	 done
 
 check:
 	@pop_sources=("$(POP_ARCHIVE_DIR)"/*.csv(N)); \
@@ -282,6 +306,21 @@ us-yearly-csv:
 	 if ! ruby "$(ROOT)/import/us-infant-yearly.rb" "$(US_MORTYEAR_SOURCE)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"
+
+wpp-yearly-csv:
+	@for file in "$(WPP_DEMOGRAPHIC)" "$(WPP_DEATH_HIST)" "$(WPP_DEATH_PROJ)" \
+	  "$(WPP_EXPOSURE_HIST)" "$(WPP_EXPOSURE_PROJ)"; do \
+	   test -s "$$file" || { echo "WPP source is missing: $$file"; exit 1; }; \
+	   gzip -t "$$file"; \
+	 done; \
+	 mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(DATA_DIR)/un-wpp-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 if ! python3 "$(ROOT)/import/un-wpp-yearly.py" \
+	   "$(WPP_DEMOGRAPHIC)" "$(WPP_DEATH_HIST)" "$(WPP_DEATH_PROJ)" \
+	   "$(WPP_EXPOSURE_HIST)" "$(WPP_EXPOSURE_PROJ)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 mv "$$tmp" "$$out"; echo "created $$out"; \
+	 echo '[wpp-yearly-csv] uploadとElasticsearch投入は行いません。'
 
 validate-csv:
 	@test -n "$(FILES)" || { echo 'FILES="CSV ..."を指定してください。'; exit 1; }

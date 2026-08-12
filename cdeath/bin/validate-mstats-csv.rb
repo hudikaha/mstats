@@ -157,7 +157,7 @@ birth_denominator_keys.each do |where, key|
 end
 
 death_rates.each do |key, rates|
-  next unless (rates & Set.new(%w[adj amr])).any?
+  next unless (rates & Set.new(%w[adj amr crude_rate])).any?
   warnings << "derived death series has no raw-count row: #{key.join('/')}" unless rates.include?('')
 end
 

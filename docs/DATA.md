@@ -25,7 +25,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `death_code` | keyword | Cause-of-death code; `00000` means all causes |
 | `death_cause` | keyword | Cause-of-death name |
 | `sex` | keyword | `male`, `female`, `both`, and related source categories |
-| `rate` | keyword | Empty for source values, `adj` for age-adjusted series, or `amr` for age-adjusted annualized mortality-rate series |
+| `rate` | keyword | Empty for counts, `crude_rate` for crude rates, `asr` for directly age-standardized rates, and legacy values such as `adj` or `amr` |
 | `algo` | keyword | Method for a comparative or derived series; empty for source values |
 | `type` | keyword | Population-series class such as `conf`, `est`, or `jpns` |
 | `age_all` | scaled_float | Value for all ages |
@@ -47,6 +47,18 @@ perinatal-mortality indicator uses `death_code=PERM`; its `age_all` value is an
 approximate event count reconstructed from the published rounded rate and the
 available birth denominator, and is marked `algo=reconstructed`. `PERM` is an
 OECD indicator code, not an ICD cause code.
+
+UN World Population Prospects 2024 annual records use `algo=un_wpp2024` and
+cover 1950–2100. Values through 2023 have `type=estimate`; later medium-variant
+values have `type=projection_medium`. Population records with those types are
+1 July population. Separate `exposure_estimate` and
+`exposure_projection_medium` population records contain annual population
+exposure and age groups used as mortality-rate denominators. All-cause death
+counts use `death_code=00000`; `rate=crude_rate` is per 100,000 population.
+`rate=asr` uses direct standardization to the WHO world standard population
+(world average for 2000–2025), is stored in `age_all`, and uses
+`algo=un_wpp2024_who_standard`. These WPP values are UN estimates and
+projections, not reported vital-registration counts.
 
 ## kcor / CUMD-WK (public CSV: `*-CUMD-WK.csv.xz` in the [kkcor directory](https://fujikawa.org/pub/kkcor/))
 
