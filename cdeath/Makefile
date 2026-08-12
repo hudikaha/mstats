@@ -384,7 +384,7 @@ logstash-official logstash-hmd logstash-wpp:
 	 for file in $(IMPORT_FILES); do \
 	   run_id=$$(date +%s); \
 	   echo "[$@] $${file:t}"; \
-	   ssh -tt $(SERVER) "sudo systemctl stop logstash; sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); export MSTATS_YEARLY_INDEX=$(YEARLY_INDEX); export MSTATS_IMPORT_PATH=$$file; exec $(LOGSTASH) --path.settings /etc/logstash --path.data /tmp/mstats-import-$$run_id -w 1 -r -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-import.conf'"; \
+	   ssh -tt $(SERVER) "sudo systemctl stop logstash; sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); export MSTATS_YEARLY_INDEX=$(YEARLY_INDEX); export MSTATS_IMPORT_PATH=$$file; exec $(LOGSTASH) --path.settings /etc/logstash --path.data /tmp/mstats-import-$$run_id -w 1 -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-import.conf'"; \
 	 done
 
 switch-mstats-alias:

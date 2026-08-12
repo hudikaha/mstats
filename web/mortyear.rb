@@ -1546,7 +1546,9 @@ else
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
   selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
-  default_model = if selected_ages.include?('age_all') || selected_80_plus || standard_age_indexes.length * 5 >= 35
+  default_model = if birth_metric
+                    'poisson'
+                  elsif selected_ages.include?('age_all') || selected_80_plus || standard_age_indexes.length * 5 >= 35
                     'quasi_poisson'
                   else
                     'poisson'
