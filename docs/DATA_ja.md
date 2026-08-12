@@ -44,6 +44,10 @@ IDは原則として地域、期間、category、rate、死因、algo、type、�
 `age_all`へ格納して、`algo=reconstructed`とします。`PERM`はOECDの指標codeであり、
 ICD死因codeではありません。
 
+日本の周産期死亡では、分母となる出産数（出生数＋妊娠満22週以後の死産数）を
+`category=delivery`の`age_all`へ格納します。`death_code=PERM`の公式死亡数はこの分母を使い、
+`algo=reconstructed`の近似系列は出生数を分母に使います。
+
 UN World Population Prospects 2024の年次recordは`algo=un_wpp2024`を使い、
 1950～2100年を収録します。2023年以前は`type=estimate`、2024年以降の中位推計は
 `type=projection_medium`です。このtypeの人口は7月1日人口です。死亡率の分母に使う年間

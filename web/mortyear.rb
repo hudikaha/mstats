@@ -87,7 +87,7 @@ METRICS = {
 }.freeze
 SPECIAL_CAUSES = {
   'INFANT' => { ja: '乳児死亡率', en: 'Infant mortality rate' },
-  'PERINATAL' => { ja: '周産期死亡率（近似）', en: 'Perinatal mortality rate (approximate)' }
+  'PERINATAL' => { ja: '周産期死亡率', en: 'Perinatal mortality rate' }
 }.freeze
 WORLD_REGIONS = {
   'Africa' => { ja: 'アフリカ', en: 'Africa' },
@@ -247,7 +247,7 @@ def metric_available?(code, rates, metric)
   when 'std_deaths' then code == 'JPN' && rates.include?('adj')
   when 'crude_rate' then code != 'JPN' && raw && rates.include?('amr')
   when 'asr' then code == 'JPN' && rates.include?('adj') && rates.include?('amr')
-  when 'birth_rate' then code == 'USA'
+  when 'birth_rate' then %w[JPN USA].include?(code)
   else false
   end
 end
@@ -260,7 +260,7 @@ def annual_metric_available?(code, catalog, metric)
   when 'deaths' then categories.include?('death') && codes.include?('00000')
   when 'crude_rate' then rates.include?('crude_rate')
   when 'asr' then rates.include?('asr')
-  when 'birth_rate' then code == 'USA' && categories.include?('birth')
+  when 'birth_rate' then %w[JPN USA].include?(code) && categories.include?('birth')
   else false
   end
 end
@@ -663,7 +663,8 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
     observed = values_for.call(row)
     raw = raw_groups.fetch([loc, year, cause], []).
           select { |candidate| !values_for.call(candidate).nil? }.min_by(&rank)
-    population_candidates = populations.fetch([loc, year], [])
+    population_candidates = populations.fetch([loc, year], []).
+                            select { |candidate| !values_for.call(candidate).nil? }
     population = if ages.include?('age_all')
                    population_candidates.reject { |item| item[:type].to_s.start_with?('exposure_') }.min_by(&rank)
                  else
@@ -883,10 +884,10 @@ selected_causes = requested_causes.select { |code| available_causes.include?(cod
 selected_causes = ['00000'].select { |code| available_causes.include?(code) } if selected_causes.empty?
 selected_causes = [available_causes.first].compact if selected_causes.empty?
 selected_causes = [selected_causes.first] if mode == 'country'
-if selected_metric == 'birth_rate' && selected_locations.include?('USA')
+if selected_metric == 'birth_rate' && (selected_locations & %w[JPN USA]).any?
   available_causes = SPECIAL_CAUSES.keys
   selected_causes = requested_causes.select { |code| available_causes.include?(code) }
-  selected_causes = ['INFANT'] if selected_causes.empty?
+  selected_causes = mode == 'series' ? SPECIAL_CAUSES.keys : ['INFANT'] if selected_causes.empty?
   selected_causes = [selected_causes.first] if mode == 'country'
 end
 # 日本語: 複数国比較では死因選択を使わず、共通の全死因へ固定する。
@@ -1016,48 +1017,40 @@ end }
 # 日本語: 年次の出生分母と乳児・周産期死亡分子を同じmstats indexから取得する。
 # English: Read annual birth denominators and infant/perinatal numerators from the shared mstats index.
 annual_source_fields = %w[id loc_code category rate death_code algo date year sex src_url age_all age_0]
-annual_records = if opts[:fixture]
-                   fixture_data.select do |row|
-                     row[:loc_code].to_s.casecmp?('usa') && !row[:yearmonth] && !row[:yearweek]
-                   end
-                 elsif selected_metric == 'birth_rate' && selected_locations.include?('USA')
-                   elastic_search(
-                     index: opts[:index], size: 1_000,
-                     filter: [{ 'term' => { 'loc_code' => 'usa' } }, { 'term' => { 'sex' => 'both' } }],
-                     must_not: [{ 'exists' => { 'field' => 'yearmonth' } },
-                                { 'exists' => { 'field' => 'yearweek' } }],
-                     source: annual_source_fields
-                   )
-                 else
-                   []
-                 end
-births_by_year = annual_records.select { |row| row[:category] == 'birth' }.
-                 to_h { |row| [row[:year].to_i, row] }
-us_special_rows = annual_records.filter_map do |row|
-  # 日本語: 乳児死亡率は米国公式系列を使い、同じ00000/age_0を持つWPP推計を混ぜない。
-  # English: Use the official U.S. infant series, excluding WPP estimates with the same 00000/age_0 fields.
-  cause, value = if row[:category] == 'death' && row[:death_code] == '00000' &&
-                    row[:rate].to_s.empty? && row[:algo].to_s.empty?
+annual_records = selected_metric == 'birth_rate' ? annual_records_all : []
+births_by_key = annual_records.select { |row| row[:category] == 'birth' }.
+                to_h { |row| [[row[:loc_code].to_s.upcase, row[:year].to_i], row] }
+deliveries_by_key = annual_records.select { |row| row[:category] == 'delivery' }.
+                   to_h { |row| [[row[:loc_code].to_s.upcase, row[:year].to_i], row] }
+special_rows = annual_records.filter_map do |row|
+  loc = row[:loc_code].to_s.upcase
+  # 日本語: 日本はINFANT/PERM公式数、米国は既存の乳児数と再構成PERMを使う。
+  # English: Use Japan's official INFANT/PERM counts and the existing U.S. infant/reconstructed PERM series.
+  cause, value = if row[:category] == 'death' && row[:death_code] == 'INFANT'
+                   ['INFANT', row[:age_all]]
+                 elsif loc == 'USA' && row[:category] == 'death' && row[:death_code] == '00000' &&
+                       row[:rate].to_s.empty? && row[:algo].to_s.empty?
                    ['INFANT', row[:age_0]]
-                 elsif row[:category] == 'death' && row[:death_code] == 'PERM' && row[:algo] == 'reconstructed'
+                 elsif row[:category] == 'death' && row[:death_code] == 'PERM'
                    ['PERINATAL', row[:age_all]]
                  end
   next unless cause && value
 
-  birth = births_by_year[row[:year].to_i]
-  next unless birth && birth[:age_all].to_f.positive?
+  key = [loc, row[:year].to_i]
+  denominator = cause == 'PERINATAL' ? deliveries_by_key[key] || births_by_key[key] : births_by_key[key]
+  next unless denominator && denominator[:age_all].to_f.positive?
 
-  births = birth[:age_all].to_f
-  urls = (Array(birth[:src_url]) + Array(row[:src_url])).compact.uniq
-  { loc_code: 'USA', sex: 'both', death_code: cause, year: row[:year].to_i,
-    deaths: value.to_f, population: births, observed: value.to_f / births * 1000.0,
+  population = denominator[:age_all].to_f
+  urls = (Array(denominator[:src_url]) + Array(row[:src_url])).compact.uniq
+  { loc_code: loc, sex: 'both', death_code: cause, year: row[:year].to_i,
+    deaths: value.to_f, population: population, observed: value.to_f / population * 1000.0,
     unit_scale: 1000.0, src_url: urls }
 end
 
 chart_data = series_specs.flat_map do |series_key, age, cause, label|
   loc = mode == 'country' ? series_key : selected_locations.first
   rows = if SPECIAL_CAUSES.key?(cause)
-           us_special_rows.select { |row| row[:loc_code] == loc && row[:death_code] == cause }
+           special_rows.select { |row| row[:loc_code] == loc && row[:death_code] == cause }
          else
            annual_by_age.fetch(age).select { |row| row[:loc_code] == loc && row[:death_code] == cause }
          end
@@ -1204,7 +1197,7 @@ puts <<~HTML
         </div>
       </div></div>
     </fieldset><br>
-    <fieldset id="cause-fieldset" style="#{selected_locations.length != 1 || !((selected_locations.first == 'JPN' && selected_metric != 'birth_rate') || (selected_locations.first == 'USA' && selected_metric == 'birth_rate')) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+    <fieldset id="cause-fieldset" style="#{selected_locations.length != 1 || !((selected_locations.first == 'JPN' && selected_metric != 'birth_rate') || (%w[JPN USA].include?(selected_locations.first) && selected_metric == 'birth_rate')) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
 HTML
 japan_causes = annual_catalog.dig('JPN', :death_codes).to_a.select { |cause| cause.match?(/\A\d{5}\z/) }
 japan_causes.each do |cause|
@@ -1281,7 +1274,7 @@ puts <<~HTML
         const selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
         const metric = document.querySelector('input[name="metric"]:checked').value;
         const scope = selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
-          selectedLocations.length === 1 && selectedLocations[0] === 'USA' && metric === 'birth_rate' ? 'birth' : null;
+          selectedLocations.length === 1 && ['JPN', 'USA'].includes(selectedLocations[0]) && metric === 'birth_rate' ? 'birth' : null;
         const hidden = scope === null;
         fieldset.style.display = hidden ? 'none' : '';
         causes.forEach(input => {
@@ -1294,8 +1287,12 @@ puts <<~HTML
         });
         const active = causes.filter(input => !input.disabled);
         if (active.length && !active.some(input => input.checked)) {
-          const preferred = active.find(input => input.value === (scope === 'birth' ? 'INFANT' : '00000')) || active[0];
-          preferred.checked = true;
+          if (scope === 'birth' && document.querySelector('.comparison-mode:checked').value === 'series') {
+            active.forEach(input => { input.checked = true; });
+          } else {
+            const preferred = active.find(input => input.value === (scope === 'birth' ? 'INFANT' : '00000')) || active[0];
+            preferred.checked = true;
+          }
         }
       }
       const standardAges = #{JSON.generate(STANDARD_AGES)};
@@ -1398,11 +1395,6 @@ puts <<~HTML
           label.style.display = available ? "" : "none";
           label.querySelector('input').disabled = !available;
         });
-        if (metric === 'birth_rate') {
-          document.querySelectorAll('.location-option').forEach(input => {
-            input.checked = input.value === 'USA';
-          });
-        }
         document.querySelectorAll('.location-region').forEach(details => {
           const visible = Array.from(details.querySelectorAll('.location-label')).some(label => label.style.display !== 'none');
           details.style.display = visible ? '' : 'none';
@@ -1447,13 +1439,13 @@ else
   count_metric = %w[deaths std_deaths].include?(selected_metric)
   birth_metric = selected_metric == 'birth_rate'
   denominator_title = if birth_metric
-                        $l == :ja ? '出生数（近似分母を含む）' : 'Births (including approximate denominator)'
+                        $l == :ja ? '出生数または出産数' : 'Births or deliveries'
                       elsif selected_ages == ['age_0']
                         $l == :ja ? '0歳人口' : 'Age-0 population'
                       else
                         $l == :ja ? '人口' : 'Population'
                       end
-  approximation_note = if selected_causes.include?('PERINATAL')
+  approximation_note = if selected_locations.include?('USA') && selected_causes.include?('PERINATAL')
                          $l == :ja ? ' 米国の周産期死亡数は、丸められた公表率と出生数から逆算した近似値です。2006年と2010年は欠測のままです。' : ' U.S. perinatal death counts are approximate values reconstructed from rounded published rates and births; 2006 and 2010 remain missing.'
                        else
                          ''
@@ -1466,7 +1458,21 @@ else
   end
   source_items = []
   if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
-    method = if selected_metric == 'asr' && $l == :ja
+    method = if selected_metric == 'birth_rate' &&
+                selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL') && $l == :ja
+               'e-Statの確定数を使用。乳児死亡率の分母は出生数、周産期死亡率の分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
+             elsif selected_metric == 'birth_rate' &&
+                   selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL')
+               'Uses final e-Stat counts. Infant mortality uses births as the denominator; perinatal mortality uses deliveries (births plus fetal deaths at 22 completed weeks or later).'
+             elsif selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL') && $l == :ja
+               'e-Statの確定数を使用。周産期死亡率の分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
+             elsif selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL')
+               'Uses final e-Stat counts and deliveries (births plus fetal deaths at 22 completed weeks or later) as the denominator.'
+             elsif selected_metric == 'birth_rate' && $l == :ja
+               'e-Statの確定出生数と乳児死亡数を使用しています。'
+             elsif selected_metric == 'birth_rate'
+               'Uses final annual birth and infant death counts from e-Stat.'
+             elsif selected_metric == 'asr' && $l == :ja
                'e-Statの年齢階級別死亡数・人口を優先し、不足階級はUN WPP 2024で補完。WHO世界標準人口で直接法により年齢調整している。'
              elsif selected_metric == 'asr'
                'Age-specific e-Stat deaths and populations take priority, with UN WPP 2024 filling unavailable strata; direct standardization uses the WHO world standard population.'
@@ -1523,7 +1529,7 @@ else
                   end
   puts <<~HTML
     <p class="mortyear-note">
-      #{ ($l == :ja ? (birth_metric ? '出生数をoffsetとしたPoisson回帰で、出生1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '月・週へ再集計せず、年次recordを直接表示しています。各国公式系列がある指標はWPPより優先します。') : (birth_metric ? 'Poisson regression uses births as the offset and displays rates per 1,000 births.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Annual records are displayed directly without monthly or weekly reaggregation. National series take priority over WPP for the same measure.')) + interval_note + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
+      #{ ($l == :ja ? (birth_metric ? '指標に対応する分母をoffsetとしたPoisson回帰で、1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '月・週へ再集計せず、年次recordを直接表示しています。各国公式系列がある指標はWPPより優先します。') : (birth_metric ? 'Poisson regression uses the denominator for each measure as the offset and displays rates per 1,000.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Annual records are displayed directly without monthly or weekly reaggregation. National series take priority over WPP for the same measure.')) + interval_note + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
     </p>
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }

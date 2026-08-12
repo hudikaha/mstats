@@ -24,6 +24,9 @@ DCAUSE_SOURCE_DIR ?= $(ROOT)/src/causejp
 STMF_DIR ?= $(ROOT)/src/stmf
 STMF_SOURCE ?= $(STMF_DIR)/stmf.csv
 US_MORTYEAR_SOURCE ?= $(ROOT)/import/us-mortyear-series.csv
+JP_INFANT_DIR ?= $(ROOT)/src/infantjp
+JP_INFANT_SOURCE ?= $(JP_INFANT_DIR)/2024-infant-6-1.csv
+JP_PERINATAL_SOURCE ?= $(JP_INFANT_DIR)/2024-perinatal-8-1.csv
 WPP_DIR ?= $(ROOT)/src/wpp
 WPP_BASE_URL := https://population.un.org/wpp/assets/Excel%20Files/1_Indicator%20(Standard)/CSV_FILES
 WPP_DEMOGRAPHIC := $(WPP_DIR)/WPP2024_Demographic_Indicators_Medium.csv.gz
@@ -45,7 +48,7 @@ LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
 .PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-wpp check csv mort-csv stmf-csv \
-  yearly-csv jp-yearly-csv us-yearly-csv wpp-yearly-csv validate-csv upload-official \
+  yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv wpp-yearly-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-yearly logstash-official logstash-hmd logstash-wpp \
   switch-mstats-alias upload logstash cod codtr
 
@@ -116,6 +119,7 @@ help:
 	@echo 'make stmf-csv STMF pooled CSVをmstats2026週次CSVへ変換（投入しない）'
 	@echo 'make yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
 	@echo 'make jp-yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
+	@echo 'make jp-infant-yearly-csv 日本の乳児・周産期死亡の年次CSVを生成（投入しない）'
 	@echo 'make us-yearly-csv 米国の出生・乳児死亡・周産期死亡年次CSVを生成（投入しない）'
 	@echo 'make wpp-yearly-csv UN WPPの人口・死亡・粗死亡率・WHO標準ASRを生成（投入しない）'
 	@echo 'make upload-official 各国公式CSVをserverへ送る（投入しない）'
@@ -317,6 +321,16 @@ us-yearly-csv:
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"
 
+jp-infant-yearly-csv:
+	@test -s "$(JP_INFANT_SOURCE)" || { echo "日本乳児死亡sourceがありません: $(JP_INFANT_SOURCE)"; exit 1; }
+	@test -s "$(JP_PERINATAL_SOURCE)" || { echo "日本周産期死亡sourceがありません: $(JP_PERINATAL_SOURCE)"; exit 1; }
+	@mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(DATA_DIR)/jp-infant-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 if ! ruby "$(ROOT)/import/jp-infant-yearly.rb" "$(JP_INFANT_SOURCE)" "$(JP_PERINATAL_SOURCE)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 mv "$$tmp" "$$out"; echo "created $$out"; \
+	 echo '[jp-infant-yearly-csv] uploadとElasticsearch投入は行いません。'
+
 wpp-yearly-csv:
 	@for file in "$(WPP_DEMOGRAPHIC)" "$(WPP_DEATH_HIST)" "$(WPP_DEATH_PROJ)" \
 	  "$(WPP_EXPOSURE_HIST)" "$(WPP_EXPOSURE_PROJ)"; do \
@@ -338,12 +352,13 @@ validate-csv:
 
 upload-official: upload
 	@jp_files=("$(DATA_DIR)"/jp-yearly-mstats2026-*.csv(Nom)); jp=$$jp_files[1]; \
+	 jp_infant_files=("$(DATA_DIR)"/jp-infant-yearly-mstats2026-*.csv(Nom)); jp_infant=$$jp_infant_files[1]; \
 	 us_files=("$(DATA_DIR)"/us-yearly-mstats2026-*.csv(Nom)); us=$$us_files[1]; \
-	 test -n "$$jp" -a -n "$$us" || { echo '日本年次または米国年次CSVがありません。'; exit 1; }; \
-	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$jp" "$$us"; \
+	 test -n "$$jp" -a -n "$$jp_infant" -a -n "$$us" || { echo '日本年次・日本乳児年次・米国年次CSVのいずれかがありません。'; exit 1; }; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$jp" "$$jp_infant" "$$us"; \
 	 echo '[upload-official] 最新の日本・米国年次CSVを$(SERVER)へ送ります。'; \
-	 scp "$$jp" "$$us" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${jp:t} jp-yearly-mstats2026.csv && ln -sfn data/$${us:t} us-yearly-mstats2026.csv"
+	 scp "$$jp" "$$jp_infant" "$$us" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${jp:t} jp-yearly-mstats2026.csv && ln -sfn data/$${jp_infant:t} jp-infant-yearly-mstats2026.csv && ln -sfn data/$${us:t} us-yearly-mstats2026.csv"
 
 upload-hmd:
 	@files=("$(DATA_DIR)"/stmf-weekly-mstats2026-*.csv(Nom)); file=$$files[1]; \
@@ -361,14 +376,15 @@ upload-wpp:
 
 upload-yearly: upload-official upload-wpp
 
-logstash-official: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/us-yearly-mstats2026.csv
+logstash-official: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-infant-yearly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/us-yearly-mstats2026.csv
 logstash-hmd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/stmf-weekly-mstats2026.csv
 logstash-wpp: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-wpp-yearly-mstats2026.csv
 logstash-official logstash-hmd logstash-wpp:
 	@echo '[$@] $(YEARLY_INDEX)へ投入します。'; \
 	 for file in $(IMPORT_FILES); do \
+	   run_id=$$(date +%s); \
 	   echo "[$@] $${file:t}"; \
-	   ssh -tt $(SERVER) "sudo systemctl stop logstash; sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); export MSTATS_YEARLY_INDEX=$(YEARLY_INDEX); export MSTATS_IMPORT_PATH=$$file; exec $(LOGSTASH) --path.settings /etc/logstash --path.data /tmp/mstats-import-\$\$ -w 1 -r -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-import.conf'"; \
+	   ssh -tt $(SERVER) "sudo systemctl stop logstash; sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); export MSTATS_YEARLY_INDEX=$(YEARLY_INDEX); export MSTATS_IMPORT_PATH=$$file; exec $(LOGSTASH) --path.settings /etc/logstash --path.data /tmp/mstats-import-$$run_id -w 1 -r -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-import.conf'"; \
 	 done
 
 switch-mstats-alias:
