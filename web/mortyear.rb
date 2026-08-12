@@ -1140,6 +1140,7 @@ puts <<~HTML
     #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
     #mortyear-vis .vega-embed, #mortyear-vis .vega-embed > div { width:100%; max-width:100%; }
     #mortyear-vis svg { display:block; max-width:100%; height:auto; }
+    .mortyear-loading { min-height:12em; display:flex; align-items:center; justify-content:center; font-size:1.2em; font-weight:bold; }
   </style>
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
@@ -1242,6 +1243,11 @@ puts <<~HTML
   </form>
   <script>
     (function () {
+      function showLoading() {
+        const vis = document.getElementById('mortyear-vis');
+        if (vis) vis.innerHTML = '<div class="mortyear-loading">#{ $l == :ja ? '読み込み中……' : 'Loading…' }</div>';
+      }
+      document.querySelector('.mortyear-form').addEventListener('submit', showLoading);
       function setInputMode(inputs, type, name) {
         inputs.forEach(input => {
           input.type = type;
@@ -1413,6 +1419,7 @@ puts <<~HTML
         button.addEventListener('click', () => {
           const form = button.closest('form');
           form.querySelector('input[name="l"]').value = button.dataset.language;
+          showLoading();
           form.submit();
         });
       });
