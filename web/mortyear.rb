@@ -1240,7 +1240,13 @@ puts <<~HTML
         const vis = document.getElementById('mortyear-vis');
         if (vis) vis.innerHTML = '<div class="mortyear-loading">#{ $l == :ja ? '読み込み中……' : 'Loading…' }</div>';
       }
-      document.querySelector('.mortyear-form').addEventListener('submit', showLoading);
+      document.querySelector('.mortyear-form').addEventListener('submit', () => {
+        // 日本語: all選択時は個別年齢をGET parameterに重複して送らない。
+        // English: When all ages is selected, omit redundant individual age parameters.
+        const allAges = document.querySelector('.age-special-option[value="age_all"]');
+        if (allAges.checked) standardInputs().forEach(input => { input.disabled = true; });
+        showLoading();
+      });
       function setInputMode(inputs, type, name) {
         inputs.forEach(input => {
           input.type = type;
