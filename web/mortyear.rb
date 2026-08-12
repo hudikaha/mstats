@@ -994,7 +994,11 @@ age_selection_label = if selected_ages.include?('age_all')
                       end
 panel_label = lambda do |loc, cause|
   cause_name = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
-  parts = [location_names(loc).fetch($l), METRICS.fetch(selected_metric).fetch($l), age_selection_label]
+  parts = if selected_metric == 'birth_rate'
+            [location_names(loc).fetch($l)]
+          else
+            [location_names(loc).fetch($l), METRICS.fetch(selected_metric).fetch($l), age_selection_label]
+          end
   parts << sex_labels.fetch(selected_sex).fetch($l) unless selected_sex == 'both'
   parts << cause_name
   parts.join(' ')
@@ -1417,7 +1421,7 @@ puts <<~HTML
         const metric = document.querySelector('.metric-option:checked').value;
         const fixedAllAges = metric === 'asr' || metric === 'birth_rate';
         document.querySelectorAll('.age-option').forEach(input => {
-          input.disabled = fixedAllAges && input.value !== 'age_all';
+          input.disabled = metric === 'birth_rate' || (metric === 'asr' && input.value !== 'age_all');
           if (fixedAllAges) input.checked = input.value === 'age_all';
         });
         if (!fixedAllAges && document.querySelector('.age-special-option[value="age_all"]').checked) {
@@ -1633,7 +1637,9 @@ else
           <option value="quasi_poisson" #{'selected' if default_model == 'quasi_poisson'}>#{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }</option>
         </select>
       </label>
-      <output id="dispersion-output"></output>
+      <!-- 推定φの計算値はchart dataに残すが、画面には表示しない。
+           Keep estimated dispersion in chart data, but do not display it. -->
+      <!-- <output id="dispersion-output"></output> -->
       &nbsp;
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
@@ -1698,8 +1704,9 @@ else
         const startOutput = document.getElementById("start-year-output");
         const output = document.getElementById("train-to-output");
         const model = document.getElementById("model-selector");
-        const dispersionOutput = document.getElementById("dispersion-output");
         const zeroBase = document.getElementById("zero-base-checkbox");
+        /* 推定φ表示を再開するときのために残す。Keep for restoring the estimated-phi display.
+        const dispersionOutput = document.getElementById("dispersion-output");
         function updateDispersion(value) {
           const parts = panels.map(([key]) => {
             const row = values.find(item => item.series === key && item.train_to === value && item.model === "quasi_poisson");
@@ -1708,6 +1715,7 @@ else
           dispersionOutput.value = parts.length ? `#{ $l == :ja ? '推定φ' : 'Estimated φ' }: ${parts.join(' / ')}` : '';
         }
         updateDispersion(trainDefault);
+        */
         startSlider.addEventListener("input", () => {
           const value = Number(startSlider.value);
           startOutput.value = value;
@@ -1717,7 +1725,7 @@ else
         slider.addEventListener("input", () => {
           const value = Number(slider.value);
           output.value = value;
-          updateDispersion(value);
+          // updateDispersion(value); // 推定φは現在非表示。Estimated phi is currently hidden.
           result.view.signal("train_to", value).runAsync();
         });
         model.addEventListener("change", () => {
