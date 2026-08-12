@@ -637,32 +637,32 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
       !row[:type].to_s.include?('projection')
   end
   rank = ->(row) { row[:algo].to_s.start_with?('un_wpp2024') ? 1 : 0 }
-  chosen = lambda do |rows|
-    rows.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }.
-      transform_values { |values| values.min_by(&rank) }
-  end
   rate_name = metric == 'asr' ? 'asr' : ''
-  value_rows = chosen.call(relevant.select do |row|
+  value_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) &&
       row[:rate].to_s == rate_name
-  end)
-  raw_rows = chosen.call(relevant.select do |row|
+  end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+  raw_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) && row[:rate].to_s.empty?
-  end)
+  end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
   populations = relevant.select { |row| row[:category] == 'pop' }.group_by do |row|
     [row[:loc_code].to_s.upcase, row[:year].to_i]
   end
 
-  value_rows.filter_map do |(loc, year, cause), row|
+  value_groups.filter_map do |(loc, year, cause), candidates|
     values_for = lambda do |record|
       next nil unless record
       fields = ages.include?('age_all') ? ['age_all'] : ages
       values = fields.map { |field| record[field.to_sym] }
       values.all? ? values.sum(&:to_f) : nil
     end
+    # 日本語: 必要な年齢fieldを持つrecordの中で各国公式値をWPPより優先する。
+    # English: Prefer national data among records that contain every requested age field.
+    row = candidates.select { |candidate| !values_for.call(candidate).nil? }.min_by(&rank)
+    next unless row
     observed = values_for.call(row)
-    next if observed.nil?
-    raw = raw_rows[[loc, year, cause]]
+    raw = raw_groups.fetch([loc, year, cause], []).
+          select { |candidate| !values_for.call(candidate).nil? }.min_by(&rank)
     population_candidates = populations.fetch([loc, year], [])
     population = if ages.include?('age_all')
                    population_candidates.reject { |item| item[:type].to_s.start_with?('exposure_') }.min_by(&rank)
