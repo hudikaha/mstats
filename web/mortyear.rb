@@ -1818,13 +1818,7 @@ else
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
   selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
-  default_model = if birth_metric
-                    'poisson'
-                  elsif selected_ages.include?('age_all') || selected_80_plus || standard_age_indexes.length * 5 >= 35
-                    'quasi_poisson'
-                  else
-                    'poisson'
-                  end
+  default_model = 'quasi_poisson'
   dispersion_labels = available_specs.to_h do |key, _age, cause, _label|
     short_label = if mode == 'country'
                     location_names(key).fetch($l)
@@ -1834,14 +1828,11 @@ else
     [key, short_label]
   end
   interval_note = if $l == :ja
-                    ' simulation未計算時は近似95%予測区間を表示し、後処理完了後はPoissonの10,000回simulation結果を自動使用します（青：simulation、黄：近似計算）。準Poissonは過分散補正による近似95%予測区間です。'
+                    '準Poissonは、観測された過分散を反映した近似95%予測区間です。Poissonでは、計算済みなら10,000回simulationによる区間へ切り替えられます（青：近似計算、黄：simulation）。'
                   else
-                    ' When simulation is not yet available, an approximate 95% prediction interval is shown. After deferred processing, Poisson automatically uses 10,000 simulations (blue: simulation; yellow: analytic approximation). Quasi-Poisson uses an approximate overdispersion-adjusted interval.'
+                    'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: analytic approximation; yellow: simulation).'
                   end
   puts <<~HTML
-    <p class="mortyear-note">
-      #{ ($l == :ja ? (birth_metric ? '指標に対応する分母をoffsetとしたPoisson回帰で、1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '') : (birth_metric ? 'Poisson regression uses the denominator for each measure as the offset and displays rates per 1,000.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : '')) + interval_note + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
-    </p>
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
         <input id="start-year-slider" type="range" min="1950" max="2015" step="1" value="#{default_start_year}">
@@ -1859,16 +1850,16 @@ else
       &nbsp;
       <label>#{ $l == :ja ? 'モデル' : 'Model' }
         <select id="model-selector">
-          <option value="poisson" #{'selected' if default_model == 'poisson'}>Poisson</option>
           <option value="quasi_poisson" #{'selected' if default_model == 'quasi_poisson'}>#{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }</option>
+          <option value="poisson" #{'selected' if default_model == 'poisson'}>Poisson</option>
         </select>
       </label>
       <!-- 推定φの計算値はchart dataに残すが、画面には表示しない。
            Keep estimated dispersion in chart data, but do not display it. -->
       <!-- <output id="dispersion-output"></output> -->
       &nbsp;
-      <label><input id="analytic-interval-checkbox" type="checkbox" #{'checked' if interval_mode == 'analytic'}>
-        #{ $l == :ja ? '近似計算を使用' : 'Use analytic approximation' }
+      <label id="simulation-interval-control" style="display:none"><input id="simulation-interval-checkbox" type="checkbox" #{'checked' unless interval_mode == 'analytic'}>
+        #{ $l == :ja ? 'simulation区間を表示（未計算時は近似区間。1分以上待って再読み込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and reload)' }
       </label>
     </p>
     <div id="mortyear-vis"></div>
@@ -1896,8 +1887,8 @@ else
           x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer: [
-          {mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#c7dff0","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
-          {mark: {type: "line", strokeDash: [6,4], strokeWidth: 2}, encoding: {color:{field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#246a9e","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
+          {mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
+          {mark: {type: "line", strokeDash: [6,4], strokeWidth: 2}, encoding: {color:{field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#88733b","#246a9e"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
             {field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}},
             {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
@@ -1935,7 +1926,8 @@ else
         const output = document.getElementById("train-to-output");
         const model = document.getElementById("model-selector");
         const zeroBase = document.getElementById("zero-base-checkbox");
-        const analyticInterval = document.getElementById("analytic-interval-checkbox");
+        const simulationControl = document.getElementById("simulation-interval-control");
+        const simulationInterval = document.getElementById("simulation-interval-checkbox");
         /* 推定φ表示を再開するときのために残す。Keep for restoring the estimated-phi display.
         const dispersionOutput = document.getElementById("dispersion-output");
         function updateDispersion(value) {
@@ -1959,18 +1951,21 @@ else
           // updateDispersion(value); // 推定φは現在非表示。Estimated phi is currently hidden.
           result.view.signal("train_to", value).runAsync();
         });
-        model.addEventListener("change", () => {
+        function syncModelControls() {
           result.view.signal("model", model.value).runAsync();
-        });
+          simulationControl.style.display = model.value === "poisson" ? "" : "none";
+        }
+        model.addEventListener("change", syncModelControls);
+        syncModelControls();
         zeroBase.addEventListener("change", () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
         });
-        analyticInterval.addEventListener("change", () => {
-          const value = analyticInterval.checked ? "analytic" : "auto";
+        simulationInterval.addEventListener("change", () => {
+          const value = simulationInterval.checked ? "auto" : "analytic";
           result.view.signal("interval_mode", value).runAsync();
           const url = new URL(window.location.href);
-          if (analyticInterval.checked) url.searchParams.set("interval", "analytic");
-          else url.searchParams.delete("interval");
+          if (simulationInterval.checked) url.searchParams.delete("interval");
+          else url.searchParams.set("interval", "analytic");
           history.replaceState(null, "", url);
         });
         result.view.addSignalListener("train_to", (_name, value) => {
@@ -1981,6 +1976,9 @@ else
         });
       }).catch(console.warn);
     </script>
+    <p class="mortyear-note">
+      #{ interval_note + ' ' + ($l == :ja ? (birth_metric ? '指標に対応する分母をoffsetとしたPoisson回帰で、1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '') : (birth_metric ? 'Poisson regression uses the denominator for each measure as the offset and displays rates per 1,000.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : '')) + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
+    </p>
     <section class="mortyear-sources" style="text-align:left">
       <h2>#{ $l == :ja ? 'グラフに使用したデータ' : 'Data used for the graphs' }</h2>
       #{wpp_note ? %(<p class="mortyear-note">#{CGI.escapeHTML(wpp_note)}</p>) : ''}
