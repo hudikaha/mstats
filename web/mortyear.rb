@@ -131,7 +131,14 @@ OptionParser.new do |parser|
   parser.on('--debug') { opts[:debug] = true }
   parser.on('--fixture FILE') { |value| opts[:fixture] = value }
   parser.on('--summary') { opts[:summary] = true }
-  parser.on('--process-cache-jobs N', Integer) { |value| opts[:process_cache_jobs] = value }
+  parser.on('--process-cache-jobs N', 'Maximum jobs or all') do |value|
+    opts[:process_cache_jobs] = value == 'all' ? :all : Integer(value, 10).then do |number|
+      raise ArgumentError unless number.positive?
+      number
+    end
+  rescue ArgumentError
+    raise OptionParser::InvalidArgument, 'use a positive integer or all'
+  end
   parser.on('--verify-cache') { opts[:verify_cache] = true }
   parser.on('--cache-dir DIR') { |value| opts[:cache_dir] = File.expand_path(value) }
 end.parse!(ARGV)
@@ -975,7 +982,8 @@ end
 # English: Simulate a bounded number of queued entries and atomically create magician-owned cache files.
 def process_mortyear_cache_jobs(limit)
   queue_paths = Dir.glob(File.join(cache_root, 'queue', '[0-9a-f][0-9a-f]', '[0-9a-f]' * 64 + '.json.gz')).
-                sort_by { |path| File.mtime(path) }.first([limit, 0].max)
+                sort_by { |path| File.mtime(path) }
+  queue_paths = queue_paths.first([limit, 0].max) unless limit == :all
   queue_paths.each do |queue_path|
     digest = File.basename(queue_path, '.json.gz')
     document = gzip_read(queue_path)
@@ -1826,9 +1834,9 @@ else
     [key, short_label]
   end
   interval_note = if $l == :ja
-                    ' simulation未計算時は近似95%予測区間を表示し、後処理完了後はPoissonの10,000回simulation結果を自動使用します。準Poissonは過分散補正による近似95%予測区間です。'
+                    ' simulation未計算時は近似95%予測区間を表示し、後処理完了後はPoissonの10,000回simulation結果を自動使用します（青：simulation、黄：近似計算）。準Poissonは過分散補正による近似95%予測区間です。'
                   else
-                    ' When simulation is not yet available, an approximate 95% prediction interval is shown. After deferred processing, Poisson automatically uses 10,000 simulations. Quasi-Poisson uses an approximate overdispersion-adjusted interval.'
+                    ' When simulation is not yet available, an approximate 95% prediction interval is shown. After deferred processing, Poisson automatically uses 10,000 simulations (blue: simulation; yellow: analytic approximation). Quasi-Poisson uses an approximate overdispersion-adjusted interval.'
                   end
   puts <<~HTML
     <p class="mortyear-note">
@@ -1845,6 +1853,10 @@ else
         <output id="train-to-output">#{default_cutoff}</output>
       </label>
       &nbsp;
+      <label><input id="zero-base-checkbox" type="checkbox">
+        #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
+      </label>
+      &nbsp;
       <label>#{ $l == :ja ? 'モデル' : 'Model' }
         <select id="model-selector">
           <option value="poisson" #{'selected' if default_model == 'poisson'}>Poisson</option>
@@ -1854,10 +1866,6 @@ else
       <!-- 推定φの計算値はchart dataに残すが、画面には表示しない。
            Keep estimated dispersion in chart data, but do not display it. -->
       <!-- <output id="dispersion-output"></output> -->
-      &nbsp;
-      <label><input id="zero-base-checkbox" type="checkbox">
-        #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
-      </label>
       &nbsp;
       <label><input id="analytic-interval-checkbox" type="checkbox" #{'checked' if interval_mode == 'analytic'}>
         #{ $l == :ja ? '近似計算を使用' : 'Use analytic approximation' }
