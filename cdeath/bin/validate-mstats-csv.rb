@@ -16,6 +16,7 @@ end.parse!
 abort 'one or more CSV files are required' if ARGV.empty?
 
 ALLOWED_CATEGORIES = %w[death pop birth fetal-death].freeze
+SPECIAL_DEATH_CODES = %w[PERM].freeze
 NUMERIC = /\A-?(?:\d+(?:\.\d*)?|\.\d+)\z/
 
 ids = {}
@@ -24,6 +25,7 @@ cause_systems = Hash.new(0)
 death_rates = Hash.new { |hash, key| hash[key] = Set.new }
 birth_keys = Set.new
 infant_rate_keys = []
+birth_denominator_keys = []
 errors = []
 warnings = []
 
@@ -95,6 +97,8 @@ ARGV.each do |file|
       errors << "#{where}: death_code is missing" if death_code.empty?
       system = if death_code == '00000'
                  'all'
+               elsif SPECIAL_DEATH_CODES.include?(death_code)
+                 'indicator'
                elsif death_code.match?(/\A\d/)
                  'japan'
                elsif death_code.match?(/\A[A-Z]/)
@@ -117,6 +121,10 @@ ARGV.each do |file|
     elsif category == 'death' && row['rate'] == 'imr'
       errors << "#{where}: infant mortality rate requires age_0" unless row['age_0'].to_s.match?(NUMERIC)
       infant_rate_keys << [where, [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
+    elsif category == 'death' && death_code == 'PERM'
+      errors << "#{where}: PERM requires algo=reconstructed" unless row['algo'] == 'reconstructed'
+      errors << "#{where}: PERM age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
+      birth_denominator_keys << [where, [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
     end
 
     row.headers.grep(/\Aage_/).each do |field|
@@ -143,6 +151,9 @@ end
 
 infant_rate_keys.each do |where, key|
   errors << "#{where}: infant mortality rate has no matching birth denominator" unless birth_keys.include?(key)
+end
+birth_denominator_keys.each do |where, key|
+  errors << "#{where}: reconstructed indicator has no matching birth denominator" unless birth_keys.include?(key)
 end
 
 death_rates.each do |key, rates|

@@ -3,7 +3,6 @@
 # frozen_string_literal: true
 
 require 'cgi'
-require 'csv'
 require 'date'
 require 'digest'
 require 'fileutils'
@@ -622,24 +621,43 @@ annual_by_age = AGES.keys.to_h do |age|
   [age, annual]
 end
 
-us_series_file = File.expand_path('data/mortyear-us-series.csv', __dir__)
-us_special_rows = if File.file?(us_series_file)
-                    CSV.read(us_series_file, headers: true).flat_map do |row|
-                      SPECIAL_CAUSES.keys.map do |cause|
-                        field = cause == 'INFANT' ? 'infant_deaths' : 'perinatal_deaths'
-                        value = row[field].to_s.match?(/\A(?:|NA|\.)\z/) ? nil : row[field].to_f
-                        next unless value
-                        urls = row['src_url'].to_s.split('|')
-                        urls = urls.take(1) if cause == 'INFANT'
-                        births = row['births'].to_f
-                        { loc_code: 'USA', sex: 'both', death_code: cause, year: row['year'].to_i,
-                          deaths: value, population: births, observed: value / births * 1000.0, unit_scale: 1000.0,
-                          src_url: urls }
-                      end.compact
-                    end
-                  else
-                    []
-                  end
+# 日本語: 年次の出生分母と乳児・周産期死亡分子を同じmstats indexから取得する。
+# English: Read annual birth denominators and infant/perinatal numerators from the shared mstats index.
+annual_source_fields = %w[id loc_code category rate death_code algo date year sex src_url age_all age_0]
+annual_records = if opts[:fixture]
+                   fixture_data.select do |row|
+                     row[:loc_code].to_s.casecmp?('usa') && !row[:yearmonth] && !row[:yearweek]
+                   end
+                 elsif selected_metric == 'birth_rate' && selected_locations.include?('USA')
+                   elastic_search(
+                     index: opts[:index], size: 1_000,
+                     filter: [{ 'term' => { 'loc_code' => 'usa' } }, { 'term' => { 'sex' => 'both' } }],
+                     must_not: [{ 'exists' => { 'field' => 'yearmonth' } },
+                                { 'exists' => { 'field' => 'yearweek' } }],
+                     source: annual_source_fields
+                   )
+                 else
+                   []
+                 end
+births_by_year = annual_records.select { |row| row[:category] == 'birth' }.
+                 to_h { |row| [row[:year].to_i, row] }
+us_special_rows = annual_records.filter_map do |row|
+  cause, value = if row[:category] == 'death' && row[:death_code] == '00000' && row[:rate].to_s.empty?
+                   ['INFANT', row[:age_0]]
+                 elsif row[:category] == 'death' && row[:death_code] == 'PERM' && row[:algo] == 'reconstructed'
+                   ['PERINATAL', row[:age_all]]
+                 end
+  next unless cause && value
+
+  birth = births_by_year[row[:year].to_i]
+  next unless birth && birth[:age_all].to_f.positive?
+
+  births = birth[:age_all].to_f
+  urls = (Array(birth[:src_url]) + Array(row[:src_url])).compact.uniq
+  { loc_code: 'USA', sex: 'both', death_code: cause, year: row[:year].to_i,
+    deaths: value.to_f, population: births, observed: value.to_f / births * 1000.0,
+    unit_scale: 1000.0, src_url: urls }
+end
 
 chart_data = series_specs.flat_map do |series_key, age, cause, label|
   loc = mode == 'country' ? series_key : selected_locations.first

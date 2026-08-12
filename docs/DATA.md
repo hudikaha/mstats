@@ -40,6 +40,14 @@ IDs normally join location, period, category, rate, cause, algorithm, type, and
 sex with `_`. For example, `jpn_2009w02_death__00000__both` is the source-value
 record for Japan, ISO week 2 of 2009, all causes, and both sexes.
 
+Annual records contain `year` but neither `yearmonth` nor `yearweek`. U.S. annual
+birth records store births in `category=birth`, `age_all`. Infant deaths are the
+`age_0` value of the all-cause (`death_code=00000`) death record. The OECD
+perinatal-mortality indicator uses `death_code=PERM`; its `age_all` value is an
+approximate event count reconstructed from the published rounded rate and the
+available birth denominator, and is marked `algo=reconstructed`. `PERM` is an
+OECD indicator code, not an ICD cause code.
+
 ## kcor / CUMD-WK (public CSV: `*-CUMD-WK.csv.xz` in the [kkcor directory](https://fujikawa.org/pub/kkcor/))
 
 One `kcor` record contains cumulative deaths through a particular week for a

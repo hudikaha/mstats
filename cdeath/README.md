@@ -88,6 +88,12 @@ with `make yearly-csv`. Death counts are summed over 12 months; population is a
 days-in-month-weighted annual mean; annual rates are recalculated from those two
 values. Incomplete years are omitted.
 
+Generate the U.S. annual birth, infant-death, and reconstructed OECD perinatal
+records separately with `make us-yearly-csv`. After validation, use
+`make upload-us-yearly logstash-us-yearly` to add only those annual records to
+the current `mstats` index. `mortyear.rb` reads them from Elasticsearch and does
+not read a Web-local CSV.
+
 Monthly and weekly cause-of-death CSVs in one pass:
 
 ```sh

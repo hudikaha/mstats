@@ -36,6 +36,13 @@
 IDは原則として地域、期間、category、rate、死因、algo、type、性別を`_`で連結します。
 例えば`jpn_2009w02_death__00000__both`は、日本、2009年第2週、全死因、男女計の元系列です。
 
+年次recordは`year`を持ち、`yearmonth`と`yearweek`を持ちません。米国年次dataでは、
+出生数を`category=birth`の`age_all`、乳児死亡数を全死因
+（`death_code=00000`）死亡recordの`age_0`へ格納します。OECDの周産期死亡指標は
+`death_code=PERM`を使い、公表された丸め済み率と利用可能な出生分母から逆算した近似件数を
+`age_all`へ格納して、`algo=reconstructed`とします。`PERM`はOECDの指標codeであり、
+ICD死因codeではありません。
+
 ## kcor / CUMD-WK（公開CSV: [kkcor公開ディレクトリ](https://fujikawa.org/pub/kkcor/) の `*-CUMD-WK.csv.xz`）
 
 `kcor`の1 recordは、cutoff時点の年齢階級・接種回数で固定したcohortについて、cutoff後の

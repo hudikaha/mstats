@@ -10,6 +10,7 @@ module Mstats2026
   JPN_POP_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0'
   HMD_STMF_URL = 'https://www.mortality.org/Data/STMF'
   US_VITAL_STATS_URL = 'https://www.cdc.gov/nchs/data_access/vitalstatsonline.htm'
+  OECD_DATA_EXPLORER_URL = 'https://data-explorer.oecd.org/'
 
   AGE_FIELDS = %w[
     age_all age_0 age_1 age_2 age_3 age_4

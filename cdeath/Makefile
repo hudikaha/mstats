@@ -23,6 +23,7 @@ POP_ARCHIVE_DIR ?= $(ROOT)/src/popjp
 DCAUSE_SOURCE_DIR ?= $(ROOT)/src/causejp
 STMF_DIR ?= $(ROOT)/src/stmf
 STMF_SOURCE ?= $(STMF_DIR)/stmf.csv
+US_MORTYEAR_SOURCE ?= $(ROOT)/import/us-mortyear-series.csv
 DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
 
@@ -35,7 +36,9 @@ SERVER_WEB_DIR ?= fujikawa/covid19
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all fetch fetch-pop fetch-death fetch-stmf check csv mort-csv stmf-csv yearly-csv validate-csv upload logstash cod codtr
+.PHONY: help all fetch fetch-pop fetch-death fetch-stmf check csv mort-csv stmf-csv \
+  yearly-csv jp-yearly-csv us-yearly-csv validate-csv upload upload-us-yearly \
+  logstash logstash-us-yearly cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -102,10 +105,14 @@ help:
 	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
 	@echo 'make stmf-csv STMF pooled CSVをmstats2026週次CSVへ変換（投入しない）'
 	@echo 'make yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
+	@echo 'make jp-yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
+	@echo 'make us-yearly-csv 米国の出生・乳児死亡・周産期死亡年次CSVを生成（投入しない）'
 	@echo 'make validate-csv FILES="..." 投入前に期間・ID・値・出典を検査'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
 	@echo 'make codtr    make codと同じデータ更新（codtr.rbは年未完の月も表示）'
 	@echo 'make upload   最新の人口・月次死因・週次死因CSVをサーバへ送る'
+	@echo 'make upload-us-yearly 最新の米国年次CSVをサーバへ送る'
+	@echo 'make logstash-us-yearly 米国年次CSVだけを現行mstats indexへ投入'
 	@echo 'make logstash サーバ上でmstats2026.confを一回実行'
 
 fetch: fetch-pop fetch-death
@@ -259,7 +266,9 @@ stmf-csv:
 	 echo "created $$out: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
 	 echo '[stmf-csv] uploadとElasticsearch投入はまだ行いません。'
 
-yearly-csv:
+yearly-csv: jp-yearly-csv
+
+jp-yearly-csv:
 	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
 	 death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); death=$$death_files[1]; \
 	 test -n "$$pop" -a -n "$$death" || { echo '月次CSVが不足しています。先に make csv を実行してください。'; exit 1; }; \
@@ -267,6 +276,14 @@ yearly-csv:
 	 out="$(DATA_DIR)/jp-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
 	 ruby "$(ROOT)/import/jp-yearly.rb" "$$death" "$$pop" > "$$tmp"; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; \
+	 mv "$$tmp" "$$out"; echo "created $$out"
+
+us-yearly-csv:
+	@test -s "$(US_MORTYEAR_SOURCE)"
+	@mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(DATA_DIR)/us-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 if ! ruby "$(ROOT)/import/us-infant-yearly.rb" "$(US_MORTYEAR_SOURCE)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"
 
 validate-csv:
@@ -282,10 +299,24 @@ upload:
 	 echo '[upload] 最新の人口・月次死因・週次死因CSVを$(SERVER)へ送ります。'; \
 	 if ! { scp "$$pop" "$$death" "$$weekly" $(SERVER):$(SERVER_MSTATS_DIR)/data/ && ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${death:t} jp-dcause-mstats2026.csv && ln -sfn data/$${weekly:t} jp-dcause-weekly-mstats2026.csv && ln -sfn data/$${pop:t} jp-pop-mstats2026.csv"; } > "$$log" 2>&1; then cat "$$log"; exit 1; fi
 
+upload-us-yearly:
+	@us_files=("$(DATA_DIR)"/us-yearly-mstats2026-*.csv(Nom)); us=$$us_files[1]; \
+	 test -n "$$us" || { echo '米国年次CSVが不足しています。先にmake us-yearly-csvを実行してください。'; exit 1; }; \
+	 mkdir -p "$(STATE_DIR)"; log="$(STATE_DIR)/upload-us-yearly.log"; \
+	 echo '[upload-us-yearly] 最新の米国年次CSVを$(SERVER)へ送ります。'; \
+	 if ! { scp "$$us" $(SERVER):$(SERVER_MSTATS_DIR)/data/ && ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${us:t} us-infant-yearly-mstats2026.csv"; } > "$$log" 2>&1; then cat "$$log"; exit 1; fi
+
 logstash:
 	@mkdir -p "$(STATE_DIR)"; log="$(STATE_DIR)/logstash.log"; \
 	 echo '[logstash] $(SERVER)のmstats2026.confでCSVを投入します。'; \
 	 if ! ssh -tt $(SERVER) 'sudo systemctl stop logstash; sudo $(LOGSTASH) --path.settings /etc/logstash -w 1 -r -f ~/$(SERVER_MSTATS_DIR)/mstats2026.conf' > "$$log" 2>&1; then cat "$$log"; exit 1; fi
+
+# 日本語: server側の非公開専用設定で米国年次recordだけを現行indexへ追加する。
+# English: Add only U.S. annual records through the private server-side one-shot configuration.
+logstash-us-yearly:
+	@mkdir -p "$(STATE_DIR)"; log="$(STATE_DIR)/logstash-us-yearly.log"; \
+	 echo '[logstash-us-yearly] 米国年次CSVだけを現行mstats indexへ投入します。'; \
+	 if ! ssh -tt $(SERVER) "sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); exec $(LOGSTASH) --path.settings /etc/logstash -w 1 -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-us-yearly.conf'" > "$$log" 2>&1; then cat "$$log"; exit 1; fi
 
 cod codtr:
 	@echo '[$@] 手元の原CSVからCSVを生成し、必要時のみ投入します。Codexは起動しません。'
