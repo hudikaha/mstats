@@ -9,7 +9,6 @@ require 'fileutils'
 require 'json'
 require 'matrix'
 require 'optparse'
-require 'tmpdir'
 require 'time'
 require 'zlib'
 
@@ -120,18 +119,23 @@ DAYS_PER_YEAR = 365.2425
 Z95 = 1.959963984540054
 MIN_TRAINING_YEARS = 4
 POISSON_SIMULATIONS = 10_000
-CACHE_SCHEMA = 3
+CACHE_SCHEMA = 4
 CACHE_MAX_BYTES = 1024 * 1024 * 1024
 CACHE_MAX_AGE = 30 * 24 * 60 * 60
+DEFAULT_CACHE_DIR = '/var/cache/medicalfacts/mortyear'
 
-opts = { index: 'mstats', debug: false, fixture: nil, summary: false, process_cache_jobs: nil }
+opts = { index: 'mstats', debug: false, fixture: nil, summary: false,
+         process_cache_jobs: nil, verify_cache: false, cache_dir: DEFAULT_CACHE_DIR }
 OptionParser.new do |parser|
   parser.on('--index INDEX') { |value| opts[:index] = value }
   parser.on('--debug') { opts[:debug] = true }
   parser.on('--fixture FILE') { |value| opts[:fixture] = value }
   parser.on('--summary') { opts[:summary] = true }
   parser.on('--process-cache-jobs N', Integer) { |value| opts[:process_cache_jobs] = value }
+  parser.on('--verify-cache') { opts[:verify_cache] = true }
+  parser.on('--cache-dir DIR') { |value| opts[:cache_dir] = File.expand_path(value) }
 end.parse!(ARGV)
+$mortyear_cache_dir = opts[:cache_dir]
 
 cgi = CGI.new
 $l = cgi['l'] == 'en' ? :en : :ja
@@ -478,9 +482,10 @@ def canonical_json(value)
   JSON.generate(canonical_value(value))
 end
 
-def gzip_write(path, value)
+def gzip_write(path, value, mode: 0o644)
   temporary = "#{path}.#{Process.pid}.tmp"
   Zlib::GzipWriter.open(temporary) { |gzip| gzip.write(JSON.generate(value)) }
+  File.chmod(mode, temporary)
   File.rename(temporary, path)
 end
 
@@ -489,117 +494,68 @@ def gzip_read(path)
 end
 
 def cache_root
-  ENV.fetch('MEDICALFACTS_CACHE_ROOT', File.join(Dir.tmpdir, 'medicalfacts-cache'))
+  $mortyear_cache_dir
 end
 
-def clean_mortyear_cache(namespace)
-  stamp = File.join(namespace, '.cleanup')
-  return if File.file?(stamp) && Time.now - File.mtime(stamp) < 86_400
-
-  FileUtils.mkdir_p(namespace, mode: 0o700)
-  File.open(File.join(namespace, '.cleanup.lock'), File::RDWR | File::CREAT, 0o600) do |lock|
-    return unless lock.flock(File::LOCK_EX | File::LOCK_NB)
-    now = Time.now
-    entries = Dir.glob(File.join(namespace, '[0-9a-f][0-9a-f]', '[0-9a-f]' * 64)).select { |path| File.directory?(path) }
-    entries.each do |entry|
-      access_files = Dir.glob(File.join(entry, 'access*')).select { |path| File.file?(path) }
-      last_used = access_files.empty? ? File.mtime(entry) : access_files.map { |path| File.mtime(path) }.max
-      FileUtils.rm_r(entry) if now - last_used > CACHE_MAX_AGE
-    end
-    entries = entries.select { |entry| File.directory?(entry) }
-    sizes = entries.to_h do |entry|
-      [entry, Dir.glob(File.join(entry, '**', '*'), File::FNM_DOTMATCH).sum { |path| File.file?(path) ? File.size(path) : 0 }]
-    end
-    total = sizes.values.sum
-    if total > CACHE_MAX_BYTES
-      entries.sort_by do |entry|
-        access_files = Dir.glob(File.join(entry, 'access*')).select { |path| File.file?(path) }
-        access_files.empty? ? File.mtime(entry) : access_files.map { |path| File.mtime(path) }.max
-      end.each do |entry|
-        break if total <= CACHE_MAX_BYTES
-        total -= sizes.fetch(entry)
-        FileUtils.rm_r(entry)
-      end
-    end
-    FileUtils.touch(stamp)
-  end
-end
-
-def cache_scenario_paths(rows, calculator_type)
-  input = rows.map { |row| canonical_value(row) }
-  input_json = canonical_json(input)
-  input_digest = Digest::SHA256.hexdigest(input_json)
-  key_material = canonical_value(
+def cache_key(rows, calculator_type)
+  canonical_value(
     cache_schema: CACHE_SCHEMA,
-    algorithm: 'poisson-linear-trend-dual-cache-v1',
+    algorithm: 'poisson-linear-trend-dual-cache-v2',
     calculator_type: calculator_type,
     simulations: POISSON_SIMULATIONS,
-    input_digest: input_digest,
-    seed_method: 'sha256-input-cutoff-v1'
+    seed_method: 'sha256-input-cutoff-v1',
+    input: rows
   )
-  key_json = canonical_json(key_material)
-  digest = Digest::SHA256.hexdigest(key_json)
-  # 日本語: schemaはcache keyに含め、実行userが変わっても既存namespaceを共有する。
-  # English: Keep schema in the cache key and reuse the writable namespace across execution users.
-  namespace = File.join(cache_root, 'mortyear-v2')
-  directory = File.join(namespace, digest[0, 2], digest)
-  FileUtils.mkdir_p(directory, mode: 0o700)
-
-  { input: input, input_digest: input_digest, key_material: key_material, key_json: key_json,
-    digest: digest, namespace: namespace, directory: directory }
 end
 
-# 日本語: 近似値は要求中に返し、simulationはpendingとしてcron workerへ渡す。
-# English: Return analytic results in-request and leave simulation as pending for the cron worker.
-def cached_scenarios(rows, calculator_type, analytic_calculator)
-  paths = cache_scenario_paths(rows, calculator_type)
-  directory = paths.fetch(:directory)
-  key_material = paths.fetch(:key_material)
-  key_json = paths.fetch(:key_json)
-  input_digest = paths.fetch(:input_digest)
-  digest = paths.fetch(:digest)
+def cache_digest(key)
+  Digest::SHA256.hexdigest(canonical_json(key))
+end
 
-  File.open(File.join(directory, 'lock'), File::RDWR | File::CREAT, 0o600) do |lock|
+def cache_file(digest, queue: false)
+  base = queue ? File.join(cache_root, 'queue') : cache_root
+  File.join(base, digest[0, 2], "#{digest}.json.gz")
+end
+
+def cache_entry(path, key)
+  return unless File.file?(path)
+
+  document = gzip_read(path)
+  Array(document[:entries]).find { |entry| canonical_value(entry[:key]) == key }
+rescue JSON::ParserError, Zlib::GzipFile::Error, Errno::ENOENT
+  nil
+end
+
+def write_queue_entry(path, entry)
+  FileUtils.mkdir_p(File.dirname(path), mode: 0o755)
+  lock_path = File.join(cache_root, 'queue', '.write.lock')
+  File.open(lock_path, File::RDWR | File::CREAT, 0o666) do |lock|
     lock.flock(File::LOCK_EX)
-    metadata_path = File.join(directory, 'metadata.json')
-    suffix = ''
-    if File.file?(metadata_path)
-      saved = JSON.parse(File.read(metadata_path))
-      suffix = "-#{Digest::SHA512.hexdigest(key_json)}" unless saved['key_material'] == key_material
-    end
-    metadata_path = File.join(directory, "metadata#{suffix}.json")
-    input_path = File.join(directory, "input#{suffix}.json.gz")
-    analytic_path = File.join(directory, "analytic#{suffix}.json.gz")
-    simulation_path = File.join(directory, "simulation#{suffix}.json.gz")
-    pending_path = File.join(directory, "pending#{suffix}")
-    access_path = File.join(directory, "access#{suffix}")
-    analytic = nil
-    if File.file?(metadata_path) && File.file?(input_path) && File.file?(analytic_path)
-      saved = JSON.parse(File.read(metadata_path))
-      if saved['key_material'] == key_material && Digest::SHA256.hexdigest(canonical_json(gzip_read(input_path))) == input_digest
-        analytic = gzip_read(analytic_path)
-      end
-    end
-
-    unless analytic
-      analytic = analytic_calculator.call(rows, '', '')
-      metadata = {
-        cache_schema: CACHE_SCHEMA, created_at: Time.now.utc.iso8601,
-        key: digest, collision_suffix: suffix.empty? ? nil : suffix.delete_prefix('-'),
-        calculator_type: calculator_type, key_material: key_material
-      }
-      temporary = "#{metadata_path}.#{Process.pid}.tmp"
-      File.write(temporary, JSON.pretty_generate(metadata))
-      File.rename(temporary, metadata_path)
-      gzip_write(input_path, paths.fetch(:input))
-      gzip_write(analytic_path, analytic)
-    end
-    FileUtils.touch(pending_path) unless File.file?(simulation_path)
-    FileUtils.touch(access_path)
-    clean_mortyear_cache(paths.fetch(:namespace))
-    simulation = File.file?(simulation_path) ? gzip_read(simulation_path) : []
-    [analytic, simulation]
+    document = File.file?(path) ? gzip_read(path) : { schema: CACHE_SCHEMA, entries: [] }
+    entries = Array(document[:entries])
+    entries << entry unless entries.any? { |item| canonical_value(item[:key]) == canonical_value(entry[:key]) }
+    gzip_write(path, { schema: CACHE_SCHEMA, entries: entries })
   end
+end
+
+# 日本語: 近似値は要求中に返し、一fileのqueueをmagicianのcron workerへ渡す。
+# English: Return analytic results in-request and queue one self-describing file for the magician cron worker.
+def cached_scenarios(rows, calculator_type, analytic_calculator)
+  key = cache_key(rows, calculator_type)
+  digest = cache_digest(key)
+  completed = cache_entry(cache_file(digest), key)
+  return [completed[:analytic], Array(completed[:simulation])] if completed
+
+  queue_path = cache_file(digest, queue: true)
+  queued = cache_entry(queue_path, key)
+  return [queued[:analytic], []] if queued
+
+  analytic = analytic_calculator.call(rows, '', '')
+  write_queue_entry(queue_path, {
+    key: key, analytic: analytic, simulation: nil,
+    created_at: Time.now.utc.iso8601, simulated_at: nil
+  })
+  [analytic, []]
 end
 
 # 日本語: 完全な暦年について週次の実数を日数按分して合計する。
@@ -997,44 +953,96 @@ def build_scenarios(rows, series_key, label, use_cache:)
   analytic_rows + scenario_display_rows(simulation, series_key, label, 'simulation', true)
 end
 
-# 日本語: cronからpending cacheを少数ずつ処理する。通常終了時は何も出力しない。
-# English: Process a bounded number of pending cache entries from cron; stay silent on success.
-def process_mortyear_cache_jobs(limit)
-  namespace = File.join(cache_root, 'mortyear-v2')
-  pending_paths = Dir.glob(File.join(namespace, '[0-9a-f][0-9a-f]', '[0-9a-f]' * 64, 'pending*')).
-                  sort_by { |path| File.mtime(path) }.first([limit, 0].max)
-  pending_paths.each do |pending_path|
-    directory = File.dirname(pending_path)
-    suffix = File.basename(pending_path).delete_prefix('pending')
-    lock_path = File.join(directory, 'lock')
-    File.open(lock_path, File::RDWR | File::CREAT, 0o600) do |lock|
-      next unless lock.flock(File::LOCK_EX | File::LOCK_NB)
-      next unless File.file?(pending_path)
+# 日本語: 完成cacheを30日・1GB以内に保つ。atimeとmtimeの新しい方を最終参照とする。
+# English: Keep completed cache within 30 days and 1 GB, using the newer of atime and mtime.
+def clean_mortyear_cache
+  paths = Dir.glob(File.join(cache_root, '[0-9a-f][0-9a-f]', '[0-9a-f]' * 64 + '.json.gz')).
+          select { |path| File.file?(path) }
+  now = Time.now
+  paths.each do |path|
+    File.unlink(path) if now - [File.atime(path), File.mtime(path)].max > CACHE_MAX_AGE
+  end
+  paths.select! { |path| File.file?(path) }
+  total = paths.sum { |path| File.size(path) }
+  paths.sort_by { |path| [File.atime(path), File.mtime(path)].max }.each do |path|
+    break if total <= CACHE_MAX_BYTES
+    total -= File.size(path)
+    File.unlink(path)
+  end
+end
 
-      metadata_path = File.join(directory, "metadata#{suffix}.json")
-      input_path = File.join(directory, "input#{suffix}.json.gz")
-      simulation_path = File.join(directory, "simulation#{suffix}.json.gz")
-      metadata = JSON.parse(File.read(metadata_path))
-      rows = gzip_read(input_path)
-      calculator = case metadata.fetch('calculator_type')
+# 日本語: queueを少数ずつsimulationし、magician所有の完成cacheをatomicに作る。
+# English: Simulate a bounded number of queued entries and atomically create magician-owned cache files.
+def process_mortyear_cache_jobs(limit)
+  queue_paths = Dir.glob(File.join(cache_root, 'queue', '[0-9a-f][0-9a-f]', '[0-9a-f]' * 64 + '.json.gz')).
+                sort_by { |path| File.mtime(path) }.first([limit, 0].max)
+  queue_paths.each do |queue_path|
+    digest = File.basename(queue_path, '.json.gz')
+    document = gzip_read(queue_path)
+    completed_entries = Array(document[:entries]).map do |entry|
+      key = entry.fetch(:key)
+      raise "Queue key does not match file name: #{queue_path}" unless cache_digest(key) == digest
+
+      calculator = case key.fetch(:calculator_type)
                    when 'scalar' then method(:compute_simulation_scenarios)
                    when 'stratified_asr' then method(:compute_stratified_asr_simulation_scenarios)
-                   else raise "Unknown calculator_type: #{metadata['calculator_type']}"
+                   else raise "Unknown calculator_type: #{key[:calculator_type]}"
                    end
-      result = calculator.call(rows, '', '')
-      gzip_write(simulation_path, result)
-      File.unlink(pending_path)
-      FileUtils.touch(File.join(directory, "access#{suffix}"))
+      entry.merge(
+        simulation: calculator.call(key.fetch(:input), '', ''),
+        simulated_at: Time.now.utc.iso8601
+      )
     end
+    completed_path = cache_file(digest)
+    FileUtils.mkdir_p(File.dirname(completed_path), mode: 0o755)
+    existing = File.file?(completed_path) ? Array(gzip_read(completed_path)[:entries]) : []
+    completed_entries.each do |entry|
+      existing.reject! { |item| canonical_value(item[:key]) == canonical_value(entry[:key]) }
+      existing << entry
+    end
+    gzip_write(completed_path, { schema: CACHE_SCHEMA, entries: existing })
+    File.unlink(queue_path)
   rescue StandardError => error
-    warn "mortyear cache job failed: #{pending_path}: #{error.class}: #{error.message}"
+    warn "mortyear cache job failed: #{queue_path}: #{error.class}: #{error.message}"
   end
+  clean_mortyear_cache if Time.now.hour == 3 && Time.now.min.zero?
+end
+
+# 日本語: 通常読込とは別に全cacheのgzip・構造・file名hashを検査する。
+# English: Separately verify gzip, structure, and filename hashes for every cache file.
+def verify_mortyear_cache
+  paths = Dir.glob(File.join(cache_root, '{,queue/}', '[0-9a-f][0-9a-f]', '*.json.gz'))
+  errors = []
+  entries = 0
+  paths.each do |path|
+    digest = File.basename(path, '.json.gz')
+    begin
+      document = gzip_read(path)
+      raise 'schema mismatch' unless document[:schema] == CACHE_SCHEMA
+      raise 'entries is not an array' unless document[:entries].is_a?(Array)
+      document[:entries].each do |entry|
+        entries += 1
+        raise 'missing key' unless entry[:key].is_a?(Hash)
+        raise 'filename hash mismatch' unless cache_digest(entry[:key]) == digest
+        raise 'analytic is not an array' unless entry[:analytic].is_a?(Array)
+        unless entry[:simulation].nil? || entry[:simulation].is_a?(Array)
+          raise 'simulation is neither null nor an array'
+        end
+      end
+    rescue StandardError => error
+      errors << "#{path}: #{error.class}: #{error.message}"
+    end
+  end
+  puts JSON.pretty_generate(files: paths.length, entries: entries, errors: errors)
+  errors.empty?
 end
 
 if opts[:process_cache_jobs]
   process_mortyear_cache_jobs(opts[:process_cache_jobs])
   exit
 end
+
+exit(verify_mortyear_cache ? 0 : 1) if opts[:verify_cache]
 
 fixture_data = if opts[:fixture]
                  parsed = JSON.parse(File.read(opts[:fixture]), symbolize_names: true)
