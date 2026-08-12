@@ -30,6 +30,10 @@ abort 'country-name source mstats.rb not found' unless country_names_library
 require country_names_library
 COUNTRY_NAMES = Locs.transform_values(&:dup).freeze
 Object.send(:remove_const, :Locs)
+COUNTRY_NAME_OVERRIDES = {
+  'XKX' => { ja: 'コソボ', en: 'Kosovo' },
+  'PRK' => { ja: '北朝鮮', en: 'North Korea' }
+}.freeze
 
 mort_vars = [
   File.expand_path('mort-vars.rb', __dir__),
@@ -131,10 +135,17 @@ requested_start_year = cgi['start_year'].to_i
 default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : 2000
 
 def location_names(code)
-  known = COUNTRY_NAMES[code] || Locs[code]
+  known = COUNTRY_NAME_OVERRIDES[code] || COUNTRY_NAMES[code]
   source_name = $annual_catalog&.dig(code, :location).to_s
   return known if known
   { ja: source_name.empty? ? code : source_name, en: source_name.empty? ? code : source_name }
+end
+
+def location_sort_key(code, language)
+  name = location_names(code).fetch(language)
+  return name.downcase unless language == :ja
+
+  [name.match?(/\A[ァ-ヿ]/) ? 0 : 1, name]
 end
 
 def default_source_urls(loc_code)
@@ -1089,6 +1100,8 @@ puts <<~HTML
     #age-scale { width:max-content; min-width:100%; }
     #age-options { display:flex; flex-wrap:nowrap; gap:.55em; align-items:flex-start; }
     #age-options label { display:inline-flex; flex-direction:column; align-items:center; margin:0; }
+    #age-options .age-terminal { align-items:flex-start; }
+    #age-options .age-terminal input { margin-left:4px; }
     #age-options .age-special { margin-left:.8em; }
     #age-slider-row { display:flex; align-items:center; gap:.7em; }
     #age-range-slider { position:relative; height:28px; }
@@ -1129,7 +1142,7 @@ location_groups = available_locations.group_by do |code|
   annual_catalog.dig(code, :world_region).to_s.then { |region| WORLD_REGIONS.key?(region) ? region : 'Other' }
 end
 WORLD_REGIONS.each do |region, region_names|
-  codes = location_groups.fetch(region, []).sort_by { |code| location_names(code).fetch($l) }
+  codes = location_groups.fetch(region, []).sort_by { |code| location_sort_key(code, $l) }
   next if codes.empty?
   open = codes.any? { |code| selected_locations.include?(code) }
   puts %(<details class="location-region" #{open ? 'open' : ''}><summary>#{CGI.escapeHTML(region_names.fetch($l))}（#{codes.length}）</summary><div class="mortyear-options">)
@@ -1155,7 +1168,8 @@ HTML
 STANDARD_AGES.each_with_index do |age, index|
   active = selected_ages.include?('age_all') || selected_ages.include?(age)
   short_label = index == STANDARD_AGES.length - 1 ? '100+' : format('%02d', index * 5)
-  puts %(<label><input class="age-option age-standard" type="checkbox" name="age" value="#{age}" #{checked(active)}>#{short_label}</label>)
+  terminal_class = index == STANDARD_AGES.length - 1 ? ' class="age-terminal"' : ''
+  puts %(<label#{terminal_class}><input class="age-option age-standard" type="checkbox" name="age" value="#{age}" #{checked(active)}>#{short_label}</label>)
 end
 %w[age_0 age_all].each do |age|
   names = AGES.fetch(age)
