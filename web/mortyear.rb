@@ -1529,6 +1529,13 @@ else
     links = urls.map { |url| %(<a href="#{CGI.escapeHTML(url)}" target="_blank">#{CGI.escapeHTML(url)}</a>) }.join('<br>')
     "<li><strong>#{CGI.escapeHTML(location_label)}</strong>: #{CGI.escapeHTML(method)}<br>#{links}</li>"
   end.join("\n")
+  wpp_note = if source_entries.any? { |entry| entry[:urls].include?(WPP_URL) }
+               if $l == :ja
+                 'UNは国際連合、WPPは国連人口部が公表するWorld Population Prospects（世界人口推計）です。'
+               else
+                 'UN WPP means the United Nations World Population Prospects, published by the UN Population Division.'
+               end
+             end
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   interval_note = if selected_metric == 'asr'
                     if $l == :ja
@@ -1652,6 +1659,7 @@ else
     </script>
     <section class="mortyear-sources" style="text-align:left">
       <h2>#{ $l == :ja ? 'グラフに使用したデータ' : 'Data used for the graphs' }</h2>
+      #{wpp_note ? %(<p class="mortyear-note">#{CGI.escapeHTML(wpp_note)}</p>) : ''}
       <ul>#{source_items}</ul>
     </section>
   HTML
