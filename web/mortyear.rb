@@ -1094,7 +1094,7 @@ end
 
 metric_label = METRICS.fetch(selected_metric).fetch($l)
 metric_label = $l == :ja ? '0歳人口当たり死亡率' : 'Mortality rate per age-0 population' if selected_metric == 'crude_rate' && selected_ages == ['age_0']
-title = $l == :ja ? "年次#{metric_label}と予測区間" : "Annual #{metric_label.downcase} and prediction intervals"
+title = $l == :ja ? '各国の死亡数・死亡率と予測区間' : 'Deaths, mortality rates, and prediction intervals by country'
 print_header(title: title, iframe: false)
 
 def checked(condition)
