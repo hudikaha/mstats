@@ -145,7 +145,13 @@ end.parse!(ARGV)
 $mortyear_cache_dir = opts[:cache_dir]
 
 cgi = CGI.new
-$l = cgi['l'] == 'en' ? :en : :ja
+requested_language = cgi['l']
+$l = if requested_language.match?(/^(en|english)/i) ||
+        (requested_language.empty? && ENV['HTTP_ACCEPT_LANGUAGE'].to_s !~ /^ja/i)
+       :en
+     else
+       :ja
+     end
 mode = cgi['mode'] == 'series' ? 'series' : 'country'
 requested_locations = cgi.params.fetch('c', []).flat_map { |value| value.split(/[~,]/) }.
                       map(&:upcase).uniq
@@ -155,6 +161,7 @@ selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
+selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
 selected_ages = ['age_all'] if selected_metric == 'asr' || selected_metric == 'birth_rate'
 requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.uniq
 requested_start_year = cgi['start_year'].to_i
@@ -1410,7 +1417,7 @@ puts <<~HTML
     </fieldset><br>
 HTML
 show_cause_fieldset = if selected_metric == 'birth_rate'
-                        selected_locations.any?
+                        true
                       else
                         selected_locations == ['JPN']
                       end
@@ -1524,17 +1531,25 @@ puts <<~HTML
           syncCauseVisibility();
         });
       });
-      function syncCauseVisibility() {
+      function updateLocationRegions() {
+        document.querySelectorAll('.location-region').forEach(details => {
+          const count = Array.from(details.querySelectorAll('.location-label')).filter(label => label.style.display !== 'none').length;
+          details.querySelector('.location-region-count').textContent = count;
+          details.style.display = count > 0 ? '' : 'none';
+        });
+        updateRegionToggles();
+      }
+      function syncCauseVisibility(restrictLocations = false) {
         const fieldset = document.getElementById('cause-fieldset');
         const causes = Array.from(document.querySelectorAll('.cause-option'));
-        const selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
+        let selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
         const metric = document.querySelector('input[name="metric"]:checked').value;
         const birthLocations = selectedLocations.length > 0 && selectedLocations.every(location => {
           const input = document.querySelector(`.location-option[value="${location}"]`);
           return input && input.closest('label').dataset.metrics.split(' ').includes('birth_rate');
         });
         const scope = selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
-          birthLocations && metric === 'birth_rate' ? 'birth' : null;
+          metric === 'birth_rate' && (selectedLocations.length === 0 || birthLocations) ? 'birth' : null;
         const hidden = scope === null;
         fieldset.style.display = hidden ? 'none' : '';
         causes.forEach(input => {
@@ -1544,6 +1559,7 @@ puts <<~HTML
           const active = !hidden && input.dataset.causeScope === scope && supported;
           input.disabled = !active;
           input.closest('label').style.display = active ? '' : 'none';
+          if (!active) input.checked = false;
         });
         fieldset.querySelectorAll('details').forEach(details => {
           details.style.display = details.querySelector('.cause-option:not(:disabled)') ? '' : 'none';
@@ -1556,6 +1572,21 @@ puts <<~HTML
             const preferred = active.find(input => input.value === (scope === 'birth' ? 'INFANT' : '00000')) || active[0];
             preferred.checked = true;
           }
+        }
+        if (restrictLocations && scope === 'birth') {
+          const selectedCauses = causes.filter(input => input.dataset.causeScope === 'birth' && input.checked);
+          document.querySelectorAll('.location-label').forEach(label => {
+            const input = label.querySelector('.location-option');
+            const metricAvailable = label.dataset.metrics.split(/\s+/).includes('birth_rate');
+            const causeAvailable = selectedCauses.every(cause =>
+              cause.dataset.locations.split(/\s+/).includes(input.value)
+            );
+            const available = metricAvailable && causeAvailable;
+            label.style.display = available ? '' : 'none';
+            input.disabled = !available;
+            if (!available) input.checked = false;
+          });
+          updateLocationRegions();
         }
       }
       const standardAges = #{JSON.generate(STANDARD_AGES)};
@@ -1659,13 +1690,9 @@ puts <<~HTML
           label.style.display = available ? "" : "none";
           label.querySelector('input').disabled = !available;
         });
-        document.querySelectorAll('.location-region').forEach(details => {
-          const count = Array.from(details.querySelectorAll('.location-label')).filter(label => label.style.display !== 'none').length;
-          details.querySelector('.location-region-count').textContent = count;
-          details.style.display = count > 0 ? '' : 'none';
-        });
+        updateLocationRegions();
         const enabled = Array.from(document.querySelectorAll('.location-option:not(:disabled)'));
-        if (!enabled.some(input => input.checked) && enabled[0]) enabled[0].checked = true;
+        if (metric !== 'birth_rate' && !enabled.some(input => input.checked) && enabled[0]) enabled[0].checked = true;
         syncAgeSlider();
         syncComparisonMode();
       }
@@ -1684,6 +1711,10 @@ puts <<~HTML
         rememberLocations();
         updateRegionToggles();
         syncCauseVisibility();
+      }));
+      document.querySelectorAll('.cause-option').forEach(input => input.addEventListener('change', () => {
+        syncCauseVisibility(true);
+        rememberLocations();
       }));
       document.querySelectorAll('.metric-option').forEach(input => input.addEventListener('change', () => {
         rememberLocations();
@@ -1818,7 +1849,7 @@ else
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
   selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
-  default_model = 'quasi_poisson'
+  default_model = selected_chart_model
   dispersion_labels = available_specs.to_h do |key, _age, cause, _label|
     short_label = if mode == 'country'
                     location_names(key).fetch($l)
@@ -1848,11 +1879,12 @@ else
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
       &nbsp;
-      <label>#{ $l == :ja ? 'モデル' : 'Model' }
-        <select id="model-selector">
-          <option value="quasi_poisson" #{'selected' if default_model == 'quasi_poisson'}>#{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }</option>
-          <option value="poisson" #{'selected' if default_model == 'poisson'}>Poisson</option>
-        </select>
+      <span>#{ $l == :ja ? 'モデル' : 'Model' }:</span>
+      <label><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
+        #{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }
+      </label>
+      <label><input class="model-option" type="radio" name="chart_model" value="poisson" #{checked(default_model == 'poisson')}>
+        Poisson
       </label>
       <!-- 推定φの計算値はchart dataに残すが、画面には表示しない。
            Keep estimated dispersion in chart data, but do not display it. -->
@@ -1924,7 +1956,7 @@ else
         const startSlider = document.getElementById("start-year-slider");
         const startOutput = document.getElementById("start-year-output");
         const output = document.getElementById("train-to-output");
-        const model = document.getElementById("model-selector");
+        const modelOptions = Array.from(document.querySelectorAll(".model-option"));
         const zeroBase = document.getElementById("zero-base-checkbox");
         const simulationControl = document.getElementById("simulation-interval-control");
         const simulationInterval = document.getElementById("simulation-interval-checkbox");
@@ -1952,10 +1984,11 @@ else
           result.view.signal("train_to", value).runAsync();
         });
         function syncModelControls() {
-          result.view.signal("model", model.value).runAsync();
-          simulationControl.style.display = model.value === "poisson" ? "" : "none";
+          const model = document.querySelector(".model-option:checked").value;
+          result.view.signal("model", model).runAsync();
+          simulationControl.style.display = model === "poisson" ? "" : "none";
         }
-        model.addEventListener("change", syncModelControls);
+        modelOptions.forEach(input => input.addEventListener("change", syncModelControls));
         syncModelControls();
         zeroBase.addEventListener("change", () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
