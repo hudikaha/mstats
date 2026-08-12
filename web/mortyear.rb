@@ -120,16 +120,17 @@ DAYS_PER_YEAR = 365.2425
 Z95 = 1.959963984540054
 MIN_TRAINING_YEARS = 4
 POISSON_SIMULATIONS = 10_000
-CACHE_SCHEMA = 2
+CACHE_SCHEMA = 3
 CACHE_MAX_BYTES = 1024 * 1024 * 1024
 CACHE_MAX_AGE = 30 * 24 * 60 * 60
 
-opts = { index: 'mstats', debug: false, fixture: nil, summary: false }
+opts = { index: 'mstats', debug: false, fixture: nil, summary: false, process_cache_jobs: nil }
 OptionParser.new do |parser|
   parser.on('--index INDEX') { |value| opts[:index] = value }
   parser.on('--debug') { opts[:debug] = true }
   parser.on('--fixture FILE') { |value| opts[:fixture] = value }
   parser.on('--summary') { opts[:summary] = true }
+  parser.on('--process-cache-jobs N', Integer) { |value| opts[:process_cache_jobs] = value }
 end.parse!(ARGV)
 
 cgi = CGI.new
@@ -142,6 +143,7 @@ selected_ages = cgi.params.fetch('age', []).flat_map { |value| value.split(/[~,]
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
+interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_ages = ['age_all'] if selected_metric == 'asr' || selected_metric == 'birth_rate'
 requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.uniq
 requested_start_year = cgi['start_year'].to_i
@@ -523,26 +525,39 @@ def clean_mortyear_cache(namespace)
   end
 end
 
-def cached_scenarios(rows, series_key, label)
+def cache_scenario_paths(rows, calculator_type)
   input = rows.map { |row| canonical_value(row) }
   input_json = canonical_json(input)
   input_digest = Digest::SHA256.hexdigest(input_json)
   key_material = canonical_value(
     cache_schema: CACHE_SCHEMA,
-    algorithm: 'poisson-linear-trend-simulation-v1',
+    algorithm: 'poisson-linear-trend-dual-cache-v1',
+    calculator_type: calculator_type,
     simulations: POISSON_SIMULATIONS,
-    series_key: series_key,
-    label: label,
     input_digest: input_digest,
-    seed_method: 'sha256-series-cutoff-v1'
+    seed_method: 'sha256-input-cutoff-v1'
   )
   key_json = canonical_json(key_material)
   digest = Digest::SHA256.hexdigest(key_json)
   # 日本語: schemaはcache keyに含め、実行userが変わっても既存namespaceを共有する。
   # English: Keep schema in the cache key and reuse the writable namespace across execution users.
-  namespace = File.join(cache_root, 'mortyear-v1')
+  namespace = File.join(cache_root, 'mortyear-v2')
   directory = File.join(namespace, digest[0, 2], digest)
   FileUtils.mkdir_p(directory, mode: 0o700)
+
+  { input: input, input_digest: input_digest, key_material: key_material, key_json: key_json,
+    digest: digest, namespace: namespace, directory: directory }
+end
+
+# 日本語: 近似値は要求中に返し、simulationはpendingとしてcron workerへ渡す。
+# English: Return analytic results in-request and leave simulation as pending for the cron worker.
+def cached_scenarios(rows, calculator_type, analytic_calculator)
+  paths = cache_scenario_paths(rows, calculator_type)
+  directory = paths.fetch(:directory)
+  key_material = paths.fetch(:key_material)
+  key_json = paths.fetch(:key_json)
+  input_digest = paths.fetch(:input_digest)
+  digest = paths.fetch(:digest)
 
   File.open(File.join(directory, 'lock'), File::RDWR | File::CREAT, 0o600) do |lock|
     lock.flock(File::LOCK_EX)
@@ -554,30 +569,36 @@ def cached_scenarios(rows, series_key, label)
     end
     metadata_path = File.join(directory, "metadata#{suffix}.json")
     input_path = File.join(directory, "input#{suffix}.json.gz")
-    result_path = File.join(directory, "result#{suffix}.json.gz")
+    analytic_path = File.join(directory, "analytic#{suffix}.json.gz")
+    simulation_path = File.join(directory, "simulation#{suffix}.json.gz")
+    pending_path = File.join(directory, "pending#{suffix}")
     access_path = File.join(directory, "access#{suffix}")
-    if File.file?(metadata_path) && File.file?(input_path) && File.file?(result_path)
+    analytic = nil
+    if File.file?(metadata_path) && File.file?(input_path) && File.file?(analytic_path)
       saved = JSON.parse(File.read(metadata_path))
       if saved['key_material'] == key_material && Digest::SHA256.hexdigest(canonical_json(gzip_read(input_path))) == input_digest
-        FileUtils.touch(access_path)
-        return gzip_read(result_path)
+        analytic = gzip_read(analytic_path)
       end
     end
 
-    result = yield
-    metadata = {
-      cache_schema: CACHE_SCHEMA, created_at: Time.now.utc.iso8601,
-      key: digest, collision_suffix: suffix.empty? ? nil : suffix.delete_prefix('-'),
-      key_material: key_material
-    }
-    temporary = "#{metadata_path}.#{Process.pid}.tmp"
-    File.write(temporary, JSON.pretty_generate(metadata))
-    File.rename(temporary, metadata_path)
-    gzip_write(input_path, input)
-    gzip_write(result_path, result)
+    unless analytic
+      analytic = analytic_calculator.call(rows, '', '')
+      metadata = {
+        cache_schema: CACHE_SCHEMA, created_at: Time.now.utc.iso8601,
+        key: digest, collision_suffix: suffix.empty? ? nil : suffix.delete_prefix('-'),
+        calculator_type: calculator_type, key_material: key_material
+      }
+      temporary = "#{metadata_path}.#{Process.pid}.tmp"
+      File.write(temporary, JSON.pretty_generate(metadata))
+      File.rename(temporary, metadata_path)
+      gzip_write(input_path, paths.fetch(:input))
+      gzip_write(analytic_path, analytic)
+    end
+    FileUtils.touch(pending_path) unless File.file?(simulation_path)
     FileUtils.touch(access_path)
-    clean_mortyear_cache(namespace)
-    result
+    clean_mortyear_cache(paths.fetch(:namespace))
+    simulation = File.file?(simulation_path) ? gzip_read(simulation_path) : []
+    [analytic, simulation]
   end
 end
 
@@ -764,7 +785,7 @@ end
 
 # 日本語: 学習終了年ごとの計算済み系列を生成し、ブラウザは選択だけを行う。
 # English: Precompute every training-cutoff scenario so the browser only switches views.
-def compute_scenarios(rows, series_key, label)
+def compute_analytic_scenarios(rows, series_key, label)
   return [] if rows.empty?
 
   last_year = rows.map { |row| row[:year] }.max
@@ -776,16 +797,10 @@ def compute_scenarios(rows, series_key, label)
   candidates.flat_map do |cutoff|
     training = rows.select { |row| row[:year].between?(2000, cutoff) }
     fit = poisson_fit(training)
-    seed = Digest::SHA256.hexdigest("#{series_key}:#{cutoff}:#{POISSON_SIMULATIONS}")[0, 8].to_i(16)
-    poisson_predictions = poisson_simulation_predictions(rows, fit, seed)
     %w[poisson quasi_poisson].flat_map do |model|
       variance_scale = model == 'quasi_poisson' ? [fit[:dispersion].to_f, 1.0].max : 1.0
       rows.map do |row|
-        prediction = if model == 'poisson'
-                       poisson_predictions.fetch([row[:year], row[:death_code]])
-                     else
-                       poisson_prediction(row, fit, variance_scale)
-                     end
+        prediction = poisson_prediction(row, fit, variance_scale)
         {
           series: series_key, label: label, model: model, train_to: cutoff,
           year: row[:year], observed: row[:observed],
@@ -800,9 +815,39 @@ def compute_scenarios(rows, series_key, label)
   end
 end
 
+# 日本語: Poissonのsimulation版だけを後処理用に生成する。
+# English: Generate only the simulated Poisson version for deferred processing.
+def compute_simulation_scenarios(rows, series_key, label)
+  return [] if rows.empty?
+
+  input_digest = Digest::SHA256.hexdigest(canonical_json(rows.map { |row| canonical_value(row) }))
+  last_year = rows.map { |row| row[:year] }.max
+  candidates = (2015..(last_year - 2)).select do |cutoff|
+    rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+  end
+  candidates.flat_map do |cutoff|
+    training = rows.select { |row| row[:year].between?(2000, cutoff) }
+    fit = poisson_fit(training)
+    seed = Digest::SHA256.hexdigest("#{input_digest}:#{cutoff}:#{POISSON_SIMULATIONS}")[0, 8].to_i(16)
+    predictions = poisson_simulation_predictions(rows, fit, seed)
+    rows.map do |row|
+      prediction = predictions.fetch([row[:year], row[:death_code]])
+      {
+        series: series_key, label: label, model: 'poisson', train_to: cutoff,
+        year: row[:year], observed: row[:observed], expected: prediction[:expected],
+        pi_lower: prediction[:lower], pi_upper: prediction[:upper],
+        outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
+        period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
+        dispersion: fit[:dispersion]&.round(4), deaths: row[:deaths].round(2),
+        population: row[:population].round, src_url: row[:src_url]
+      }
+    end
+  end
+end
+
 # 日本語: 年齢階級別回帰の予測率をWHO標準人口で直接法により合成する。
 # English: Combine age-specific regression predictions by direct WHO-standard weighting.
-def compute_stratified_asr_scenarios(rows, series_key, label)
+def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
   return [] if rows.empty?
 
   last_year = rows.map { |row| row[:year] }.max
@@ -871,11 +916,124 @@ def compute_stratified_asr_scenarios(rows, series_key, label)
   end
 end
 
-def build_scenarios(rows, series_key, label, use_cache:)
-  calculator = rows.first&.key?(:strata) ? method(:compute_stratified_asr_scenarios) : method(:compute_scenarios)
-  return calculator.call(rows, series_key, label) unless use_cache
+# 日本語: 年齢階級別の係数・観測変動をsimulationし、標準人口weightで合成する。
+# English: Simulate stratum-specific coefficient and observation uncertainty, then combine by standard weights.
+def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
+  return [] if rows.empty?
 
-  cached_scenarios(rows, series_key, label) { calculator.call(rows, series_key, label) }
+  input_digest = Digest::SHA256.hexdigest(canonical_json(rows.map { |row| canonical_value(row) }))
+  last_year = rows.map { |row| row[:year] }.max
+  candidates = (2015..(last_year - 2)).select do |cutoff|
+    rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+  end
+  candidates.flat_map do |cutoff|
+    training = rows.select { |row| row[:year].between?(2000, cutoff) }
+    fits = WHO_WORLD_STANDARD.keys.to_h do |age|
+      age_rows = training.map do |row|
+        stratum = row[:strata].find { |item| item[:age] == age }
+        { year: row[:year], deaths: stratum[:deaths], population: stratum[:population] }
+      end
+      [age, poisson_fit(age_rows)]
+    end
+    seed = Digest::SHA256.hexdigest("#{input_digest}:asr:#{cutoff}:#{POISSON_SIMULATIONS}")[0, 8].to_i(16)
+    random = Random.new(seed)
+    draws = fits.to_h { |age, fit| [age, coefficient_draws(fit, POISSON_SIMULATIONS, random)] }
+    rows.map do |row|
+      simulations = Array.new(POISSON_SIMULATIONS, 0.0)
+      expected = 0.0
+      row[:strata].each do |stratum|
+        fit = fits.fetch(stratum[:age])
+        x = row[:year] - fit[:center]
+        population = stratum[:population]
+        weight = stratum[:weight]
+        expected += weight * Math.exp(fit[:beta][0] + fit[:beta][1] * x) * 100_000.0
+        draws.fetch(stratum[:age]).each_with_index do |beta, index|
+          mu = Math.exp(beta[0] + beta[1] * x) * population
+          simulations[index] += weight * poisson_random(random, mu) / population * 100_000.0
+        end
+      end
+      simulations.sort!
+      lower = simulations[(POISSON_SIMULATIONS * 0.025).floor]
+      upper = simulations[(POISSON_SIMULATIONS * 0.975).floor - 1]
+      {
+        series: series_key, label: label, model: 'poisson', train_to: cutoff,
+        year: row[:year], observed: row[:observed], expected: expected,
+        pi_lower: lower, pi_upper: upper, outside_pi: row[:observed] < lower || row[:observed] > upper,
+        period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
+        dispersion: nil, deaths: row[:deaths].round(2), population: row[:population].round,
+        src_url: row[:src_url]
+      }
+    end
+  end
+end
+
+def scenario_display_rows(rows, series_key, label, interval_method, auto_selected)
+  interval_label = if interval_method == 'simulation'
+                     $l == :ja ? 'シミュレーション' : 'Simulation'
+                   else
+                     $l == :ja ? '近似計算' : 'Analytic approximation'
+                   end
+  rows.map do |row|
+    row.merge(series: series_key, label: label, interval_method: interval_method,
+              interval_label: interval_label,
+              auto_selected: auto_selected)
+  end
+end
+
+def build_scenarios(rows, series_key, label, use_cache:)
+  stratified = rows.first&.key?(:strata)
+  analytic_calculator = stratified ? method(:compute_stratified_asr_analytic_scenarios) : method(:compute_analytic_scenarios)
+  unless use_cache
+    analytic = analytic_calculator.call(rows, series_key, label)
+    return scenario_display_rows(analytic, series_key, label, 'analytic', true)
+  end
+
+  analytic, simulation = cached_scenarios(rows, stratified ? 'stratified_asr' : 'scalar', analytic_calculator)
+  simulation_ready = !simulation.empty?
+  analytic_rows = scenario_display_rows(analytic, series_key, label, 'analytic', !simulation_ready)
+  # 日本語: 準Poissonにはsimulation版がないため、常に近似結果を自動選択する。
+  # English: Quasi-Poisson has no simulated version, so auto mode always selects its analytic result.
+  analytic_rows.each { |row| row[:auto_selected] = true if row[:model] == 'quasi_poisson' }
+  analytic_rows + scenario_display_rows(simulation, series_key, label, 'simulation', true)
+end
+
+# 日本語: cronからpending cacheを少数ずつ処理する。通常終了時は何も出力しない。
+# English: Process a bounded number of pending cache entries from cron; stay silent on success.
+def process_mortyear_cache_jobs(limit)
+  namespace = File.join(cache_root, 'mortyear-v2')
+  pending_paths = Dir.glob(File.join(namespace, '[0-9a-f][0-9a-f]', '[0-9a-f]' * 64, 'pending*')).
+                  sort_by { |path| File.mtime(path) }.first([limit, 0].max)
+  pending_paths.each do |pending_path|
+    directory = File.dirname(pending_path)
+    suffix = File.basename(pending_path).delete_prefix('pending')
+    lock_path = File.join(directory, 'lock')
+    File.open(lock_path, File::RDWR | File::CREAT, 0o600) do |lock|
+      next unless lock.flock(File::LOCK_EX | File::LOCK_NB)
+      next unless File.file?(pending_path)
+
+      metadata_path = File.join(directory, "metadata#{suffix}.json")
+      input_path = File.join(directory, "input#{suffix}.json.gz")
+      simulation_path = File.join(directory, "simulation#{suffix}.json.gz")
+      metadata = JSON.parse(File.read(metadata_path))
+      rows = gzip_read(input_path)
+      calculator = case metadata.fetch('calculator_type')
+                   when 'scalar' then method(:compute_simulation_scenarios)
+                   when 'stratified_asr' then method(:compute_stratified_asr_simulation_scenarios)
+                   else raise "Unknown calculator_type: #{metadata['calculator_type']}"
+                   end
+      result = calculator.call(rows, '', '')
+      gzip_write(simulation_path, result)
+      File.unlink(pending_path)
+      FileUtils.touch(File.join(directory, "access#{suffix}"))
+    end
+  rescue StandardError => error
+    warn "mortyear cache job failed: #{pending_path}: #{error.class}: #{error.message}"
+  end
+end
+
+if opts[:process_cache_jobs]
+  process_mortyear_cache_jobs(opts[:process_cache_jobs])
+  exit
 end
 
 fixture_data = if opts[:fixture]
@@ -1103,9 +1261,10 @@ if opts[:summary]
     values = chart_data.select { |row| row[:series] == key }
     last_cutoff = values.map { |row| row[:train_to] }.max
     requested_summary_cutoff = values.map { |row| row[:train_to] }.include?(default_cutoff) ? default_cutoff : last_cutoff
-    poisson_latest = values.select { |row| row[:model] == 'poisson' && row[:train_to] == requested_summary_cutoff }.
+    selected_values = values.select { |row| interval_mode == 'analytic' ? row[:interval_method] == 'analytic' : row[:auto_selected] }
+    poisson_latest = selected_values.select { |row| row[:model] == 'poisson' && row[:train_to] == requested_summary_cutoff }.
                      max_by { |row| row[:year] }
-    latest = values.select { |row| row[:model] == 'quasi_poisson' && row[:train_to] == last_cutoff }.
+    latest = selected_values.select { |row| row[:model] == 'quasi_poisson' && row[:train_to] == last_cutoff }.
              max_by { |row| row[:year] }
     [label, {
       years: values.map { |row| row[:year] }.uniq.minmax,
@@ -1658,16 +1817,10 @@ else
                   end
     [key, short_label]
   end
-  interval_note = if selected_metric == 'asr'
-                    if $l == :ja
-                      ' Poissonの青帯は年齢階級別の回帰係数分散と観測分散をWHO標準人口weightで合成した近似95%予測区間です。準Poissonは全階級の残差から推定した過分散を反映します。'
-                    else
-                      ' The Poisson band is an approximate 95% prediction interval combining age-specific coefficient and observation variance with WHO standard-population weights. Quasi-Poisson reflects overdispersion estimated across all strata.'
-                    end
-                  elsif $l == :ja
-                    ' Poissonの青帯は回帰係数と観測変動を含む10,000回シミュレーションによる95%予測区間です。準Poissonは過分散補正による近似95%予測区間です。'
+  interval_note = if $l == :ja
+                    ' simulation未計算時は近似95%予測区間を表示し、後処理完了後はPoissonの10,000回simulation結果を自動使用します。準Poissonは過分散補正による近似95%予測区間です。'
                   else
-                    ' The Poisson band is a 95% prediction interval from 10,000 simulations including coefficient and observation uncertainty. The quasi-Poisson band is an approximate overdispersion-adjusted 95% prediction interval.'
+                    ' When simulation is not yet available, an approximate 95% prediction interval is shown. After deferred processing, Poisson automatically uses 10,000 simulations. Quasi-Poisson uses an approximate overdispersion-adjusted interval.'
                   end
   puts <<~HTML
     <p class="mortyear-note">
@@ -1697,6 +1850,10 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
+      &nbsp;
+      <label><input id="analytic-interval-checkbox" type="checkbox" #{'checked' if interval_mode == 'analytic'}>
+        #{ $l == :ja ? '近似計算を使用' : 'Use analytic approximation' }
+      </label>
     </p>
     <div id="mortyear-vis"></div>
     <script>
@@ -1706,6 +1863,7 @@ else
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
       const modelDefault = #{JSON.generate(default_model)};
+      const intervalModeDefault = #{JSON.generate(interval_mode)};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const panelSpecs = panels.map(([key, label]) => ({
@@ -1715,14 +1873,15 @@ else
           {filter: `datum.series == '${key}'`},
           {filter: "datum.year >= display_start"},
           {filter: "datum.train_to == train_to"},
-          {filter: "datum.model == model"}
+          {filter: "datum.model == model"},
+          {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
         ],
         encoding: {
           x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer: [
-          {mark: {type: "area", color: "#dceaf5"}, encoding: {y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
-          {mark: {type: "line", color: "#246a9e", strokeDash: [6,4], strokeWidth: 2}, encoding: {y: {field: "expected", type: "quantitative"}}},
+          {mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#c7dff0","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
+          {mark: {type: "line", strokeDash: [6,4], strokeWidth: 2}, encoding: {color:{field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#246a9e","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
             {field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}},
             {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
@@ -1732,6 +1891,7 @@ else
             {field:"deaths", type:"quantitative", format:",.2f", title:#{JSON.generate($l == :ja ? '年境界按分後死亡数' : 'Prorated deaths')}},
             {field:"population", type:"quantitative", format:",d", title:#{JSON.generate(denominator_title)}}
             ,{field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}}
+            ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
           {transform:[{filter:"datum.outside_pi"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {transform:[{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}}
@@ -1744,6 +1904,7 @@ else
           {name:"display_start", value:displayStartDefault},
           {name:"train_to", value:trainDefault},
           {name:"model", value:modelDefault},
+          {name:"interval_mode", value:intervalModeDefault},
           {name:"zero_base", value:false}
         ],
         vconcat: panelSpecs,
@@ -1758,6 +1919,7 @@ else
         const output = document.getElementById("train-to-output");
         const model = document.getElementById("model-selector");
         const zeroBase = document.getElementById("zero-base-checkbox");
+        const analyticInterval = document.getElementById("analytic-interval-checkbox");
         /* 推定φ表示を再開するときのために残す。Keep for restoring the estimated-phi display.
         const dispersionOutput = document.getElementById("dispersion-output");
         function updateDispersion(value) {
@@ -1786,6 +1948,14 @@ else
         });
         zeroBase.addEventListener("change", () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
+        });
+        analyticInterval.addEventListener("change", () => {
+          const value = analyticInterval.checked ? "analytic" : "auto";
+          result.view.signal("interval_mode", value).runAsync();
+          const url = new URL(window.location.href);
+          if (analyticInterval.checked) url.searchParams.set("interval", "analytic");
+          else url.searchParams.delete("interval");
+          history.replaceState(null, "", url);
         });
         result.view.addSignalListener("train_to", (_name, value) => {
           const url = new URL(window.location.href);
