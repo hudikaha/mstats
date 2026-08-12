@@ -961,17 +961,41 @@ else
   )
 end
 
+sex_labels = {
+  'male' => { ja: '男性', en: 'Male' },
+  'female' => { ja: '女性', en: 'Female' }
+}.freeze
+age_selection_label = if selected_ages.include?('age_all')
+                        $l == :ja ? '全年齢' : 'All ages'
+                      elsif selected_ages == ['age_0']
+                        '0'
+                      else
+                        indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
+                        if indexes.any? && indexes.each_cons(2).all? { |left, right| right == left + 1 }
+                          lower = format('%02d', indexes.first * 5)
+                          upper = indexes.last == STANDARD_AGES.length - 1 ? '100+' : format('%02d', indexes.last * 5 + 4)
+                          "#{lower}-#{upper}"
+                        else
+                          selected_ages.map { |age| AGES.fetch(age).fetch($l) }.join(', ')
+                        end
+                      end
+panel_label = lambda do |loc, cause|
+  cause_name = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
+  parts = [location_names(loc).fetch($l), METRICS.fetch(selected_metric).fetch($l), age_selection_label]
+  parts << sex_labels.fetch(selected_sex).fetch($l) unless selected_sex == 'both'
+  parts << cause_name
+  parts.join(' ')
+end
+
 series_specs = if mode == 'country'
                  selected_locations.map do |loc|
                    cause = selected_causes.first
-                   cause_label = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
-                   [loc, selected_ages, cause, "#{location_names(loc).fetch($l)} — #{cause_label}"]
+                   [loc, selected_ages, cause, panel_label.call(loc, cause)]
                  end
                else
                  selected_causes.map do |cause|
                    key = "#{selected_locations.first}-#{selected_ages.join('+')}-#{cause}"
-                   label = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
-                   [key, selected_ages, cause, label]
+                   [key, selected_ages, cause, panel_label.call(selected_locations.first, cause)]
                  end
                end
 
@@ -1179,36 +1203,34 @@ puts <<~HTML
         </div>
       </div></div>
     </fieldset><br>
-    <fieldset id="cause-fieldset" data-single-option="#{available_causes.length <= 1}" style="#{available_causes.length <= 1 || selected_locations.length != 1 || !((selected_locations.first == 'JPN' && selected_metric != 'birth_rate') || (selected_locations.first == 'USA' && selected_metric == 'birth_rate')) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+    <fieldset id="cause-fieldset" style="#{selected_locations.length != 1 || !((selected_locations.first == 'JPN' && selected_metric != 'birth_rate') || (selected_locations.first == 'USA' && selected_metric == 'birth_rate')) ? 'display:none' : ''}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
 HTML
-available_causes.each do |cause|
+japan_causes = annual_catalog.dig('JPN', :death_codes).to_a.select { |cause| cause.match?(/\A\d{5}\z/) }
+japan_causes.each do |cause|
   next unless cause == '00000'
   names = Death_codes.fetch(cause, { ja: cause, en: cause })
   type = mode == 'country' ? 'radio' : 'checkbox'
-  puts %(<label><input class="cause-option" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
-special_available = available_causes & SPECIAL_CAUSES.keys
-unless special_available.empty?
-  puts %(<details open><summary>#{CGI.escapeHTML($l == :ja ? '出生関連指標' : 'Birth-related measures')}</summary><div class="mortyear-options">)
-  special_available.each do |cause|
-    type = mode == 'country' ? 'radio' : 'checkbox'
-    puts %(<label><input class="cause-option" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(SPECIAL_CAUSES.fetch(cause).fetch($l))}</label>)
-  end
-  puts %(</div></details>)
+puts %(<details open><summary>#{CGI.escapeHTML($l == :ja ? '出生関連指標' : 'Birth-related measures')}</summary><div class="mortyear-options">)
+SPECIAL_CAUSES.each do |cause, names|
+  type = mode == 'country' ? 'radio' : 'checkbox'
+  puts %(<label><input class="cause-option" data-cause-scope="birth" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
-top_causes = available_causes.select { |cause| cause.match?(/\A\d{2}000\z/) && cause != '00000' }
+puts %(</div></details>)
+top_causes = japan_causes.select { |cause| cause.match?(/\A\d{2}000\z/) && cause != '00000' }
 top_causes.each do |parent|
-  children = available_causes.select { |cause| cause != parent && cause.start_with?(parent[0, 2]) }
+  children = japan_causes.select { |cause| cause != parent && cause.start_with?(parent[0, 2]) }
   names = Death_codes.fetch(parent, { ja: parent, en: parent })
   open = ([parent] + children).any? { |cause| selected_causes.include?(cause) }
   puts %(<details #{open ? 'open' : ''}><summary>)
   type = mode == 'country' ? 'radio' : 'checkbox'
-  puts %(<label><input class="cause-option" type="#{type}" name="death_codes" value="#{parent}" #{checked(selected_causes.include?(parent))}>#{parent}: #{CGI.escapeHTML(names.fetch($l))}</label></summary>)
+  puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{parent}" #{checked(selected_causes.include?(parent))}>#{parent}: #{CGI.escapeHTML(names.fetch($l))}</label></summary>)
   unless children.empty?
     puts %(<div class="mortyear-options">)
     children.each do |cause|
       child_names = Death_codes.fetch(cause, { ja: cause, en: cause })
-      puts %(<label><input class="cause-option" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{cause}: #{CGI.escapeHTML(child_names.fetch($l))}</label>)
+      puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{cause}: #{CGI.escapeHTML(child_names.fetch($l))}</label>)
     end
     puts %(</div>)
   end
@@ -1252,12 +1274,23 @@ puts <<~HTML
         const causes = Array.from(document.querySelectorAll('.cause-option'));
         const selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
         const metric = document.querySelector('input[name="metric"]:checked').value;
-        const eligible = selectedLocations.length === 1 &&
-          ((selectedLocations[0] === 'JPN' && metric !== 'birth_rate') ||
-           (selectedLocations[0] === 'USA' && metric === 'birth_rate'));
-        const hidden = fieldset.dataset.singleOption === 'true' || !eligible;
+        const scope = selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
+          selectedLocations.length === 1 && selectedLocations[0] === 'USA' && metric === 'birth_rate' ? 'birth' : null;
+        const hidden = scope === null;
         fieldset.style.display = hidden ? 'none' : '';
-        causes.forEach(input => { input.disabled = hidden; });
+        causes.forEach(input => {
+          const active = !hidden && input.dataset.causeScope === scope;
+          input.disabled = !active;
+          input.closest('label').style.display = active ? '' : 'none';
+        });
+        fieldset.querySelectorAll('details').forEach(details => {
+          details.style.display = details.querySelector('.cause-option:not(:disabled)') ? '' : 'none';
+        });
+        const active = causes.filter(input => !input.disabled);
+        if (active.length && !active.some(input => input.checked)) {
+          const preferred = active.find(input => input.value === (scope === 'birth' ? 'INFANT' : '00000')) || active[0];
+          preferred.checked = true;
+        }
       }
       const standardAges = #{JSON.generate(STANDARD_AGES)};
       const ageStart = document.getElementById('age-start');
@@ -1359,6 +1392,11 @@ puts <<~HTML
           label.style.display = available ? "" : "none";
           label.querySelector('input').disabled = !available;
         });
+        if (metric === 'birth_rate') {
+          document.querySelectorAll('.location-option').forEach(input => {
+            input.checked = input.value === 'USA';
+          });
+        }
         document.querySelectorAll('.location-region').forEach(details => {
           const visible = Array.from(details.querySelectorAll('.location-label')).some(label => label.style.display !== 'none');
           details.style.display = visible ? '' : 'none';
@@ -1501,7 +1539,7 @@ else
           {filter: "datum.model == model"}
         ],
         encoding: {
-          x: {field: "year", type: "quantitative", scale: {domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
+          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer: [
           {mark: {type: "area", color: "#dceaf5"}, encoding: {y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
