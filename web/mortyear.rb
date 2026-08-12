@@ -980,7 +980,7 @@ else
         vconcat: panelSpecs,
         autosize: {type:"fit-x", contains:"padding", resize:true},
         resolve: {scale: {y: "independent"}},
-        config: {view:{stroke:null}, axis:{labelFontSize:12,titleFontSize:13}, axisY:{minExtent:72,maxExtent:72}, title:{fontSize:15}}
+        config: {view:{stroke:null}, axis:{labelFontSize:15,titleFontSize:17}, axisY:{minExtent:84,maxExtent:84}, title:{fontSize:19}}
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         const slider = document.getElementById("train-to-slider");
