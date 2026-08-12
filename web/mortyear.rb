@@ -1150,7 +1150,8 @@ puts <<~HTML
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
 METRICS.each do |metric, names|
-  puts %(<label><input class="metric-option" type="radio" name="metric" value="#{metric}" #{checked(selected_metric == metric)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  hidden_style = metric == 'std_deaths' ? ' style="display:none"' : ''
+  puts %(<label#{hidden_style}><input class="metric-option" type="radio" name="metric" value="#{metric}" #{checked(selected_metric == metric)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts <<~HTML
     </fieldset><br>
