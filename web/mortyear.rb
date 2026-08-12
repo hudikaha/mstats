@@ -1145,6 +1145,8 @@ puts <<~HTML
     #age-range-slider input::-webkit-slider-runnable-track { height:3px; background:transparent; }
     #age-range-slider input::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; pointer-events:auto; width:16px; height:16px; margin-top:-6px; border:1px solid #666; border-radius:50%; background:#687080; }
     #age-range-slider input::-moz-range-thumb { pointer-events:auto; width:16px; height:16px; border:1px solid #666; border-radius:50%; background:#687080; }
+    .location-region-controls { margin:.35em 0 .55em; }
+    .location-region-controls button { margin-right:.45em; }
     .mortyear-note { text-align:left; background:#f5f7f8; padding:.8em 1em; }
     #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
     #mortyear-vis .vega-embed, #mortyear-vis .vega-embed > div { width:100%; max-width:100%; }
@@ -1180,7 +1182,8 @@ WORLD_REGIONS.each do |region, region_names|
   codes = location_groups.fetch(region, []).sort_by { |code| location_sort_key(code, $l) }
   next if codes.empty?
   open = codes.any? { |code| selected_locations.include?(code) }
-  puts %(<details class="location-region" #{open ? 'open' : ''}><summary>#{CGI.escapeHTML(region_names.fetch($l))}（#{codes.length}）</summary><div class="mortyear-options">)
+  puts %(<details class="location-region" #{open ? 'open' : ''}><summary>#{CGI.escapeHTML(region_names.fetch($l))}（#{codes.length}）</summary>)
+  puts %(<div class="location-region-controls"><button type="button" data-region-action="select">#{CGI.escapeHTML($l == :ja ? 'すべて選択' : 'Select all')}</button><button type="button" data-region-action="clear">#{CGI.escapeHTML($l == :ja ? 'クリア' : 'Clear')}</button></div><div class="mortyear-options">)
   codes.each do |code|
     names = location_names(code)
     metrics = METRICS.keys.select do |metric|
@@ -1297,8 +1300,23 @@ puts <<~HTML
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'death_codes');
         }
+        document.querySelectorAll('.location-region-controls').forEach(controls => {
+          controls.style.display = selected === 'country' ? '' : 'none';
+        });
         syncCauseVisibility();
       }
+      document.querySelectorAll('[data-region-action]').forEach(button => {
+        button.addEventListener('click', () => {
+          const select = button.dataset.regionAction === 'select';
+          const region = button.closest('.location-region');
+          region.querySelectorAll('.location-label').forEach(label => {
+            const input = label.querySelector('.location-option');
+            if (!input.disabled && label.style.display !== 'none') input.checked = select;
+          });
+          rememberLocations();
+          syncCauseVisibility();
+        });
+      });
       function syncCauseVisibility() {
         const fieldset = document.getElementById('cause-fieldset');
         const causes = Array.from(document.querySelectorAll('.cause-option'));
