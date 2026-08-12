@@ -1345,6 +1345,7 @@ puts <<~HTML
     #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
     #mortyear-vis .vega-embed, #mortyear-vis .vega-embed > div { width:100%; max-width:100%; }
     #mortyear-vis svg { display:block; max-width:100%; height:auto; }
+    #train-to-slider { width:50px; }
     .mortyear-loading { min-height:12em; display:flex; align-items:center; justify-content:center; font-size:1.2em; font-weight:bold; }
   </style>
   <form class="mortyear-form" method="get">
