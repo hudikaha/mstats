@@ -1451,7 +1451,7 @@ top_causes.each do |parent|
 end
 puts <<~HTML
     </fieldset><br>
-    <button type="submit">#{ $l == :ja ? '表示' : 'Show' }</button>
+    <button type="submit">#{ $l == :ja ? '読込み' : 'Submit' }</button>
   </form>
   <script>
     (function () {
@@ -1859,7 +1859,7 @@ else
       <!-- <output id="dispersion-output"></output> -->
       &nbsp;
       <label id="simulation-interval-control" style="display:none"><input id="simulation-interval-checkbox" type="checkbox" #{'checked' unless interval_mode == 'analytic'}>
-        #{ $l == :ja ? 'simulation区間を表示（未計算時は近似区間。1分以上待って再読み込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and reload)' }
+        #{ $l == :ja ? 'simulation区間を表示（未計算時は近似区間。1分以上待って再読込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and resubmit)' }
       </label>
     </p>
     <div id="mortyear-vis"></div>
