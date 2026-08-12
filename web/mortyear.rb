@@ -1531,8 +1531,8 @@ else
       &nbsp;
       <label>#{ $l == :ja ? 'モデル' : 'Model' }
         <select id="model-selector">
-          <option value="poisson">#{ $l == :ja ? 'Poisson（標準）' : 'Poisson (standard)' }</option>
-          <option value="quasi_poisson">#{ $l == :ja ? '準Poisson（感度分析）' : 'Quasi-Poisson (sensitivity)' }</option>
+          <option value="poisson">Poisson</option>
+          <option value="quasi_poisson">#{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }</option>
         </select>
       </label>
       &nbsp;
