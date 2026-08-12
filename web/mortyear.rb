@@ -1456,7 +1456,7 @@ else
     sources[loc] ||= []
     sources[loc] |= urls
   end
-  source_items = []
+  source_entries = []
   if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
     method = if selected_metric == 'birth_rate' &&
                 selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL') && $l == :ja
@@ -1476,18 +1476,20 @@ else
                'e-Statの年齢階級別死亡数・人口を優先し、不足階級はUN WPP 2024で補完。WHO世界標準人口で直接法により年齢調整している。'
              elsif selected_metric == 'asr'
                'Age-specific e-Stat deaths and populations take priority, with UN WPP 2024 filling unavailable strata; direct standardization uses the WHO world standard population.'
+             elsif selected_metric == 'crude_rate' && selected_ages != ['age_all'] && $l == :ja
+               'e-Statの年齢別死亡数とUN WPP 2024の年齢別人口を使用。'
+             elsif selected_metric == 'crude_rate' && selected_ages != ['age_all']
+               'Uses age-specific deaths from e-Stat and age-specific population from UN WPP 2024.'
              elsif $l == :ja
-               'e-Statの月次死亡数と月次人口が原資料。既存の月次→週次変換による派生系列を年次へ再集計している。年齢調整には日本の最新確定人口を標準人口として使用。'
+               'e-Statの月次死亡数と月次人口が原資料。'
              else
-               'Source data are monthly deaths and population from e-Stat. The current implementation reaggregates the derived monthly-to-weekly series into annual values.'
+               'Source data are monthly deaths and population from e-Stat.'
              end
-    links = sources_by_location['JPN'].map { |url| %(<a href="#{CGI.escapeHTML(url)}" target="_blank">#{CGI.escapeHTML(url)}</a>) }.join('<br>')
-    source_items << "<li><strong>#{CGI.escapeHTML(location_names('JPN').fetch($l))}</strong>: #{CGI.escapeHTML(method)}<br>#{links}</li>"
+    source_entries << { loc: 'JPN', method: method, urls: sources_by_location['JPN'] }
   end
   sources_by_location.each do |loc, urls|
     next if loc == 'JPN' && urls.any? { |url| url.include?('e-stat.go.jp') }
 
-    links = urls.map { |url| %(<a href="#{CGI.escapeHTML(url)}" target="_blank">#{CGI.escapeHTML(url)}</a>) }.join('<br>')
     method = if loc == 'USA' && selected_metric == 'birth_rate' &&
                 selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL')
                if $l == :ja
@@ -1508,13 +1510,25 @@ else
                  'Uses annual birth and infant death counts from the U.S. CDC.'
                end
              elsif urls.include?(WPP_URL)
-               $l == :ja ? 'UN WPP 2024の年次推計値（2023年まで）。2024年以降の中位予測はこの画面では使わない。' : 'UN WPP 2024 annual estimates through 2023; medium projections from 2024 onward are not used on this page.'
+               $l == :ja ? 'UN WPP 2024の年次推計値（2023年まで）。' : 'UN WPP 2024 annual estimates through 2023.'
              else
                $l == :ja ? 'リンク先の公表年次値を使用しています。' : 'Uses the published annual values at the linked source.'
              end
-    source_items << "<li><strong>#{CGI.escapeHTML(location_names(loc).fetch($l))}</strong>: #{CGI.escapeHTML(method)}<br>#{links}</li>"
+    source_entries << { loc: loc, method: method, urls: urls }
   end
-  source_items = source_items.join("\n")
+  # 日本語: 同じ処理説明の地域は一項目にまとめ、大量の国名列挙を避ける。
+  # English: Group locations with the same processing note and avoid listing a large number of country names.
+  source_items = source_entries.group_by { |entry| entry[:method] }.map do |method, entries|
+    locations = entries.map { |entry| location_names(entry[:loc]).fetch($l) }
+    location_label = if locations.length > 8
+                       $l == :ja ? 'それ以外' : 'Other locations'
+                     else
+                       locations.join($l == :ja ? '、' : ', ')
+                     end
+    urls = entries.flat_map { |entry| entry[:urls] }.uniq
+    links = urls.map { |url| %(<a href="#{CGI.escapeHTML(url)}" target="_blank">#{CGI.escapeHTML(url)}</a>) }.join('<br>')
+    "<li><strong>#{CGI.escapeHTML(location_label)}</strong>: #{CGI.escapeHTML(method)}<br>#{links}</li>"
+  end.join("\n")
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   interval_note = if selected_metric == 'asr'
                     if $l == :ja
@@ -1529,7 +1543,7 @@ else
                   end
   puts <<~HTML
     <p class="mortyear-note">
-      #{ ($l == :ja ? (birth_metric ? '指標に対応する分母をoffsetとしたPoisson回帰で、1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '月・週へ再集計せず、年次recordを直接表示しています。各国公式系列がある指標はWPPより優先します。') : (birth_metric ? 'Poisson regression uses the denominator for each measure as the offset and displays rates per 1,000.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Annual records are displayed directly without monthly or weekly reaggregation. National series take priority over WPP for the same measure.')) + interval_note + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
+      #{ ($l == :ja ? (birth_metric ? '指標に対応する分母をoffsetとしたPoisson回帰で、1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '') : (birth_metric ? 'Poisson regression uses the denominator for each measure as the offset and displays rates per 1,000.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : '')) + interval_note + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
     </p>
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
