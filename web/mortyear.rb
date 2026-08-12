@@ -1475,10 +1475,29 @@ else
     next if loc == 'JPN' && urls.any? { |url| url.include?('e-stat.go.jp') }
 
     links = urls.map { |url| %(<a href="#{CGI.escapeHTML(url)}" target="_blank">#{CGI.escapeHTML(url)}</a>) }.join('<br>')
-    method = if urls.include?(WPP_URL)
+    method = if loc == 'USA' && selected_metric == 'birth_rate' &&
+                selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL')
+               if $l == :ja
+                 '乳児死亡率には米国CDCの年次出生数・乳児死亡数を使用しています。周産期死亡率には米国の年次出生数と、OECD公表率から逆算した近似死亡数を使用しています。'
+               else
+                 'Infant mortality uses annual U.S. CDC birth and infant death counts. Perinatal mortality uses annual U.S. births and approximate death counts reconstructed from OECD-published rates.'
+               end
+             elsif loc == 'USA' && selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL')
+               if $l == :ja
+                 '米国の年次出生数と、OECD公表率から逆算した周産期死亡数を使用しています。死亡数は近似値です。'
+               else
+                 'Uses annual U.S. births and perinatal death counts reconstructed from OECD-published rates. The death counts are approximate.'
+               end
+             elsif loc == 'USA' && selected_metric == 'birth_rate'
+               if $l == :ja
+                 '米国CDCの年次出生数と乳児死亡数を使用しています。'
+               else
+                 'Uses annual birth and infant death counts from the U.S. CDC.'
+               end
+             elsif urls.include?(WPP_URL)
                $l == :ja ? 'UN WPP 2024の年次推計値（2023年まで）。2024年以降の中位予測はこの画面では使わない。' : 'UN WPP 2024 annual estimates through 2023; medium projections from 2024 onward are not used on this page.'
              else
-               $l == :ja ? '各リンクの各国原データを完全な暦年へ集計した。' : 'National source data at the links were aggregated into complete calendar years.'
+               $l == :ja ? 'リンク先の公表年次値を使用しています。' : 'Uses the published annual values at the linked source.'
              end
     source_items << "<li><strong>#{CGI.escapeHTML(location_names(loc).fetch($l))}</strong>: #{CGI.escapeHTML(method)}<br>#{links}</li>"
   end
