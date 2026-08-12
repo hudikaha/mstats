@@ -968,7 +968,7 @@ sex_labels = {
 age_selection_label = if selected_ages.include?('age_all')
                         $l == :ja ? '全年齢' : 'All ages'
                       elsif selected_ages == ['age_0']
-                        '0'
+                        $l == :ja ? '0歳' : 'Age 0'
                       else
                         indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
                         if indexes.any? && indexes.each_cons(2).all? { |left, right| right == left + 1 }
