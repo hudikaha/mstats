@@ -261,9 +261,18 @@ def annual_metric_available?(code, catalog, metric)
   when 'crude_rate' then rates.include?('crude_rate')
   when 'asr' then rates.include?('asr')
   when 'birth_rate'
-    categories.include?('birth') && (codes.include?('INFANT') || codes.include?('PERM'))
+    categories.include?('birth') &&
+      (codes.include?('INFANT') || codes.include?('PERM') || (code == 'USA' && codes.include?('00000')))
   else false
   end
+end
+
+# 日本語: 米国乳児死亡は既存の全死因recordのage_0にあるため、表示可能性を保存codeから変換する。
+# English: U.S. infant deaths use age_0 of the legacy all-cause record, so map storage codes to display availability.
+def birth_cause_available?(location, catalog, cause)
+  codes = catalog.fetch(:death_codes)
+  return codes.include?('PERM') if cause == 'PERINATAL'
+  codes.include?('INFANT') || (location == 'USA' && codes.include?('00000'))
 end
 
 def available_death_codes(index:, fixture:, locations:, metric:)
@@ -887,8 +896,7 @@ selected_causes = [available_causes.first].compact if selected_causes.empty?
 selected_causes = [selected_causes.first] if mode == 'country'
 if selected_metric == 'birth_rate'
   available_causes = SPECIAL_CAUSES.keys.select do |cause|
-    code = cause == 'PERINATAL' ? 'PERM' : cause
-    selected_locations.all? { |loc| annual_catalog.dig(loc, :death_codes).to_a.include?(code) }
+    selected_locations.all? { |loc| birth_cause_available?(loc, annual_catalog.fetch(loc), cause) }
   end
   selected_causes = requested_causes.select { |code| available_causes.include?(code) }
   selected_causes = mode == 'series' ? SPECIAL_CAUSES.keys : ['INFANT'] if selected_causes.empty?
@@ -1221,8 +1229,7 @@ end
 puts %(<details open><summary>#{CGI.escapeHTML($l == :ja ? '出生関連指標' : 'Birth-related measures')}</summary><div class="mortyear-options">)
 SPECIAL_CAUSES.each do |cause, names|
   type = mode == 'country' ? 'radio' : 'checkbox'
-  code = cause == 'PERINATAL' ? 'PERM' : cause
-  locations = annual_catalog.select { |_loc, catalog| catalog.fetch(:death_codes).include?(code) }.keys
+  locations = annual_catalog.select { |loc, catalog| birth_cause_available?(loc, catalog, cause) }.keys
   puts %(<label><input class="cause-option" data-cause-scope="birth" data-locations="#{locations.join(' ')}" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts %(</div></details>)
