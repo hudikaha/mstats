@@ -15,6 +15,7 @@ WHO_URL = (
     "paper31_2001_age_standardization_rates.pdf"
 )
 HISTORICAL_END = 2023
+NORTHERN_AMERICA = {"BMU", "CAN", "GRL", "SPM", "USA"}
 
 WHO_STANDARD = {
     "age_00_04": 8.86, "age_05_09": 8.69, "age_10_14": 8.60,
@@ -37,7 +38,7 @@ AGE_FIELDS = [
     "age_05_14", "age_15_29", "age_30_49", "age_50_64",
 ]
 FIELDS = [
-    "id", "loc_code", "location", "category", "rate", "death_code",
+    "id", "loc_code", "location", "world_region", "category", "rate", "death_code",
     "death_cause", "algo", "type", "src_url", "date", "year", "sex",
 ] + AGE_FIELDS
 
@@ -116,11 +117,12 @@ def record_id(loc, year, category, rate, code, algo, kind, sex):
     return "_".join(map(str, [loc, year, category, rate, code, algo, kind, sex]))
 
 
-def base(loc, location, year, sex, category, kind, rate="", code="",
+def base(loc, location, world_region, year, sex, category, kind, rate="", code="",
          src_urls=None, algo="un_wpp2024"):
     return {
         "id": record_id(loc, year, category, rate, code, algo, kind, sex),
-        "loc_code": loc, "location": location, "category": category,
+        "loc_code": loc, "location": location, "world_region": world_region,
+        "category": category,
         "rate": rate, "death_code": code,
         "death_cause": "All causes" if code == "00000" else "",
         "algo": algo, "type": kind, "src_url": json.dumps(src_urls or [WPP_URL]),
@@ -146,6 +148,25 @@ def main():
     indicators = {}
     locations = {}
 
+    # WPPの親子関係から、各国が属する最上位の地理地域を求める。
+    # Resolve each country's top-level geographic region from the WPP hierarchy.
+    hierarchy = {}
+    for source in rows(options.demographic):
+        loc_id = source["LocID"]
+        hierarchy[loc_id] = {
+            "parent": source["ParentID"], "name": source["Location"],
+            "type": source["LocTypeName"],
+        }
+    def world_region(source):
+        if source["ISO3_code"] in NORTHERN_AMERICA:
+            return "Northern America"
+        node = hierarchy.get(source["ParentID"])
+        while node:
+            if node["type"] == "Geographic region":
+                return node["name"]
+            node = hierarchy.get(node["parent"])
+        return "Other"
+
     # 年央人口を人口recordとして出力する。
     # Emit mid-year population records.
     for source in rows(options.demographic):
@@ -153,7 +174,7 @@ def main():
             continue
         loc, location, year = source["ISO3_code"].lower(), source["Location"], int(source["Time"])
         iso = source["ISO3_code"]
-        locations[iso] = location
+        locations[iso] = (location, world_region(source))
         kind = "estimate" if year <= HISTORICAL_END else "projection_medium"
         for sex, pop_col, death_col in (
             ("both", "TPopulation1July", "Deaths"),
@@ -163,25 +184,25 @@ def main():
             population = float(source[pop_col]) * 1000
             deaths = float(source[death_col]) * 1000
             indicators[(loc, year, sex)] = (population, deaths)
-            pop = base(loc, location, year, sex, "pop", kind)
+            pop = base(loc, location, locations[iso][1], year, sex, "pop", kind)
             pop["age_all"] = clean(population)
             writer.writerow(pop)
 
     def flush(key, totals):
         if key is None:
             return
-        loc, location, year = key
+        loc, location, world_region, year = key
         for sex in ("both", "male", "female"):
             death_age = totals[sex]["death"]
             exposure_age = totals[sex]["exposure"]
             midyear_population, total_deaths = indicators[(loc, year, sex)]
             kind = "estimate" if year <= HISTORICAL_END else "projection_medium"
             exposure_kind = "exposure_estimate" if year <= HISTORICAL_END else "exposure_projection_medium"
-            death = base(loc, location, year, sex, "death", kind, code="00000")
+            death = base(loc, location, world_region, year, sex, "death", kind, code="00000")
             death.update({field: clean(value * 1000) for field, value in death_age.items()})
             death["age_all"] = clean(total_deaths)
             writer.writerow(death)
-            exposure = base(loc, location, year, sex, "pop", exposure_kind)
+            exposure = base(loc, location, world_region, year, sex, "pop", exposure_kind)
             exposure.update({field: clean(value * 1000) for field, value in exposure_age.items()})
             writer.writerow(exposure)
             rates = {
@@ -190,7 +211,7 @@ def main():
             }
             rates["age_0"] = death_age["age_0"] * 100_000 / exposure_age["age_0"]
             rates["age_all"] = total_deaths * 100_000 / midyear_population
-            crude = base(loc, location, year, sex, "death", kind,
+            crude = base(loc, location, world_region, year, sex, "death", kind,
                          rate="crude_rate", code="00000")
             crude.update({field: clean(value) for field, value in rates.items()})
             writer.writerow(crude)
@@ -199,7 +220,7 @@ def main():
             if all(field in rates for field in WHO_STANDARD):
                 asr_value = sum(rates[field] * weight for field, weight in WHO_STANDARD.items()) \
                     / sum(WHO_STANDARD.values())
-                asr = base(loc, location, year, sex, "death", kind,
+                asr = base(loc, location, world_region, year, sex, "death", kind,
                            rate="asr", code="00000", src_urls=[WPP_URL, WHO_URL],
                            algo="un_wpp2024_who_standard")
                 asr["age_all"] = clean(asr_value)
@@ -230,7 +251,8 @@ def main():
         iso, year, age = death_key
         if iso not in locations or not options.from_year <= year <= options.to_year:
             continue
-        key = (iso.lower(), locations[iso], year)
+        location, world_region = locations[iso]
+        key = (iso.lower(), location, world_region, year)
         if key != current_key:
             flush(current_key, totals)
             current_key = key

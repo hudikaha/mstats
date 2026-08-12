@@ -79,10 +79,21 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
     denominator = population[field]
     [field, count && denominator&.positive? ? clean_number(count * 100_000.0 / denominator) : nil]
   end
-  rate_id = [loc, year, 'death', 'amr', code, algo, type, sex].join('_')
-  rows[rate_id] = base.merge(id: rate_id, rate: 'amr',
+  rate_id = [loc, year, 'death', 'crude_rate', code, algo, type, sex].join('_')
+  rows[rate_id] = base.merge(id: rate_id, rate: 'crude_rate',
                              src_url: (src_url + rows.fetch([loc, year, 'pop', '', pop_type, '', sex].join('_'))[:src_url]).uniq)
                           .merge(rates.transform_keys(&:to_sym))
+
+  # 日本語: 全標準年齢階級がある場合だけ、WHO世界標準人口によるASRを作る。
+  # English: Build a WHO-world-standard ASR only when every standard age group is available.
+  standard_rates = Mstats2026::WHO_WORLD_STANDARD.keys.to_h { |field| [field, rates[field]] }
+  next unless standard_rates.values.all?
+
+  asr_value = standard_rates.sum { |field, value| value * Mstats2026::WHO_WORLD_STANDARD.fetch(field) } /
+              Mstats2026::WHO_WORLD_STANDARD.values.sum
+  asr_id = [loc, year, 'death', 'asr', code, 'who_standard', type, sex].join('_')
+  rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: 'who_standard',
+                            src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(asr_value))
 end
 
 Mstats2026.output_yearly(rows)

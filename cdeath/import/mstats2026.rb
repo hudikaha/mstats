@@ -6,6 +6,15 @@ require 'json'
 # 死因と人口を共通のmstats2026 CSV形式へ出力する。
 # Emit cause-of-death and population records in the shared mstats2026 CSV schema.
 module Mstats2026
+  WHO_WORLD_STANDARD = {
+    'age_00_04' => 8.86, 'age_05_09' => 8.69, 'age_10_14' => 8.60,
+    'age_15_19' => 8.47, 'age_20_24' => 8.22, 'age_25_29' => 7.93,
+    'age_30_34' => 7.61, 'age_35_39' => 7.15, 'age_40_44' => 6.59,
+    'age_45_49' => 6.04, 'age_50_54' => 5.37, 'age_55_59' => 4.55,
+    'age_60_64' => 3.72, 'age_65_69' => 2.96, 'age_70_74' => 2.21,
+    'age_75_79' => 1.52, 'age_80_84' => 0.91, 'age_85_89' => 0.44,
+    'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100over' => 0.005
+  }.freeze
   JPN_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0'
   JPN_POP_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0'
   HMD_STMF_URL = 'https://www.mortality.org/Data/STMF'

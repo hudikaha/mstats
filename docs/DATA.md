@@ -18,6 +18,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `id` | keyword | Unique record identifier |
 | `loc_code` | keyword | Lowercase location code; normally ISO 3166-1 alpha-3 for countries and codes such as `jp132101` for municipalities |
 | `location` | keyword | Location name |
+| `world_region` | keyword | Broad UN geographic region, when supplied by an international source |
 | `date` | date | First day of a month or the reference date for a week |
 | `yearmonth` / `yearweek` | keyword | Period code such as `2009m01` / `2009w02` |
 | `year`, `month`, `week` | integer | Calendar year, month, or week number; units that do not apply are absent |

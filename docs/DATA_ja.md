@@ -16,6 +16,7 @@
 | `id` | keyword | recordを一意に識別するID |
 | `loc_code` | keyword | 小文字の地域code。国は原則ISO 3166-1 alpha-3、自治体は`jp132101`など |
 | `location` | keyword | 地域名 |
+| `world_region` | keyword | 国際dataに含まれる場合のUN大地域区分 |
 | `date` | date | 月次は月初、週次は対象週の基準日 |
 | `yearmonth` / `yearweek` | keyword | `2009m01` / `2009w02`形式の期間code |
 | `year`, `month`, `week` | integer | 暦年、月、週番号。該当しない単位は存在しない |
