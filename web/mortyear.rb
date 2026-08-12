@@ -1870,7 +1870,7 @@ else
         <output id="start-year-output">#{default_start_year}</output>
       </label>
       &nbsp;
-      <label>#{ $l == :ja ? '学習終了年' : 'Training end' }
+      <label>#{ $l == :ja ? '学習期間 2000–' : 'Training period 2000–' }
         <input id="train-to-slider" type="range" min="#{cutoffs.min}" max="#{cutoffs.max}" step="1" value="#{default_cutoff}">
         <output id="train-to-output">#{default_cutoff}</output>
       </label>
