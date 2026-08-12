@@ -32,7 +32,20 @@ COUNTRY_NAMES = Locs.transform_values(&:dup).freeze
 Object.send(:remove_const, :Locs)
 COUNTRY_NAME_OVERRIDES = {
   'XKX' => { ja: 'コソボ', en: 'Kosovo' },
-  'PRK' => { ja: '北朝鮮', en: 'North Korea' }
+  'PRK' => { ja: '北朝鮮', en: 'North Korea' },
+  'MYT' => { ja: 'マヨット', en: 'Mayotte' },
+  'REU' => { ja: 'レユニオン', en: 'Réunion' },
+  'ESH' => { ja: '西サハラ', en: 'Western Sahara' },
+  'GUF' => { ja: 'フランス領ギアナ', en: 'French Guiana' },
+  'GLP' => { ja: 'グアドループ', en: 'Guadeloupe' },
+  'MTQ' => { ja: 'マルティニーク', en: 'Martinique' },
+  'PRI' => { ja: 'プエルトリコ', en: 'Puerto Rico' },
+  'BLM' => { ja: 'サン・バルテルミー', en: 'Saint Barthélemy' },
+  'MAF' => { ja: 'サン・マルタン（フランス領）', en: 'Saint Martin (French part)' },
+  'VIR' => { ja: 'アメリカ領ヴァージン諸島', en: 'United States Virgin Islands' },
+  'ASM' => { ja: 'アメリカ領サモア', en: 'American Samoa' },
+  'GUM' => { ja: 'グアム', en: 'Guam' },
+  'MNP' => { ja: '北マリアナ諸島', en: 'Northern Mariana Islands' }
 }.freeze
 
 mort_vars = [
@@ -1181,8 +1194,12 @@ WORLD_REGIONS.each do |region, region_names|
   codes = location_groups.fetch(region, []).sort_by { |code| location_sort_key(code, $l) }
   next if codes.empty?
   open = codes.any? { |code| selected_locations.include?(code) }
+  selectable_count = codes.count do |code|
+    selected_metric == 'std_deaths' ? code == 'JPN' :
+      annual_metric_available?(code, annual_catalog.fetch(code), selected_metric)
+  end
   toggle_label = $l == :ja ? 'この地域をすべて選択・解除' : 'Select or clear this region'
-  puts %(<details class="location-region" #{open ? 'open' : ''}><summary>#{CGI.escapeHTML(region_names.fetch($l))}（#{codes.length}）<input class="location-region-toggle" type="checkbox" title="#{CGI.escapeHTML(toggle_label)}" aria-label="#{CGI.escapeHTML(toggle_label)}"></summary><div class="mortyear-options">)
+  puts %(<details class="location-region" #{open ? 'open' : ''}><summary><span class="location-region-name">#{CGI.escapeHTML(region_names.fetch($l))}</span>（<span class="location-region-count">#{selectable_count}</span>）<input class="location-region-toggle" type="checkbox" title="#{CGI.escapeHTML(toggle_label)}" aria-label="#{CGI.escapeHTML(toggle_label)}"></summary><div class="mortyear-options">)
   codes.each do |code|
     names = location_names(code)
     metrics = METRICS.keys.select do |metric|
@@ -1468,8 +1485,9 @@ puts <<~HTML
           label.querySelector('input').disabled = !available;
         });
         document.querySelectorAll('.location-region').forEach(details => {
-          const visible = Array.from(details.querySelectorAll('.location-label')).some(label => label.style.display !== 'none');
-          details.style.display = visible ? '' : 'none';
+          const count = Array.from(details.querySelectorAll('.location-label')).filter(label => label.style.display !== 'none').length;
+          details.querySelector('.location-region-count').textContent = count;
+          details.style.display = count > 0 ? '' : 'none';
         });
         const enabled = Array.from(document.querySelectorAll('.location-option:not(:disabled)'));
         if (!enabled.some(input => input.checked) && enabled[0]) enabled[0].checked = true;
