@@ -714,7 +714,9 @@ death_codes = $causes.keys.map{|type| CauseCodes.fetch(type)}
 source_age_fields = $ages.keys.map{|age| AgeFields.fetch(age, "age_#{age}")}
 
 data0 = elastic_search(
-    :index => 'mstats',
+    # 日本語: alias切替前の回帰検査では物理indexを環境変数で指定する。
+    # English: Allow a physical index during pre-alias regression tests.
+    :index => ENV.fetch('MSTATS_INDEX', 'mstats'),
     :filter => [
         { 'range' => {'date' => {'gte' => "#{$oldest}-01-01", 'lt' => $data_before } } },
         { 'term' => {'category' => 'death'} },

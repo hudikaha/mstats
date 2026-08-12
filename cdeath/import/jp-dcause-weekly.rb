@@ -51,7 +51,13 @@ end
 def read_records(path)
   CSV.read(path, headers: true).to_h do |csv_row|
     row = csv_row.to_h.to_h do |key, value|
-      converted = key.start_with?('age_') ? number(value) : value
+      converted = if key.start_with?('age_')
+                    number(value)
+                  elsif key == 'src_url' && value&.start_with?('[')
+                    JSON.parse(value)
+                  else
+                    value
+                  end
       [key.to_sym, converted]
     end
     row[:year] = row[:year].to_i

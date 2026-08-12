@@ -62,11 +62,11 @@ curl -sS \
 
 ```yaml
 ---
-_index: mstats20260719
+_index: mstats20260812
 _type: _doc
 _id: jpn_2009w02_death__00000__both
-_version: 2
-_seq_no: 1446906
+_version: 1
+_seq_no: 85638
 _primary_term: 1
 found: true
 _source:

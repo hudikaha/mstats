@@ -5,19 +5,24 @@ require 'json'
 require 'net/http'
 require 'uri'
 
-index = ARGV.fetch(0, 'mstats20260719')
-expected_total = Integer(ARGV.fetch(1, '1446906'))
+index = ARGV.fetch(0, 'mstats20260812')
+expected_total = Integer(ARGV.fetch(1, '1460948'))
 password_file = File.expand_path('~/.config/mstats/espass.txt')
+user = ENV.fetch('ES_USER', 'elastic')
 password = ENV['ES_PASSWORD']
-password = File.read(password_file).strip if password.to_s.empty? && File.file?(password_file)
+if password.to_s.empty? && File.file?(password_file)
+  stored_user, stored_password = File.read(password_file).strip.split(':', 2)
+  user = stored_user unless stored_user.to_s.empty?
+  password = stored_password
+end
 abort 'ES_PASSWORD or ~/.config/mstats/espass.txt is required' if password.to_s.empty?
 
 # 認証値を表示せずElasticsearchへJSON requestを送る。
 # Send an Elasticsearch JSON request without exposing credentials.
-def es_request(method, path, password, body = nil)
+def es_request(method, path, user, password, body = nil)
   uri = URI("http://localhost:9200#{path}")
   request = method.new(uri)
-  request.basic_auth(ENV.fetch('ES_USER', 'elastic'), password)
+  request.basic_auth(user, password)
   if body
     request['Content-Type'] = 'application/json'
     request.body = JSON.generate(body)
@@ -27,7 +32,7 @@ def es_request(method, path, password, body = nil)
   JSON.parse(response.body)
 end
 
-mapping = es_request(Net::HTTP::Get, "/#{index}/_mapping", password)
+mapping = es_request(Net::HTTP::Get, "/#{index}/_mapping", user, password)
 resolved_mapping = mapping[index] || (mapping.values.first if mapping.length == 1)
 age_mapping = resolved_mapping&.dig('mappings', 'properties', 'age_all')
 expected_mapping = { 'type' => 'scaled_float', 'scaling_factor' => 100.0 }
@@ -52,11 +57,21 @@ queries = {
     { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'exists' => { 'field' => 'yearweek' } }],
                   'must_not' => [{ 'term' => { 'loc_code' => 'jpn' } }] } },
     270_954
+  ],
+  death_yearly_jpn: [
+    { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'term' => { 'loc_code' => 'jpn' } }],
+                  'must_not' => [{ 'exists' => { 'field' => 'yearmonth' } }, { 'exists' => { 'field' => 'yearweek' } }] } },
+    13_816
+  ],
+  yearly_usa: [
+    { 'bool' => { 'must' => [{ 'term' => { 'loc_code' => 'usa' } }],
+                  'must_not' => [{ 'exists' => { 'field' => 'yearmonth' } }, { 'exists' => { 'field' => 'yearweek' } }] } },
+    73
   ]
 }.freeze
 
 queries.each do |label, (query, expected)|
-  result = es_request(Net::HTTP::Post, "/#{index}/_count", password, 'query' => query)
+  result = es_request(Net::HTTP::Post, "/#{index}/_count", user, password, 'query' => query)
   actual = result.fetch('count')
   abort "#{label}: expected #{expected}, got #{actual}" unless actual == expected
   puts "#{label}=#{actual}"
@@ -64,10 +79,14 @@ end
 
 representatives = {
   'jpn_2024w09_death__00000__both' => %w[date age_all],
-  'usa_2025w53_death__00000__both' => %w[date age_all]
+  'usa_2025w53_death__00000__both' => %w[date age_all],
+  'jpn_2009_death__00000___both' => %w[date age_all src_url],
+  'usa_2024_birth____both' => %w[date age_all src_url],
+  'usa_2024_death__00000__both' => %w[date age_0 src_url],
+  'usa_2022_death__PERM_reconstructed_both' => %w[date age_all src_url]
 }.freeze
 representatives.each do |id, fields|
-  result = es_request(Net::HTTP::Get, "/#{index}/_doc/#{id}", password)
+  result = es_request(Net::HTTP::Get, "/#{index}/_doc/#{id}", user, password)
   abort "representative document not found: #{id}" unless result['found']
   values = fields.to_h { |field| [field, result.fetch('_source')[field]] }
   puts "#{id} #{values.map { |field, value| "#{field}=#{value}" }.join(' ')}"

@@ -129,30 +129,28 @@ ln -sfn data/jp-dcause-mstats2026-YYYYMMDD-HHMM.csv jp-dcause-mstats2026.csv
 ln -sfn data/jp-pop-mstats2026-YYYYMMDD-HHMM.csv jp-pop-mstats2026.csv
 ```
 
-The replacement physical index is `mstats20260719`. Its mapping is
+The current physical index is `mstats20260812`. It was created with the mapping in
 `config/elasticsearch/mstats20260719.json`; every `age_*` field uses
 `scaled_float` with a scaling factor of 100. Monthly integers and weekly values
 rounded to two decimal places can therefore share the same fields. The mapping
 keeps dynamic fields enabled and applies the numeric rule through an
 `age_*` dynamic template.
 
-`config/logstash/mstats.conf` is the tracked four-input
-template for monthly population, monthly causes, weekly Japanese causes, and
-weekly STMF data. Copy it to the server's private configuration location and
-provide `ES_PASSWORD` externally. The public logical name `mstats` is an alias
-for `mstats20260719`.
+The private server configuration `~/mstats/mstats2026.conf` has four inputs for
+monthly population, monthly causes, weekly Japanese causes, and weekly STMF
+data. Credentials are read from the private credential file when Make invokes
+Logstash. The public logical name `mstats` is an alias
+for `mstats20260812`.
 
 The server has `/Users -> /home`, so `mstats2026.conf` follows the existing
-fixed-path convention and reads `/Users/magician/mstats/*.csv`. Import with one
-Logstash worker because CSV header autodetection is stateful:
+fixed-path convention and reads `/Users/magician/mstats/*.csv`. Import through
+Make, which supplies the private credentials and uses one Logstash worker
+because CSV header autodetection is stateful:
 
 ```sh
-cd ~/mstats
-sudo systemctl stop logstash
-sudo /usr/share/logstash/bin/logstash --path.settings /etc/logstash \
-  -w 1 -r -f mstats2026.conf
+make -C cdeath logstash
 ```
 
-Logstash writes to the physical Elasticsearch index `mstats20260719`.
+Logstash writes through the logical `mstats` alias, while
 `cdeath/web/cod.rb`, `cdeath/web/codtr.rb`, and `web/mort.rb` query the logical
 `mstats` alias through the read-only API.

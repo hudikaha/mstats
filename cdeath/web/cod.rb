@@ -1617,7 +1617,9 @@ age_sources = if $adjustment != 'none' || per_capita_selected
               end
 
 data0 = elastic_search(
-    :index => 'mstats',
+    # 日本語: alias切替前の回帰検査では物理indexを環境変数で指定する。
+    # English: Allow a physical index during pre-alias regression tests.
+    :index => ENV.fetch('MSTATS_INDEX', 'mstats'),
     :filter => [
         {'terms' => {'year' => required_years}},
         {'term' => {'loc_code' => 'jpn'}},
