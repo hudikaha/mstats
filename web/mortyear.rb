@@ -1145,7 +1145,7 @@ puts <<~HTML
     #age-range-slider input::-webkit-slider-runnable-track { height:3px; background:transparent; }
     #age-range-slider input::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; pointer-events:auto; width:16px; height:16px; margin-top:-6px; border:1px solid #666; border-radius:50%; background:#687080; }
     #age-range-slider input::-moz-range-thumb { pointer-events:auto; width:16px; height:16px; border:1px solid #666; border-radius:50%; background:#687080; }
-    .location-region-controls { display:inline-flex; margin-left:.65em; gap:.35em; }
+    .location-region-toggle { margin-left:.55em; vertical-align:middle; }
     .mortyear-note { text-align:left; background:#f5f7f8; padding:.8em 1em; }
     #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
     #mortyear-vis .vega-embed, #mortyear-vis .vega-embed > div { width:100%; max-width:100%; }
@@ -1181,7 +1181,8 @@ WORLD_REGIONS.each do |region, region_names|
   codes = location_groups.fetch(region, []).sort_by { |code| location_sort_key(code, $l) }
   next if codes.empty?
   open = codes.any? { |code| selected_locations.include?(code) }
-  puts %(<details class="location-region" #{open ? 'open' : ''}><summary>#{CGI.escapeHTML(region_names.fetch($l))}（#{codes.length}）<span class="location-region-controls"><button type="button" data-region-action="select">#{CGI.escapeHTML($l == :ja ? 'すべて選択' : 'Select all')}</button><button type="button" data-region-action="clear">#{CGI.escapeHTML($l == :ja ? 'クリア' : 'Clear')}</button></span></summary><div class="mortyear-options">)
+  toggle_label = $l == :ja ? 'この地域をすべて選択・解除' : 'Select or clear this region'
+  puts %(<details class="location-region" #{open ? 'open' : ''}><summary>#{CGI.escapeHTML(region_names.fetch($l))}（#{codes.length}）<input class="location-region-toggle" type="checkbox" title="#{CGI.escapeHTML(toggle_label)}" aria-label="#{CGI.escapeHTML(toggle_label)}"></summary><div class="mortyear-options">)
   codes.each do |code|
     names = location_names(code)
     metrics = METRICS.keys.select do |metric|
@@ -1298,22 +1299,36 @@ puts <<~HTML
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'death_codes');
         }
-        document.querySelectorAll('.location-region-controls').forEach(controls => {
-          controls.style.display = selected === 'country' ? '' : 'none';
+        document.querySelectorAll('.location-region-toggle').forEach(toggle => {
+          toggle.style.display = selected === 'country' ? '' : 'none';
         });
+        updateRegionToggles();
         syncCauseVisibility();
       }
-      document.querySelectorAll('[data-region-action]').forEach(button => {
-        button.addEventListener('click', event => {
-          event.preventDefault();
+      function updateRegionToggles() {
+        document.querySelectorAll('.location-region').forEach(region => {
+          const toggle = region.querySelector('.location-region-toggle');
+          const inputs = Array.from(region.querySelectorAll('.location-label')).filter(label =>
+            label.style.display !== 'none' && !label.querySelector('.location-option').disabled
+          ).map(label => label.querySelector('.location-option'));
+          const selected = inputs.filter(input => input.checked).length;
+          toggle.checked = inputs.length > 0 && selected === inputs.length;
+          toggle.indeterminate = selected > 0 && selected < inputs.length;
+          toggle.disabled = inputs.length === 0;
+        });
+      }
+      document.querySelectorAll('.location-region-toggle').forEach(toggle => {
+        toggle.addEventListener('click', event => {
           event.stopPropagation();
-          const select = button.dataset.regionAction === 'select';
-          const region = button.closest('.location-region');
+        });
+        toggle.addEventListener('change', () => {
+          const region = toggle.closest('.location-region');
           region.querySelectorAll('.location-label').forEach(label => {
             const input = label.querySelector('.location-option');
-            if (!input.disabled && label.style.display !== 'none') input.checked = select;
+            if (!input.disabled && label.style.display !== 'none') input.checked = toggle.checked;
           });
           rememberLocations();
+          updateRegionToggles();
           syncCauseVisibility();
         });
       });
@@ -1473,6 +1488,7 @@ puts <<~HTML
       });
       document.querySelectorAll('.location-option').forEach(input => input.addEventListener('change', () => {
         rememberLocations();
+        updateRegionToggles();
         syncCauseVisibility();
       }));
       document.querySelectorAll('.metric-option').forEach(input => input.addEventListener('change', () => {
