@@ -2540,7 +2540,7 @@ else
                                 available_count.call('crude_rate', age: 'age_0')].min
                      if selected_period == 'calendar'
                        [
-                         [$l == :ja ? '実死亡数・粗死亡率・0歳の両指標' : 'Deaths, crude rates, and both age-0 measures', general],
+                         [$l == :ja ? '全年齢・0歳・年齢区間別の死亡数と粗死亡率' : 'Death counts and crude mortality rates for all ages, age 0, and selected age ranges', general],
                          [$l == :ja ? '年齢調整死亡率' : 'Age-standardized mortality rates', available_count.call('asr')],
                          [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'INFANT')],
                          [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'PERINATAL')]
@@ -2560,7 +2560,8 @@ else
                    end
   coverage_html = if coverage_items
                     coverage_items.map do |label, count|
-                      "<li>#{CGI.escapeHTML(label)}：#{count}#{CGI.escapeHTML($l == :ja ? 'か国・地域' : ' countries or areas')}</li>"
+                      separator = $l == :ja ? '：' : ': '
+                      "<li>#{CGI.escapeHTML(label)}#{separator}#{count}#{CGI.escapeHTML($l == :ja ? 'か国・地域' : ' countries or areas')}</li>"
                     end.join
                   end
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
