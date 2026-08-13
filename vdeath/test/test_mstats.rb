@@ -4,7 +4,7 @@
 require 'csv'
 require 'date'
 require 'minitest/autorun'
-require_relative '../lib/mstats2'
+require_relative '../lib/mstats'
 
 class Mstats2Test < Minitest::Test
   def test_document_id_has_exactly_eight_components

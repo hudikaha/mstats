@@ -66,7 +66,7 @@ The output begins as follows:
 
 ```yaml
 ---
-_index: mstats20260812
+_index: mstats20260813
 _type: _doc
 _id: jpn_2009w02_death__00000__both
 _version: 1

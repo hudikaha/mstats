@@ -173,11 +173,10 @@ EOF
     end
 end
 
-# 公開datasetと移行検査中の物理indexはloopback上の読取専用Nginx APIを使用する。
-# Use the read-only Nginx API on loopback for public datasets and migration-test indices.
+# 公開datasetはloopback上の読取専用Nginx APIを使用する。
+# Use the read-only Nginx API on loopback for public datasets.
 PUBLIC_ELASTIC_INDEXES = {
     'mstats' => 'mstats',
-    'mstats20260813' => 'mstats20260813',
     'kcor' => 'kcor',
     'kcor2025' => 'kcor',
     'vdeath' => 'vdeath',
