@@ -883,6 +883,35 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages)
   end.sort_by { |row| [row[:loc_code], row[:date].to_s] }
 end
 
+# 日本語: 日本の週次粗死亡率を週死亡数と各月の公式人口から人口日で再計算する。
+# English: Recalculate Japanese weekly crude rates from weekly deaths and official monthly population-days.
+def replace_japan_weekly_crude_rates(count_rows, rate_rows, population_rows)
+  populations = {}
+  population_rows.each do |row|
+    key = row[:yearmonth].to_s
+    current = populations[key]
+    rank = row[:type] == 'conf' ? 2 : 1
+    populations[key] = [rank, row] if current.nil? || rank > current.first
+  end
+
+  corrected = count_rows.filter_map do |count|
+    next unless count[:loc_code].to_s.casecmp('JPN').zero?
+    deaths = count[:age_all]
+    next if deaths.nil?
+
+    sunday = Date.iso8601(count[:date].to_s)
+    population_days = (sunday - 6..sunday).sum do |date|
+      period = format('%04dm%02d', date.year, date.month)
+      populations.dig(period, 1, :age_all).to_f
+    end
+    next unless population_days.positive?
+
+    count.merge(rate: 'amr', age_all: (deaths.to_f * DAYS_PER_YEAR * 100_000 /
+                                       population_days).round(2))
+  end
+  rate_rows.reject { |row| row[:loc_code].to_s.casecmp('JPN').zero? } + corrected
+end
+
 # 日本語: UN月次AMRを、同じ系列のSTMF週次値が始まる前だけ短期変動表示へ加える。
 # English: Add UN monthly AMR to the detailed view only before the matching STMF weekly series begins.
 def prepend_monthly_amr(weekly_rows, monthly_rows, mode, selected_locations, selected_ages)
@@ -1855,6 +1884,30 @@ chart_data.each do |row|
   date = selected_period == 'calendar' ? Date.new(row[:year], 1, 1) : Date.commercial(row[:year], start_week, 1)
   row[:plot_date] = date.iso8601
 end
+monthly_supplement_enabled = selected_period != 'calendar' && selected_metric == 'crude_rate' &&
+                             selected_ages == ['age_all'] && selected_sex == 'both' &&
+                             selected_causes == ['00000']
+if monthly_supplement_enabled && selected_locations.include?('JPN')
+  population_source = %w[loc_code yearmonth category type date year month sex age_all]
+  japan_populations = if opts[:fixture]
+                        fixture_data.select do |row|
+                          row[:loc_code].to_s.casecmp('JPN').zero? && row[:yearmonth] &&
+                            row[:category] == 'pop' && %w[conf est].include?(row[:type]) &&
+                            row[:sex] == 'both'
+                        end
+                      else
+                        elastic_search(
+                          index: opts[:index], size: 100_000,
+                          filter: [{ 'term' => { 'loc_code' => 'jpn' } },
+                                   { 'term' => { 'category' => 'pop' } },
+                                   { 'terms' => { 'type' => %w[conf est] } },
+                                   { 'term' => { 'sex' => 'both' } },
+                                   { 'exists' => { 'field' => 'yearmonth' } }],
+                          source: population_source
+                        )
+                      end
+  rate_rows = replace_japan_weekly_crude_rates(count_rows, rate_rows, japan_populations)
+end
 weekly_context = if selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)
                    weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages).map do |row|
                      series_key = mode == 'country' ? row[:loc_code] :
@@ -1867,9 +1920,6 @@ weekly_context = if selected_period != 'calendar' && %w[crude_rate asr].include?
 
 # 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次AMRで補完する。
 # English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly AMR.
-monthly_supplement_enabled = selected_period != 'calendar' && selected_metric == 'crude_rate' &&
-                             selected_ages == ['age_all'] && selected_sex == 'both' &&
-                             selected_causes == ['00000']
 if monthly_supplement_enabled
   monthly_source = %w[loc_code yearmonth category rate death_code type date year month sex age_all]
   monthly_rows = if opts[:fixture]
