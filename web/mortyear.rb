@@ -963,16 +963,28 @@ end
 # 日本語: 出生分母と乳児・周産期死亡分子を結合し、回帰用の最終系列を作る。
 # English: Join birth denominators to infant/perinatal numerators into final regression series.
 def birth_rate_rows(records)
-  births = records.select { |row| row[:category] == 'birth' }.
-           to_h { |row| [[row[:loc_code].to_s.upcase, row[:year].to_i], row] }
-  deliveries = records.select { |row| row[:category] == 'delivery' }.
-               to_h { |row| [[row[:loc_code].to_s.upcase, row[:year].to_i], row] }
-  records.filter_map do |row|
+  # 日本語: 同じ年の公式値と国際推計が共存するときは公式値を優先する。
+  # English: Prefer official values when international estimates coexist for the same year.
+  source_rank = lambda do |row|
+    case row[:type].to_s
+    when 'conf' then 0
+    when 'reconst' then 1
+    else 2
+    end
+  end
+  choose_by_year = lambda do |category|
+    records.select { |row| row[:category] == category }.
+      group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i] }.
+      transform_values { |rows| rows.min_by(&source_rank) }
+  end
+  births = choose_by_year.call('birth')
+  deliveries = choose_by_year.call('delivery')
+  numerators = records.filter_map do |row|
     loc = row[:loc_code].to_s.upcase
     cause, value = if row[:category] == 'death' && row[:death_code] == 'INFANT'
                      ['INFANT', row[:age_all]]
                    elsif loc == 'USA' && row[:category] == 'death' && row[:death_code] == '00000' &&
-                         row[:rate].to_s.empty? && row[:algo].to_s.empty?
+                         row[:rate].to_s.empty? && row[:algo].to_s.empty? && row[:type].to_s == 'conf'
                      ['INFANT', row[:age_0]]
                    elsif row[:category] == 'death' && row[:death_code] == 'PERM'
                      ['PERINATAL', row[:age_all]]
@@ -987,8 +999,14 @@ def birth_rate_rows(records)
     urls = (Array(denominator[:src_url]) + Array(row[:src_url])).compact.uniq
     { loc_code: loc, sex: 'both', death_code: cause, year: row[:year].to_i,
       deaths: value.to_f, population: population, observed: value.to_f / population * 1000.0,
-      unit_scale: 1000.0, src_url: urls }
+      unit_scale: 1000.0, src_url: urls, source_rank: source_rank.call(row) }
   end
+  numerators.group_by { |row| [row[:loc_code], row[:year], row[:death_code]] }.
+    values.map do |rows|
+      selected = rows.min_by { |row| row[:source_rank] }.dup
+      selected.delete(:source_rank)
+      selected
+    end
 end
 
 # 日本語: 学習終了年ごとの計算済み系列を生成し、ブラウザは選択だけを行う。
