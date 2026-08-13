@@ -172,6 +172,7 @@ interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
 selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
 $mortyear_period = selected_period
+$mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
 selected_ages = ['age_all'] if selected_metric == 'asr' || selected_metric == 'birth_rate'
 selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_rate asr].include?(selected_metric)
 selected_ages &= STMF_AGES if selected_period != 'calendar'
@@ -549,7 +550,7 @@ def cache_key(rows, calculator_type)
   canonical_value(
     cache_schema: CACHE_SCHEMA,
     algorithm: 'poisson-linear-trend-dual-cache-v2',
-    period: { type: $mortyear_period, aggregation_version: 1 },
+    period: { type: $mortyear_period, aggregation_version: 2 },
     calculator_type: calculator_type,
     simulations: POISSON_SIMULATIONS,
     seed_method: 'sha256-input-cutoff-v1',
@@ -715,7 +716,7 @@ def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = '
   seasons.filter_map do |(loc, sex, cause, season_start), values|
     season_end = Date.commercial(season_start.cwyear + 1, start_week, 1) - 1
     required_days = (season_start..season_end).count
-    next unless season_start.cwyear >= 2000 && values[:covered_days].length == required_days
+    next unless season_start.cwyear >= 1999 && values[:covered_days].length == required_days
     population = values[:population_days] / required_days
     next unless population.positive?
 
@@ -875,11 +876,11 @@ def stratified_asr_rows(records, locations, sex, causes)
   end.sort_by { |row| [row[:loc_code], row[:year]] }
 end
 
-def scenario_cutoffs(years)
+def scenario_cutoffs(years, training_start = 2000)
   return [] if years.empty?
 
   (2015..(years.max - 2)).select do |cutoff|
-    years.count { |year| year.between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+    years.count { |year| year.between?(training_start, cutoff) } >= MIN_TRAINING_YEARS
   end
 end
 
@@ -921,12 +922,12 @@ def compute_analytic_scenarios(rows, series_key, label)
 
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
-    rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+    rows.count { |row| row[:year].between?($mortyear_training_start, cutoff) } >= MIN_TRAINING_YEARS
   end
   return [] if candidates.empty?
 
   candidates.flat_map do |cutoff|
-    training = rows.select { |row| row[:year].between?(2000, cutoff) }
+    training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
     fit = poisson_fit(training)
     %w[poisson quasi_poisson].flat_map do |model|
       variance_scale = model == 'quasi_poisson' ? [fit[:dispersion].to_f, 1.0].max : 1.0
@@ -937,7 +938,7 @@ def compute_analytic_scenarios(rows, series_key, label)
           year: row[:year], observed: row[:observed],
           expected: prediction[:expected], pi_lower: prediction[:lower],
           pi_upper: prediction[:upper], outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
-          period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
+          period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
           dispersion: fit[:dispersion]&.round(4), deaths: row[:deaths].round(2),
           population: row[:population].round, src_url: row[:src_url]
         }
@@ -954,10 +955,10 @@ def compute_simulation_scenarios(rows, series_key, label)
   input_digest = Digest::SHA256.hexdigest(canonical_json(rows.map { |row| canonical_value(row) }))
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
-    rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+    rows.count { |row| row[:year].between?($mortyear_training_start, cutoff) } >= MIN_TRAINING_YEARS
   end
   candidates.flat_map do |cutoff|
-    training = rows.select { |row| row[:year].between?(2000, cutoff) }
+    training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
     fit = poisson_fit(training)
     seed = Digest::SHA256.hexdigest("#{input_digest}:#{cutoff}:#{POISSON_SIMULATIONS}")[0, 8].to_i(16)
     predictions = poisson_simulation_predictions(rows, fit, seed)
@@ -968,7 +969,7 @@ def compute_simulation_scenarios(rows, series_key, label)
         year: row[:year], observed: row[:observed], expected: prediction[:expected],
         pi_lower: prediction[:lower], pi_upper: prediction[:upper],
         outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
-        period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
+        period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
         dispersion: fit[:dispersion]&.round(4), deaths: row[:deaths].round(2),
         population: row[:population].round, src_url: row[:src_url]
       }
@@ -984,10 +985,10 @@ def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
   stratum_ages = rows.first.fetch(:strata).map { |item| item.fetch(:age) }
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
-    rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+    rows.count { |row| row[:year].between?($mortyear_training_start, cutoff) } >= MIN_TRAINING_YEARS
   end
   candidates.flat_map do |cutoff|
-    training = rows.select { |row| row[:year].between?(2000, cutoff) }
+    training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
     fits = stratum_ages.to_h do |age|
       age_rows = training.map do |row|
         stratum = row[:strata].find { |item| item[:age] == age }
@@ -1039,7 +1040,7 @@ def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
           year: row[:year], observed: row[:observed], expected: prediction[:expected],
           pi_lower: prediction[:lower], pi_upper: prediction[:upper],
           outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
-          period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
+          period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
           dispersion: dispersion&.round(4), deaths: row[:deaths].round(2),
           population: row[:population].round, src_url: row[:src_url]
         }
@@ -1057,10 +1058,10 @@ def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
   input_digest = Digest::SHA256.hexdigest(canonical_json(rows.map { |row| canonical_value(row) }))
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
-    rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
+    rows.count { |row| row[:year].between?($mortyear_training_start, cutoff) } >= MIN_TRAINING_YEARS
   end
   candidates.flat_map do |cutoff|
-    training = rows.select { |row| row[:year].between?(2000, cutoff) }
+    training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
     fits = stratum_ages.to_h do |age|
       age_rows = training.map do |row|
         stratum = row[:strata].find { |item| item[:age] == age }
@@ -1092,7 +1093,7 @@ def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
         series: series_key, label: label, model: 'poisson', train_to: cutoff,
         year: row[:year], observed: row[:observed], expected: expected,
         pi_lower: lower, pi_upper: upper, outside_pi: row[:observed] < lower || row[:observed] > upper,
-        period: row[:year].between?(2000, cutoff) ? 'training' : row[:year] < 2000 ? 'historical' : 'prediction',
+        period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
         dispersion: nil, deaths: row[:deaths].round(2), population: row[:population].round,
         src_url: row[:src_url]
       }
@@ -1239,7 +1240,7 @@ def catalog_combination_available?(entry, metric, cause, sex, ages, period = 'ca
   years = ages.map do |age|
     catalog_years(series.find { |item| item[:age] == age }.fetch(:years))
   end.reduce { |common, values| common & values }
-  scenario_cutoffs(years || []).any?
+  scenario_cutoffs(years || [], period == 'calendar' ? 2000 : 1999).any?
 end
 
 def catalog_years(span)
@@ -1270,7 +1271,7 @@ end
 
 def catalog_series(metric, cause, sex, age, rows, period: 'calendar')
   years = rows.map { |row| row[:year].to_i }.uniq.sort
-  cutoffs = scenario_cutoffs(years)
+  cutoffs = scenario_cutoffs(years, period == 'calendar' ? 2000 : 1999)
   {
     period: period, metric: metric, cause: cause, sex: sex, age: age, years: catalog_year_span(years),
     train_to: catalog_year_span(cutoffs), displayable: !cutoffs.empty?
@@ -1376,7 +1377,7 @@ def rebuild_mortyear_catalog(index)
   end
   document = {
     schema: 1, generated_at: Time.now.utc.iso8601, index: index,
-    rules: { first_training_year: 2000, first_cutoff: 2015,
+    rules: { first_training_year: { calendar: 2000, flu27: 1999, flu36: 1999 }, first_cutoff: 2015,
              min_training_years: MIN_TRAINING_YEARS, min_evaluation_years: 2 },
     locations: locations
   }
@@ -2342,7 +2343,7 @@ else
         <output id="start-year-output">#{default_start_year}</output>
       </label>
       &nbsp;
-      <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '2000/01'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '2000/01'}–" }
+      <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999/00'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999/00'}–" }
         <input id="train-to-slider" type="range" min="#{cutoffs.min}" max="#{cutoffs.max}" step="1" value="#{default_cutoff}">
         <output id="train-to-output">#{cutoff_label.call(default_cutoff)}</output>
       </label>
@@ -2407,7 +2408,7 @@ else
             ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
           {transform:[{filter:"datum.outside_pi"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
-          {transform:[{filter:"datum.year == 2000"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}},
+          {data:{values:[{year:#{$mortyear_training_start}}]}, mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}},
           {transform:[{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}}
         ]
       }));
