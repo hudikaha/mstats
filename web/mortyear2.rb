@@ -1441,7 +1441,20 @@ panel_label = lambda do |loc, cause|
           end
   parts << sex_labels.fetch(selected_sex).fetch($l) unless selected_sex == 'both'
   parts << cause_name
-  parts.join(' ')
+  unit = if selected_metric == 'birth_rate'
+           if cause == 'INFANT'
+             $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
+           elsif loc == 'JPN'
+             $l == :ja ? '（出産1,000件当たり）' : '(per 1,000 deliveries)'
+           else
+             $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
+           end
+         elsif %w[crude_rate asr].include?(selected_metric)
+           $l == :ja ? '（人口10万人当たり）' : '(per 100,000 pop)'
+         elsif %w[deaths std_deaths].include?(selected_metric)
+           $l == :ja ? '（人）' : '(persons)'
+         end
+  [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
 end
 
 series_specs = if mode == 'country'
@@ -2240,7 +2253,7 @@ else
       }).catch(console.warn);
     </script>
     <p class="mortyear-note">
-      #{ interval_note + ' ' + ($l == :ja ? (birth_metric ? '指標に対応する分母をoffsetとしたPoisson回帰で、1,000当たりを表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '') : (birth_metric ? 'Poisson regression uses the denominator for each measure as the offset and displays rates per 1,000.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : '')) + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
+      #{ interval_note + ' ' + ($l == :ja ? (birth_metric ? '指標に対応する出生数または出産数を分母（offset）としたPoisson回帰を使用し、分母1,000当たりの死亡率を表示しています。' : %w[crude_rate asr].include?(selected_metric) ? '死亡率は人口10万人当たりで表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '死亡数は人数で表示しています。') : (birth_metric ? 'Poisson regression uses births or deliveries as the offset, and mortality rates are shown per 1,000 births or deliveries.' : %w[crude_rate asr].include?(selected_metric) ? 'Mortality rates are shown per 100,000 population.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Deaths are shown as counts.')) + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
     </p>
     <section class="mortyear-sources" style="text-align:left">
       <h2>#{ $l == :ja ? 'グラフに使用したデータ' : 'Data used for the graphs' }</h2>
