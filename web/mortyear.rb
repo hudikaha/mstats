@@ -269,6 +269,10 @@ def available_annual_catalog(index:, fixture:)
         death_code_max_years: rows.select { |row| !row[:death_code].to_s.empty? }.
                               group_by { |row| row[:death_code].to_s }.
                               transform_values { |items| items.map { |row| row[:year].to_i }.max },
+        infant_all_cause_max_year: rows.select do |row|
+          row[:category] == 'death' && row[:death_code] == '00000' && row[:type] == 'conf' &&
+            row[:rate].to_s.empty? && row[:algo].to_s.empty? && !row[:age_0].nil?
+        end.map { |row| row[:year].to_i }.max.to_i,
         algos: rows.map { |row| row[:algo].to_s }.uniq
       }
     end
@@ -290,6 +294,11 @@ def available_annual_catalog(index:, fixture:)
       categories: { terms: { field: 'category', size: 20 } },
       death_codes: { terms: { field: 'death_code', size: 1000 },
                      aggs: { max_year: { max: { field: 'year' } } } },
+      infant_all_cause: { filter: { bool: { filter: [
+        { term: { category: 'death' } }, { term: { death_code: '00000' } },
+        { term: { type: 'conf' } }, { exists: { field: 'age_0' } }
+      ], must_not: [{ exists: { field: 'rate' } }, { exists: { field: 'algo' } }] } },
+                          aggs: { max_year: { max: { field: 'year' } } } },
       algos: { terms: { field: 'algo', size: 20 } }
     } } }
   )
@@ -307,6 +316,7 @@ def available_annual_catalog(index:, fixture:)
       death_code_max_years: bucket.dig('death_codes', 'buckets').to_h do |entry|
         [entry['key'].to_s, entry.dig('max_year', 'value').to_i]
       end,
+      infant_all_cause_max_year: bucket.dig('infant_all_cause', 'max_year', 'value').to_i,
       algos: values.call('algos')
     }]
   end
@@ -354,7 +364,7 @@ def annual_metric_available?(code, catalog, metric)
   when 'asr' then rates.include?('asr')
   when 'birth_rate'
     categories.include?('birth') &&
-      (codes.include?('INFANT') || codes.include?('PERM') || (code == 'USA' && codes.include?('00000')))
+      (codes.include?('INFANT') || codes.include?('PERM') || catalog.fetch(:infant_all_cause_max_year, 0).positive?)
   else false
   end
 end
@@ -365,9 +375,9 @@ def period_metric_available?(catalog, metric, period)
   end
 end
 
-# 日本語: 米国乳児死亡は既存の全死因recordのage_0にあるため、表示可能性を保存codeから変換する。
-# English: U.S. infant deaths use age_0 of the legacy all-cause record, so map storage codes to display availability.
-def birth_cause_available?(location, catalog, cause)
+# 日本語: 明示的な乳児死亡recordか、公式全死因recordのage_0から表示可能性を判定する。
+# English: Determine availability from an explicit infant record or age_0 of an official all-cause record.
+def birth_cause_available?(_location, catalog, cause)
   if catalog[:series]
     return catalog[:series].any? do |item|
       item[:metric] == 'birth_rate' && item[:cause] == cause && item[:displayable]
@@ -375,10 +385,15 @@ def birth_cause_available?(location, catalog, cause)
   end
 
   codes = catalog.fetch(:death_codes)
-  stored_code = cause == 'PERINATAL' ? 'PERM' : location == 'USA' ? '00000' : 'INFANT'
   # 日本語: 最短cutoff 2015と、その後2年の予測評価を作れる系列だけを表示対象にする。
   # English: Require enough data for the earliest 2015 cutoff plus two evaluation years.
-  codes.include?(stored_code) && catalog.fetch(:death_code_max_years, {}).fetch(stored_code, 0) >= 2017
+  max_years = catalog.fetch(:death_code_max_years, {})
+  if cause == 'PERINATAL'
+    codes.include?('PERM') && max_years.fetch('PERM', 0) >= 2017
+  else
+    explicit = codes.include?('INFANT') && max_years.fetch('INFANT', 0) >= 2017
+    explicit || catalog.fetch(:infant_all_cause_max_year, 0) >= 2017
+  end
 end
 
 def available_death_codes(index:, fixture:, locations:, metric:)
@@ -983,7 +998,7 @@ def birth_rate_rows(records)
     loc = row[:loc_code].to_s.upcase
     cause, value = if row[:category] == 'death' && row[:death_code] == 'INFANT'
                      ['INFANT', row[:age_all]]
-                   elsif loc == 'USA' && row[:category] == 'death' && row[:death_code] == '00000' &&
+                   elsif row[:category] == 'death' && row[:death_code] == '00000' &&
                          row[:rate].to_s.empty? && row[:algo].to_s.empty? && row[:type].to_s == 'conf'
                      ['INFANT', row[:age_0]]
                    elsif row[:category] == 'death' && row[:death_code] == 'PERM'
@@ -997,9 +1012,10 @@ def birth_rate_rows(records)
 
     population = denominator[:age_all].to_f
     urls = (Array(denominator[:src_url]) + Array(row[:src_url])).compact.uniq
+    numerator_rank = [row[:death_code] == '00000' ? 1 : 0, source_rank.call(row)]
     { loc_code: loc, sex: 'both', death_code: cause, year: row[:year].to_i,
       deaths: value.to_f, population: population, observed: value.to_f / population * 1000.0,
-      unit_scale: 1000.0, src_url: urls, source_rank: source_rank.call(row) }
+      unit_scale: 1000.0, src_url: urls, source_rank: numerator_rank }
   end
   numerators.group_by { |row| [row[:loc_code], row[:year], row[:death_code]] }.
     values.map do |rows|
