@@ -1627,13 +1627,7 @@ panel_label = lambda do |loc, cause|
          elsif %w[deaths std_deaths].include?(selected_metric)
            $l == :ja ? '（人）' : '(persons)'
          end
-  title = [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
-  if selected_period != 'calendar'
-    start_week = selected_period == 'flu27' ? 27 : 36
-    period_label = $l == :ja ? "インフルエンザ年（第#{start_week}週開始）" : "Influenza year (starts W#{start_week})"
-    title = [title, period_label].join(' ')
-  end
-  title
+  [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
 end
 
 series_specs = if mode == 'country'
@@ -2434,7 +2428,12 @@ else
           {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
         ],
         encoding: {
-          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate(selected_period == 'calendar' ? ($l == :ja ? '年' : 'Year') : ($l == :ja ? 'インフルエンザ年（開始年）' : 'Influenza year (start year)'))}}
+          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate(if selected_period == 'calendar'
+            $l == :ja ? '年' : 'Year'
+          else
+            start_week = selected_period == 'flu27' ? 27 : 36
+            $l == :ja ? "インフルエンザ年（開始年・第#{start_week}週開始）" : "Influenza year (start year, from W#{start_week})"
+          end)}}
         },
         layer: [
           {mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
