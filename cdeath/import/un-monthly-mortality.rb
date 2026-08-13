@@ -13,7 +13,7 @@ abort 'Usage: un-monthly-mortality.rb UNDATA.csv WPP-MSTATS.csv' unless ARGV.len
 
 UN_URL = 'https://data.un.org/Data.aspx?d=POP&f=tableCode%3A65'
 WPP_URL = 'https://population.un.org/wpp/downloads'
-TYPE = 'undyb'
+TYPE = 'unmonth'
 MONTHS = Date::MONTHNAMES.compact.to_h { |name| [name, Date::MONTHNAMES.index(name)] }.freeze
 ALIASES = {
   'aland islands' => 'aland islands',
