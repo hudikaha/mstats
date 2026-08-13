@@ -1660,13 +1660,17 @@ end
 
 cutoffs = chart_data.map { |row| row[:train_to] }.uniq.sort
 requested_cutoff = cgi['train_to'].to_i
+preferred_cutoff = selected_period == 'calendar' ? 2019 : 2018
 default_cutoff = if cutoffs.include?(requested_cutoff)
                    requested_cutoff
-                 elsif cutoffs.include?(2019)
-                   2019
+                 elsif cutoffs.include?(preferred_cutoff)
+                   preferred_cutoff
                  else
                    cutoffs.last
                  end
+cutoff_label = lambda do |year|
+  selected_period == 'calendar' ? year.to_s : "#{year}/#{format('%02d', (year + 1) % 100)}"
+end
 available_specs = series_specs.select { |key, _age, _cause, _label| chart_data.any? { |row| row[:series] == key } }
 
 if opts[:summary]
@@ -2338,9 +2342,9 @@ else
         <output id="start-year-output">#{default_start_year}</output>
       </label>
       &nbsp;
-      <label>#{ $l == :ja ? '学習期間 2000–' : 'Training period 2000–' }
+      <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '2000/01'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '2000/01'}–" }
         <input id="train-to-slider" type="range" min="#{cutoffs.min}" max="#{cutoffs.max}" step="1" value="#{default_cutoff}">
-        <output id="train-to-output">#{default_cutoff}</output>
+        <output id="train-to-output">#{cutoff_label.call(default_cutoff)}</output>
       </label>
       &nbsp;
       <label><input id="zero-base-checkbox" type="checkbox">
@@ -2369,6 +2373,8 @@ else
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
+      const influenzaPeriod = #{selected_period == 'calendar' ? 'false' : 'true'};
+      const trainLabel = year => influenzaPeriod ? `${year}/${String(year + 1).slice(-2)}` : String(year);
       const modelDefault = #{JSON.generate(default_model)};
       const intervalModeDefault = #{JSON.generate(interval_mode)};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
@@ -2401,7 +2407,7 @@ else
             ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
           {transform:[{filter:"datum.outside_pi"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
-          {transform:[{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}}
+          {transform:[{filter:#{JSON.generate(selected_period == 'calendar' ? 'datum.year == train_to' : 'datum.year == train_to + 1')}}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}}
         ]
       }));
       const spec = {
@@ -2447,7 +2453,7 @@ else
         });
         slider.addEventListener("input", () => {
           const value = Number(slider.value);
-          output.value = value;
+          output.value = trainLabel(value);
           // updateDispersion(value); // 推定φは現在非表示。Estimated phi is currently hidden.
           result.view.signal("train_to", value).runAsync();
         });
