@@ -29,6 +29,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `rate` | keyword | Empty for counts, `crude` for crude rates, `asr` for directly age-standardized rates, and legacy values such as `adj` or `amr` |
 | `algo` | keyword | Method for a comparative or derived series; empty for source values |
 | `type` | keyword | Population-series class such as `conf`, `est`, or `jpns` |
+| `src_url` | keyword array, not indexed | One or more URLs identifying the source data used for the record |
 | `age_all` | scaled_float | Value for all ages |
 | `age_*` | scaled_float | Age-group value such as `age_00_04`, `age_80_84`, or `age_100over` |
 
@@ -42,6 +43,12 @@ algorithm, type, and sex—with `_`. Underscores are not allowed inside a compon
 empty components remain as empty positions. For example,
 `jpn_2009w02_death__00000___both` is the source-value
 record for Japan, ISO week 2 of 2009, all causes, and both sexes.
+
+Every record has `src_url`. In the source CSV it is a JSON array, because a
+derived record may depend on more than one source, such as mortality counts,
+population denominators, and a standard population. Elasticsearch stores the
+array in a non-indexed `keyword` field: it is returned in `_source` for provenance
+and display, but it cannot be used as a search condition or aggregation field.
 
 Annual records contain `year` but neither `yearmonth` nor `yearweek`. U.S. annual
 birth records store births in `category=birth`, `age_all`. Infant deaths are the
