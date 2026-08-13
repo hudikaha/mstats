@@ -37,6 +37,10 @@ WPP_EXPOSURE_PROJ := $(WPP_DIR)/WPP2024_PopulationExposureBySingleAgeSex_Medium_
 OECD_DIR ?= $(ROOT)/src/oecd
 OECD_MIM_SOURCE ?= $(OECD_DIR)/maternal-infant-mortality.csv
 OECD_MIM_URL := https://sdmx.oecd.org/public/rest/v1/data/OECD.ELS.HD,DSD_HEALTH_STAT@DF_MIM,1.1/.A.INM+PERM..........?startPeriod=2000&dimensionAtObservation=AllDimensions
+UN_MONTHLY_DIR ?= $(ROOT)/src/un
+UN_MONTHLY_ARCHIVE ?= $(UN_MONTHLY_DIR)/un-monthly-mortality.zip
+UN_MONTHLY_SOURCE ?= $(UN_MONTHLY_DIR)/UNdata_Export_mortality.csv
+UN_MONTHLY_URL := https://data.un.org/Handlers/DownloadHandler.ashx?DataFilter=tableCode%3A65&DataMartId=POP&Format=csv
 DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
 
@@ -50,8 +54,8 @@ YEARLY_INDEX ?= mstats20260813
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-wpp check csv mort-csv stmf-csv \
-  yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv validate-csv upload-official \
+.PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-wpp fetch-un-monthly check csv mort-csv stmf-csv \
+  yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-oecd upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd \
   switch-mstats-alias upload logstash cod codtr
 
@@ -116,6 +120,8 @@ help:
 	@echo 'make fetch-death Codexで死因の新規原CSVを取得'
 	@echo 'make fetch-stmf HMD認証情報を環境変数から読みSTMF pooled CSVを取得'
 	@echo 'make fetch-wpp UN WPP 2024の人口・単年齢死亡・population exposureを取得'
+	@echo 'make fetch-un-monthly UNdataの月別死亡数を取得'
+	@echo 'make un-monthly-csv UN月別死亡数と年率換算死亡率の投入前CSVを作成'
 	@echo 'make all      Codexで取得後、CSV生成・必要時のみ投入'
 	@echo 'make csv      原CSV更新時に月次・週次の日時付き累積CSVを同時生成'
 	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
@@ -363,6 +369,28 @@ wpp-yearly-csv:
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"; \
 	 echo '[wpp-yearly-csv] uploadとElasticsearch投入は行いません。'
+
+fetch-un-monthly:
+	@mkdir -p "$(UN_MONTHLY_DIR)"; tmp="$(UN_MONTHLY_ARCHIVE).tmp"; unpack=$$(mktemp -d); \
+	 trap 'rm -f "$$tmp"; rm -rf "$$unpack"' EXIT; \
+	 curl -fL --retry 3 --retry-delay 5 '$(UN_MONTHLY_URL)' -o "$$tmp"; \
+	 test -s "$$tmp" || { echo 'UNdata download is empty'; exit 1; }; \
+	 unzip -t "$$tmp"; unzip -q "$$tmp" -d "$$unpack"; \
+	 files=("$$unpack"/*.csv(N)); (( $${#files} == 1 )) || { echo 'UNdata archive must contain exactly one CSV'; exit 1; }; \
+	 header=$$(head -1 "$$files[1]" | tr -d '\r'); \
+	 [[ $$header == '"Country or Area","Year","Area","Month","Record Type","Reliability","Source Year","Value","Value Footnotes"'* ]] || { echo "unexpected UNdata header: $$header"; exit 1; }; \
+	 mv "$$tmp" "$(UN_MONTHLY_ARCHIVE)"; cp "$$files[1]" "$(UN_MONTHLY_SOURCE)"; \
+	 echo "created $(UN_MONTHLY_SOURCE)"
+
+un-monthly-csv:
+	@test -s "$(UN_MONTHLY_SOURCE)" || { echo "UN monthly source is missing: $(UN_MONTHLY_SOURCE)"; exit 1; }
+	@wpp_files=("$(DATA_DIR)"/un-wpp-yearly-mstats2026-*.csv(Nom)); wpp=$$wpp_files[1]; \
+	 test -n "$$wpp" || { echo 'WPP年次CSVがありません。'; exit 1; }; \
+	 stamp=$$(date +%Y%m%d-%H%M%S); out="$(DATA_DIR)/un-monthly-mortality-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 if ! ruby "$(ROOT)/import/un-monthly-mortality.rb" "$(UN_MONTHLY_SOURCE)" "$$wpp" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
+	 mv "$$tmp" "$$out"; echo "created $$out"; \
+	 echo '[un-monthly-csv] uploadとElasticsearch投入は行いません。'
 
 validate-csv:
 	@test -n "$(FILES)" || { echo 'FILES="CSV ..."を指定してください。'; exit 1; }
