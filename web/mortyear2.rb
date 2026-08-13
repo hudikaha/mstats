@@ -2236,7 +2236,11 @@ else
   end
   source_entries = []
   if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
-    method = if selected_metric == 'birth_rate' &&
+    method = if selected_period != 'calendar' && $l == :ja
+               'e-Statの月次死亡数・月次人口から作った週次推計値を、インフルエンザ年へ再集計しています。UN WPPは使用していません。'
+             elsif selected_period != 'calendar'
+               'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years. UN WPP is not used.'
+             elsif selected_metric == 'birth_rate' &&
                 selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL') && $l == :ja
                'e-Statの確定数を使用。乳児死亡率の分母は出生数です。周産期死亡数は妊娠満22週以後の死産数と生後1週未満の早期新生児死亡数の合計で、分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
              elsif selected_metric == 'birth_rate' &&
@@ -2268,7 +2272,11 @@ else
   sources_by_location.each do |loc, urls|
     next if loc == 'JPN' && urls.any? { |url| url.include?('e-stat.go.jp') }
 
-    method = if loc == 'USA' && selected_metric == 'birth_rate' &&
+    method = if selected_period != 'calendar' && urls.include?(HMD_URL) && $l == :ja
+               'HMD STMFの週次死亡数・死亡率を、インフルエンザ年へ再集計しています。'
+             elsif selected_period != 'calendar' && urls.include?(HMD_URL)
+               'Aggregates HMD STMF weekly deaths and mortality rates into influenza years.'
+             elsif loc == 'USA' && selected_metric == 'birth_rate' &&
                 selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL')
                if $l == :ja
                  '乳児死亡率には米国CDCの年次出生数・乳児死亡数を使用しています。周産期死亡率には米国の年次出生数と、OECD公表率から逆算した近似死亡数を使用しています。'
@@ -2313,13 +2321,29 @@ else
     links = urls.map { |url| %(<a href="#{CGI.escapeHTML(url)}" target="_blank">#{CGI.escapeHTML(url)}</a>) }.join('<br>')
     "<li><strong>#{CGI.escapeHTML(location_label)}</strong>: #{CGI.escapeHTML(method)}<br>#{links}</li>"
   end.join("\n")
-  wpp_note = if source_entries.any? { |entry| entry[:urls].include?(WPP_URL) }
-               if $l == :ja
-                 'UNは国際連合、WPPは国連人口部が公表するWorld Population Prospects（世界人口推計）です。'
-               else
-                 'UN WPP means the United Nations World Population Prospects, published by the UN Population Division.'
-               end
-             end
+  method_notes = if $l == :ja
+                   <<~HTML
+                     <h3>用語と集計方法</h3>
+                     <dl class="mortyear-note">
+                       <dt><strong>HMD</strong></dt><dd>Human Mortality Database（国際死亡データベース）。各国の死亡・人口データを共通形式で提供しています。</dd>
+                       <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations。HMDが提供する週次死亡データです。この画面では年齢階級別の週次死亡数と死亡率を使用します。</dd>
+                       <dt><strong>UN WPP</strong></dt><dd>国連人口部のWorld Population Prospects（世界人口推計）。各国の年次人口などを補う場合に使用します。日本のインフルエンザ年系列には使用しません。</dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate（年齢調整死亡率）。年齢階級別死亡率をWHO世界標準人口で加重する直接法で計算します。インフルエンザ年のASRは、STMF共通の00–14、15–64、65–74、75–84、85歳以上という粗い階級による近似です。</dd>
+                       <dt><strong>インフルエンザ年の集計</strong></dt><dd>週次死亡数を日数按分し、週次死亡数と死亡率から得た人口を人口日として積算します。第27週または第36週から翌年の同じ開始週直前まで、全日がそろう期間だけを表示します。日本の週次値は実測週次値ではなく、e-Stat月次値から按分・平滑化した推計値です。</dd>
+                     </dl>
+                   HTML
+                 else
+                   <<~HTML
+                     <h3>Terms and aggregation</h3>
+                     <dl class="mortyear-note">
+                       <dt><strong>HMD</strong></dt><dd>Human Mortality Database, which provides harmonized mortality and population data for participating countries.</dd>
+                       <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations, the weekly mortality dataset provided by HMD. This page uses its age-specific weekly deaths and mortality rates.</dd>
+                       <dt><strong>UN WPP</strong></dt><dd>United Nations World Population Prospects, published by the UN Population Division. It supplies annual population data where needed. It is not used for the Japanese influenza-year series.</dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate, calculated by direct standardization with the WHO world standard population. Influenza-year ASR is approximate because it uses the broad common STMF groups 00–14, 15–64, 65–74, 75–84, and 85+.</dd>
+                       <dt><strong>Influenza-year aggregation</strong></dt><dd>Weekly deaths are prorated by day, and population inferred from weekly deaths and rates is accumulated as population-days. Only complete periods from W27 or W36 to the day before the same starting week in the following year are shown. Japanese weekly values are estimates prorated and smoothed from monthly e-Stat data, not directly observed weekly counts.</dd>
+                     </dl>
+                   HTML
+                 end
   coverage_items = if menu_catalog
                      available_count = lambda do |metric, cause: nil, age: nil|
                        menu_catalog.count do |_loc, entry|
@@ -2533,8 +2557,8 @@ else
     #{coverage_html ? %(<section class="mortyear-coverage" style="text-align:left"><h2>#{CGI.escapeHTML($l == :ja ? '対応している国・地域数' : 'Countries and areas covered')}</h2><ul>#{coverage_html}</ul></section>) : ''}
     <section class="mortyear-sources" style="text-align:left">
       <h2>#{ $l == :ja ? 'グラフに使用したデータ' : 'Data used for the graphs' }</h2>
-      #{wpp_note ? %(<p class="mortyear-note">#{CGI.escapeHTML(wpp_note)}</p>) : ''}
       <ul>#{source_items}</ul>
+      #{method_notes}
     </section>
   HTML
 end
