@@ -1997,6 +1997,11 @@ else
                        else
                          ''
                        end
+  unit_note = if $l == :ja
+                '実死亡数と標準人口換算死亡数は人数、粗死亡率と年齢調整死亡率は人口10万人当たりで表示しています。0歳人口当たり死亡率は0歳人口10万人当たりで、出生数を分母とする通常の乳児死亡率とは異なります。出生関連死亡率は、指標に対応する出生数または出産数を分母（offset）としたポアソン回帰を使用し、分母1,000当たりで表示しています。'
+              else
+                'Observed and standardized deaths are shown as counts. Crude and age-standardized mortality rates are shown per 100,000 population. The age-0 population rate is shown per 100,000 age-0 population and differs from the conventional infant mortality rate, which uses live births as its denominator. Birth-related mortality rates use births or deliveries as the offset in Poisson regression and are shown per 1,000 births or deliveries.'
+              end
   sources_by_location = available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
     loc = mode == 'country' ? key : selected_locations.first
     urls = chart_data.select { |row| row[:series] == key }.flat_map { |row| row[:src_url] }.uniq
@@ -2102,7 +2107,7 @@ else
     [key, short_label]
   end
   interval_note = if $l == :ja
-                    '準Poissonは、観測された過分散を反映した近似95%予測区間です。Poissonでは、計算済みなら10,000回simulationによる区間へ切り替えられます（青：近似計算、黄：simulation）。'
+                    '準ポアソンは、観測された過分散を反映した近似95%予測区間です。ポアソンでは、計算済みなら10,000回シミュレーションによる区間へ切り替えられます（青：近似計算、黄：シミュレーション）。'
                   else
                     'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: analytic approximation; yellow: simulation).'
                   end
@@ -2124,17 +2129,17 @@ else
       &nbsp;
       <span>#{ $l == :ja ? 'モデル' : 'Model' }:</span>
       <label><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
-        #{ $l == :ja ? '準Poisson' : 'Quasi-Poisson' }
+        #{ $l == :ja ? '準ポアソン' : 'Quasi-Poisson' }
       </label>
       <label><input class="model-option" type="radio" name="chart_model" value="poisson" #{checked(default_model == 'poisson')}>
-        Poisson
+        #{ $l == :ja ? 'ポアソン' : 'Poisson' }
       </label>
       <!-- 推定φの計算値はchart dataに残すが、画面には表示しない。
            Keep estimated dispersion in chart data, but do not display it. -->
       <!-- <output id="dispersion-output"></output> -->
       &nbsp;
       <label id="simulation-interval-control" style="display:none"><input id="simulation-interval-checkbox" type="checkbox" #{'checked' unless interval_mode == 'analytic'}>
-        #{ $l == :ja ? 'simulation区間を表示（未計算時は近似区間。1分以上待って再読込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and resubmit)' }
+        #{ $l == :ja ? 'シミュレーション区間を表示（未計算時は近似区間。1分以上待って再読込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and resubmit)' }
       </label>
     </p>
     <div id="mortyear-vis"></div>
@@ -2253,7 +2258,7 @@ else
       }).catch(console.warn);
     </script>
     <p class="mortyear-note">
-      #{ interval_note + ' ' + ($l == :ja ? (birth_metric ? '指標に対応する出生数または出産数を分母（offset）としたPoisson回帰を使用し、分母1,000当たりの死亡率を表示しています。' : %w[crude_rate asr].include?(selected_metric) ? '死亡率は人口10万人当たりで表示しています。' : selected_metric == 'std_deaths' ? '日本の週次派生系列を完全な暦年へ集計しています。年境界週の死亡数は日数按分しました。' : '死亡数は人数で表示しています。') : (birth_metric ? 'Poisson regression uses births or deliveries as the offset, and mortality rates are shown per 1,000 births or deliveries.' : %w[crude_rate asr].include?(selected_metric) ? 'Mortality rates are shown per 100,000 population.' : selected_metric == 'std_deaths' ? 'Japanese derived weekly series are aggregated into complete calendar years; boundary weeks are prorated by days.' : 'Deaths are shown as counts.')) + (selected_metric == 'crude_rate' && selected_ages == ['age_0'] ? ($l == :ja ? ' 通常の乳児死亡率は出生数を分母としますが、この指標は0歳人口を分母とします。' : ' Unlike the conventional infant mortality rate, which uses births as the denominator, this measure uses the age-0 population.') : '') + approximation_note }
+      #{ interval_note + ' ' + unit_note + (selected_metric == 'std_deaths' ? ($l == :ja ? ' 日本の週次派生系列を完全な暦年へ集計し、年境界週の死亡数は日数按分しています。' : ' Japanese derived weekly series are aggregated into complete calendar years, and boundary weeks are prorated by days.') : '') + approximation_note }
     </p>
     <section class="mortyear-sources" style="text-align:left">
       <h2>#{ $l == :ja ? 'グラフに使用したデータ' : 'Data used for the graphs' }</h2>
