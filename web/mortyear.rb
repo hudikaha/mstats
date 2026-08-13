@@ -177,6 +177,17 @@ selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? 
 selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
 $mortyear_period = selected_period
 $mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
+# 日本語: 暦年の英国とSTMF週次の英国地域を期間切替時に相互変換する。
+# English: Map annual UK and STMF weekly UK-region codes when switching periods.
+requested_locations = requested_locations.flat_map do |code|
+  if selected_period == 'calendar' && %w[ENG SCO].include?(code)
+    'GBR'
+  elsif selected_period != 'calendar' && code == 'GBR'
+    'ENG'
+  else
+    code
+  end
+end.uniq
 selected_ages = ['age_all'] if selected_metric == 'asr' || selected_metric == 'birth_rate'
 selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_rate asr].include?(selected_metric)
 selected_ages &= STMF_AGES if selected_period != 'calendar'
