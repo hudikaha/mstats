@@ -14,12 +14,12 @@ FROM_YEAR = 2000
 # 日本語: e-Statの複数行headerを飛ばし、年次を先頭列に持つ行だけを読む。
 # English: Skip the multi-line e-Stat header and read rows whose first column is a year.
 def yearly_rows(path)
-  CSV.read(path, encoding: 'Windows-31J:UTF-8').filter_map do |row|
+  CSV.read(path, encoding: 'Windows-31J:UTF-8').map do |row|
     next unless row[0].to_s.match?(/\A\d{4}\z/)
     year = row[0].to_i
     next if year < FROM_YEAR
     [year, row]
-  end.to_h
+  end.compact.to_h
 end
 
 infant = yearly_rows(ARGV[0])
@@ -37,25 +37,25 @@ common_years.each do |year|
   late_fetal_deaths = Integer(perinatal_row.fetch(5))
   deliveries = births + late_fetal_deaths
   common = { loc_code: 'jpn', location: 'Japan', date: "#{year}-01-01", year: year,
-             sex: 'both', type: 'conf' }
+             sex: 'both', type: 'cfm' }
 
-  birth_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'birth', type: 'conf', sex: 'both')
+  birth_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'birth', type: 'cfm', sex: 'both')
   rows[birth_id] = common.merge(id: birth_id, category: 'birth',
                                 src_url: [INFANT_URL], age_all: births)
 
-  delivery_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'delivery', type: 'conf', sex: 'both')
+  delivery_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'delivery', type: 'cfm', sex: 'both')
   rows[delivery_id] = common.merge(id: delivery_id, category: 'delivery',
                                    src_url: [INFANT_URL, PERINATAL_URL], age_all: deliveries)
 
   infant_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'death',
-                                   death_code: 'INFANT', type: 'conf', sex: 'both')
-  rows[infant_id] = common.merge(id: infant_id, category: 'death', death_code: 'INFANT',
+                                   death_code: 'infant', type: 'cfm', sex: 'both')
+  rows[infant_id] = common.merge(id: infant_id, category: 'death', death_code: 'infant',
                                  death_cause: 'Infant mortality',
                                  src_url: [INFANT_URL], age_all: infant_deaths)
 
   perinatal_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'death',
-                                      death_code: 'PERM', type: 'conf', sex: 'both')
-  rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'PERM',
+                                      death_code: 'perm', type: 'cfm', sex: 'both')
+  rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'perm',
                                     death_cause: 'Perinatal mortality',
                                     src_url: [PERINATAL_URL], age_all: perinatal_deaths)
 end

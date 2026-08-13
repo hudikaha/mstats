@@ -124,7 +124,7 @@ def base(loc, location, world_region, year, sex, category, kind, rate="", code="
         "loc_code": loc, "location": location, "world_region": world_region,
         "category": category,
         "rate": rate, "death_code": code,
-        "death_cause": "All causes" if code == "00000" else "",
+        "death_cause": "All causes" if code == "allcause" else "",
         "algo": algo, "type": kind, "src_url": json.dumps(src_urls or [WPP_URL]),
         "date": f"{year:04d}-01-01", "year": year, "sex": sex,
     }
@@ -175,7 +175,7 @@ def main():
         loc, location, year = source["ISO3_code"].lower(), source["Location"], int(source["Time"])
         iso = source["ISO3_code"]
         locations[iso] = (location, world_region(source))
-        kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024proj"
+        kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024prj"
         for sex, pop_col, death_col in (
             ("both", "TPopulation1July", "Deaths"),
             ("male", "TPopulationMale1July", "DeathsMale"),
@@ -196,9 +196,9 @@ def main():
             death_age = totals[sex]["death"]
             exposure_age = totals[sex]["exposure"]
             midyear_population, total_deaths = indicators[(loc, year, sex)]
-            kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024proj"
-            exposure_kind = "unwpp2024expest" if year <= HISTORICAL_END else "unwpp2024expproj"
-            death = base(loc, location, world_region, year, sex, "death", kind, code="00000")
+            kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024prj"
+            exposure_kind = "unwpp2024expest" if year <= HISTORICAL_END else "unwpp2024expprj"
+            death = base(loc, location, world_region, year, sex, "death", kind, code="allcause")
             death.update({field: clean(value * 1000) for field, value in death_age.items()})
             death["age_all"] = clean(total_deaths)
             writer.writerow(death)
@@ -212,7 +212,7 @@ def main():
             rates["age_0"] = death_age["age_0"] * 100_000 / exposure_age["age_0"]
             rates["age_all"] = total_deaths * 100_000 / midyear_population
             crude = base(loc, location, world_region, year, sex, "death", kind,
-                         rate="crude", code="00000")
+                         rate="crude", code="allcause")
             crude.update({field: clean(value) for field, value in rates.items()})
             writer.writerow(crude)
             # 丸めによりpopulation exposureが0の階級があればASRを欠測とする。
@@ -221,7 +221,7 @@ def main():
                 asr_value = sum(rates[field] * weight for field, weight in WHO_STANDARD.items()) \
                     / sum(WHO_STANDARD.values())
                 asr = base(loc, location, world_region, year, sex, "death", kind,
-                           rate="asr", code="00000", src_urls=[WPP_URL, WHO_URL],
+                           rate="asr", code="allcause", src_urls=[WPP_URL, WHO_URL],
                            algo="whostd")
                 asr["age_all"] = clean(asr_value)
                 writer.writerow(asr)

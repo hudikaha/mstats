@@ -5,9 +5,9 @@ require 'csv'
 require_relative 'mstats2026'
 
 TYPE_MAP = {
-  'confirmed' => 'conf',
+  'confirmed' => 'cfm',
   'estimated' => 'est',
-  'Japanese' => 'jpns',
+  'Japanese' => 'cfmjpns',
 }.freeze
 
 rows = {}

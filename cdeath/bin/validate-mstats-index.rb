@@ -5,8 +5,8 @@ require 'json'
 require 'net/http'
 require 'uri'
 
-index = ARGV.fetch(0, 'mstats20260813')
-expected_total = Integer(ARGV.fetch(1, '1985975'))
+index = ARGV.fetch(0, 'mstats20260814')
+expected_total = Integer(ARGV.fetch(1, '1876527'))
 password_file = File.expand_path('~/.config/mstats/espass.txt')
 user = ENV.fetch('ES_USER', 'elastic')
 password = ENV['ES_PASSWORD']
@@ -46,29 +46,37 @@ queries = {
     1890
   ],
   death_monthly: [
-    { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'exists' => { 'field' => 'yearmonth' } }] } },
+    { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'exists' => { 'field' => 'yearmonth' } }],
+                  'must_not' => [{ 'term' => { 'type' => 'unmonth' } }] } },
     83_748
   ],
-  death_weekly_jpn: [
-    { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'term' => { 'loc_code' => 'jpn' } }, { 'exists' => { 'field' => 'yearweek' } }] } },
-    1_090_314
+  death_monthly_un: [
+    { 'term' => { 'type' => 'unmonth' } },
+    87_340
+  ],
+  death_weekly_reconstructed_jpn: [
+    { 'term' => { 'type' => 'stmfrecon' } },
+    757_938
   ],
   death_weekly_stmf: [
-    { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'exists' => { 'field' => 'yearweek' } }],
-                  'must_not' => [{ 'term' => { 'loc_code' => 'jpn' } }] } },
-    270_954
+    { 'term' => { 'type' => 'stmf' } },
+    406_431
   ],
   yearly_wpp: [
-    { 'terms' => { 'type' => %w[unwpp2024est unwpp2024expest unwpp2024proj unwpp2024expproj] } },
+    { 'terms' => { 'type' => %w[unwpp2024est unwpp2024expest unwpp2024prj unwpp2024expprj] } },
     521_454
   ],
   yearly_reconstructed: [
-    { 'term' => { 'type' => 'reconst' } },
+    { 'term' => { 'type' => 'recon' } },
     3_385
   ],
   who_standard: [
     { 'term' => { 'algo' => 'whostd' } },
-    92_121
+    243_129
+  ],
+  japan_2015_standard: [
+    { 'term' => { 'algo' => 'jp2015std' } },
+    15_642
   ]
 }.freeze
 
@@ -80,14 +88,14 @@ queries.each do |label, (query, expected)|
 end
 
 representatives = {
-  'jpn_2024w09_death__00000___both' => %w[date age_all],
-  'usa_2025w53_death__00000___both' => %w[date age_all],
-  'jpn_2009_death__00000___both' => %w[date age_all src_url],
-  'jpn_2014_death_asr_00000_whostd__both' => %w[date age_all src_url],
-  'swe_2023_death_asr_00000_whostd_unwpp2024est_both' => %w[date age_all src_url],
-  'usa_2024_birth____conf_both' => %w[date age_all src_url],
-  'usa_2024_death__00000__conf_both' => %w[date age_0 src_url],
-  'usa_2022_death__PERM__reconst_both' => %w[date age_all src_url]
+  'jpn_2024w09_death__allcause__stmfrecon_both' => %w[date age_all],
+  'usa_2025w53_death__allcause__stmf_both' => %w[date age_all],
+  'jpn_2009_death__allcause___both' => %w[date age_all src_url],
+  'jpn_2014_death_asr_allcause_whostd__both' => %w[date age_all src_url],
+  'swe_2023_death_asr_allcause_whostd_unwpp2024est_both' => %w[date age_all src_url],
+  'usa_2024_birth____cfm_both' => %w[date age_all src_url],
+  'usa_2024_death__allcause__cfm_both' => %w[date age_0 src_url],
+  'usa_2022_death__perm__recon_both' => %w[date age_all src_url]
 }.freeze
 representatives.each do |id, fields|
   result = es_request(Net::HTTP::Get, "/#{index}/_doc/#{id}", user, password)
@@ -104,3 +112,20 @@ invalid_ids = es_request(Net::HTTP::Post, "/#{index}/_count", user, password,
                          } } }).fetch('count')
 abort "non-canonical IDs=#{invalid_ids}" unless invalid_ids.zero?
 puts 'canonical_eight_component_ids=ok'
+
+# 新形式へ旧語が混入していないことを確認する。
+# Confirm that no legacy vocabulary remains in the canonical index.
+legacy_query = {
+  'bool' => {
+    'should' => [
+      { 'terms' => { 'rate' => %w[amr adj] } },
+      { 'terms' => { 'death_code' => %w[00000 INFANT PERM] } },
+      { 'terms' => { 'type' => %w[conf confirmed reconst unwpp2024proj unwpp2024expproj] } }
+    ],
+    'minimum_should_match' => 1
+  }
+}
+legacy_count = es_request(Net::HTTP::Post, "/#{index}/_count", user, password,
+                          'query' => legacy_query).fetch('count')
+abort "legacy vocabulary documents=#{legacy_count}" unless legacy_count.zero?
+puts 'legacy_vocabulary=none'

@@ -87,7 +87,7 @@ files.each do |file|
         sex = 'both'
         sex = 'male' if row['性別'] =~ /男/
         sex = 'female' if row['性別'] =~ /女/
-        code = '00000' if code == 'all'
+        code = 'allcause' if code == 'all'
         id = Mstats2026.record_id(loc_code: 'jpn', period: "#{year}m#{sprintf('%02d', month)}",
                                   category: 'death', death_code: code, sex: sex)
         health[id] = {

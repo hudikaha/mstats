@@ -17,7 +17,9 @@ end.parse!
 abort 'one or more CSV files are required' if ARGV.empty?
 
 ALLOWED_CATEGORIES = %w[death pop birth delivery fetal-death].freeze
-SPECIAL_DEATH_CODES = %w[INFANT PERM].freeze
+SPECIAL_DEATH_CODES = %w[infant perm].freeze
+LEGACY_RATES = %w[adj amr].freeze
+LEGACY_TYPES = %w[conf jpns reconst unwpp2024proj unwpp2024expproj].freeze
 NUMERIC = /\A-?(?:\d+(?:\.\d*)?|\.\d+)\z/
 
 ids = {}
@@ -48,7 +50,9 @@ end
 ARGV.each do |file|
   abort "CSV not found: #{file}" unless File.file?(file)
 
+  file_rows = 0
   CSV.foreach(file, headers: true).with_index(2) do |row, line|
+    file_rows += 1
     where = "#{file}:#{line}"
     id = row['id'].to_s
     if id.empty?
@@ -85,7 +89,7 @@ ARGV.each do |file|
     begin
       date = Date.iso8601(row['date'].to_s)
       errors << "#{where}: date year #{date.year} differs from year #{year}" if unit != 'weekly' && date.year != year
-    rescue Date::Error
+    rescue ArgumentError
       errors << "#{where}: invalid date #{row['date'].inspect}"
     end
 
@@ -102,15 +106,21 @@ ARGV.each do |file|
     end
 
     death_code = row['death_code'].to_s
+    %w[loc_code category rate death_code algo type sex].each do |field|
+      value = row[field].to_s
+      errors << "#{where}: #{field} must be lowercase: #{value.inspect}" unless value == value.downcase
+    end
+    errors << "#{where}: legacy rate is forbidden: #{row['rate']}" if LEGACY_RATES.include?(row['rate'])
+    errors << "#{where}: legacy type is forbidden: #{row['type']}" if LEGACY_TYPES.include?(row['type'])
     if category == 'death'
       errors << "#{where}: death_code is missing" if death_code.empty?
-      system = if death_code == '00000'
+      system = if death_code == 'allcause'
                  'all'
                elsif SPECIAL_DEATH_CODES.include?(death_code)
                  'indicator'
                elsif death_code.match?(/\A\d/)
                  'japan'
-               elsif death_code.match?(/\A[A-Z]/)
+               elsif death_code.match?(/\A[a-z]/)
                  'icd10'
                else
                  'unknown'
@@ -118,7 +128,7 @@ ARGV.each do |file|
       cause_systems[system] += 1
       errors << "#{where}: unrecognized death_code #{death_code.inspect}" if system == 'unknown'
       key = [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], death_code,
-             row['algo'], row['type'], row['sex']]
+             row['type'], row['sex']]
       death_rates[key] << row['rate'].to_s
     elsif present?(death_code)
       warnings << "#{where}: death_code is ignored for category #{category}"
@@ -133,9 +143,9 @@ ARGV.each do |file|
     elsif category == 'death' && row['rate'] == 'imr'
       errors << "#{where}: infant mortality rate requires age_0" unless row['age_0'].to_s.match?(NUMERIC)
       infant_rate_keys << [where, [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
-    elsif category == 'death' && death_code == 'PERM'
-      errors << "#{where}: PERM age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
-      denominator = row['type'] == 'reconst' ? birth_keys : delivery_keys
+    elsif category == 'death' && death_code == 'perm'
+      errors << "#{where}: perm age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
+      denominator = row['type'] == 'recon' ? birth_keys : delivery_keys
       birth_denominator_keys << [where, denominator,
                                  [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
     end
@@ -146,6 +156,11 @@ ARGV.each do |file|
 
       errors << "#{where}: #{field} is not numeric: #{value.inspect}" unless value.match?(NUMERIC)
       errors << "#{where}: #{field} is negative: #{value}" if value.match?(NUMERIC) && value.to_f.negative?
+    end
+    if row['rate'] == 'asr'
+      populated = row.headers.grep(/\Aage_/).reject { |field| field == 'age_all' }.
+                    select { |field| present?(row[field]) }
+      errors << "#{where}: ASR may populate only age_all: #{populated.join(',')}" unless populated.empty?
     end
 
     begin
@@ -160,6 +175,7 @@ ARGV.each do |file|
   rescue CSV::MalformedCSVError => e
     errors << "#{where}: malformed CSV: #{e.message}"
   end
+  errors << "#{file}: no data rows" if file_rows.zero?
 end
 
 infant_rate_keys.each do |where, key|
@@ -170,7 +186,7 @@ birth_denominator_keys.each do |where, denominators, key|
 end
 
 death_rates.each do |key, rates|
-  next unless (rates & Set.new(%w[adj amr crude])).any?
+  next unless (rates & Set.new(%w[crude asr])).any?
   warnings << "derived death series has no raw-count row: #{key.join('/')}" unless rates.include?('')
 end
 

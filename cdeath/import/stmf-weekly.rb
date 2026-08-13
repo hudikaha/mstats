@@ -43,6 +43,18 @@ AGE_COLUMNS = {
   age_85over: %w[D85p R85p]
 }.freeze
 
+STMF_ASR_MEMBERS = {
+  age_00_14: %w[age_00_04 age_05_09 age_10_14],
+  age_15_64: %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39
+                age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
+  age_65_74: %w[age_65_69 age_70_74],
+  age_75_84: %w[age_75_79 age_80_84],
+  age_85over: %w[age_85_89 age_90_94 age_95_99 age_100over]
+}.freeze
+STMF_ASR_WEIGHTS = STMF_ASR_MEMBERS.transform_values do |members|
+  members.sum { |age| Mstats2026::WHO_WORLD_STANDARD.fetch(age) }
+end.freeze
+
 # STMFの欠測記号を保持して数値だけを変換する。
 # Preserve STMF missing markers and convert only numeric values.
 def stmf_number(value)
@@ -90,9 +102,10 @@ source_rows.each do |source|
   sex = SEXES[source['Sex']]
   next unless sex
 
-  ['', 'amr'].each_with_index do |rate, column_index|
+  ['', 'crude'].each_with_index do |rate, column_index|
     id = Mstats2026.record_id(loc_code: loc_code, period: format('%04dw%02d', year, week),
-                              category: 'death', rate: rate, death_code: '00000', sex: sex)
+                              category: 'death', rate: rate, death_code: 'allcause',
+                              type: 'stmf', sex: sex)
     row = {
       id: id,
       loc_code: loc_code,
@@ -100,9 +113,10 @@ source_rows.each do |source|
       yearweek: format('%04dw%02d', year, week),
       category: 'death',
       rate: rate,
-      death_code: '00000',
+      death_code: 'allcause',
       death_cause: 'All causes',
       algo: '',
+      type: 'stmf',
       src_url: [Mstats2026::HMD_STMF_URL],
       date: week_date(canonical_code, year, week, extra_week_years).to_s,
       year: year,
@@ -111,10 +125,27 @@ source_rows.each do |source|
     }
     AGE_COLUMNS.each do |age, columns|
       value = stmf_number(source[columns[column_index]])
-      row[age] = rate == 'amr' && value ? (value * 100_000).round(2) : value&.round(2)
+      row[age] = rate == 'crude' && value ? (value * 100_000).round(2) : value&.round(2)
     end
     rows[id] = row
   end
+
+  crude_id = Mstats2026.record_id(loc_code: loc_code, period: format('%04dw%02d', year, week),
+                                   category: 'death', rate: 'crude', death_code: 'allcause',
+                                   type: 'stmf', sex: sex)
+  crude = rows.fetch(crude_id)
+  next unless STMF_ASR_WEIGHTS.keys.all? { |age| crude[age] }
+
+  asr_id = Mstats2026.record_id(loc_code: loc_code, period: format('%04dw%02d', year, week),
+                                category: 'death', rate: 'asr', death_code: 'allcause',
+                                algo: 'whostd', type: 'stmf', sex: sex)
+  asr = crude.slice(:loc_code, :location, :yearweek, :category, :death_code, :death_cause,
+                    :src_url, :date, :year, :week, :sex).merge(
+                      id: asr_id, rate: 'asr', algo: 'whostd', type: 'stmf'
+                    )
+  asr[:age_all] = (STMF_ASR_WEIGHTS.sum { |age, weight| crude.fetch(age) * weight } /
+                    STMF_ASR_WEIGHTS.values.sum).round(2)
+  rows[asr_id] = asr
 end
 
 Mstats2026.output_weekly(rows)

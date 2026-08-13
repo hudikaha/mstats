@@ -106,60 +106,79 @@ def rate_age_groups(population)
   groups
 end
 
-# 月次実数から旧mort.rb互換のadj・amr系列を作る。
-# Derive the adj and amr series used by the existing mort.rb page.
+# 月次実数と人口から週次再構成用の粗死亡率・二種類のASRを作る。
+# Derive crude rates and two ASRs used to reconstruct the weekly series.
 def monthly_series(deaths, populations)
   populations.each_value { |row| add_age_groups(row) }
   populations_by_key = populations.values.to_h do |row|
     [[row[:loc_code], row[:yearmonth], row[:type], row[:sex]], row]
   end
   latest_population = populations.values.
-                        select { |row| row[:type] == 'conf' }.
+                        select { |row| row[:type] == 'cfm' }.
                         group_by { |row| row[:sex] }.
                         transform_values { |rows| rows.max_by { |row| row[:yearmonth] } }
 
   deaths.each_with_object({}) do |(id, source), rows|
     raw = add_age_groups(source.dup)
-    rows[id] = raw
+    raw[:type] = 'stmfrecon'
+    raw[:id] = Mstats2026.record_id_for(raw)
+    rows[raw[:id]] = raw
 
-    population = populations_by_key[[source[:loc_code], source[:yearmonth], 'conf', source[:sex]]]
+    population = populations_by_key[[source[:loc_code], source[:yearmonth], 'cfm', source[:sex]]]
     population ||= populations_by_key[[source[:loc_code], source[:yearmonth], 'est', source[:sex]]]
-    standard = latest_population[source[:sex]]
-    next unless population && standard
+    next unless population
 
-    %w[adj amr].each do |rate|
-      derived_id = Mstats2026.record_id(loc_code: source[:loc_code], period: source[:yearmonth],
-                                        category: 'death', rate: rate, death_code: source[:death_code],
-                                        algo: source[:algo], type: source[:type], sex: source[:sex])
-      derived = raw.dup
-      derived[:id] = derived_id
-      derived[:rate] = rate
-      derived[:src_url] = (Array(raw[:src_url]) | Array(population[:src_url]) |
-                           Array(standard[:src_url])).reject { |url| url.to_s.empty? }
+    days_in_year = Date.leap?(source[:year]) ? 366 : 365
+    days_in_month = Date.new(source[:year], source[:month], -1).day
+    annual_rate = lambda do |members|
+      count_values = members.map { |age| raw[age] }
+      pop_values = members.map { |age| population[age] }
+      next nil if count_values.any?(&:nil?) || pop_values.any? { |value| !value&.positive? }
 
-      OUTPUT_AGES.each { |age| derived[age] = nil }
-      rate_age_groups(population).each do |target, members|
-        adjusted = members.sum do |age|
-          deaths_value = raw[age]
-          current_population = population[age]
-          standard_population = standard[age]
-          next 0.0 unless deaths_value && current_population&.positive? && standard_population
+      count_values.sum.to_f * 100_000 * days_in_year / (pop_values.sum * days_in_month)
+    end
 
-          deaths_value * standard_population.to_f / current_population
-        end
-        if rate == 'adj'
-          derived[target] = adjusted.round(2)
-        else
-          standard_total = members.sum { |age| standard[age].to_f }
-          days_in_year = Date.leap?(source[:year]) ? 366 : 365
-          days_in_month = Date.new(source[:year], source[:month], -1).day
-          derived[target] = if standard_total.positive?
-                              (adjusted * 100_000 * days_in_year /
-                               (standard_total * days_in_month)).round(2)
-                            end
-        end
+    crude_id = Mstats2026.record_id(loc_code: source[:loc_code], period: source[:yearmonth],
+                                    category: 'death', rate: 'crude', death_code: source[:death_code],
+                                    type: 'stmfrecon', sex: source[:sex])
+    crude = raw.dup
+    crude[:id] = crude_id
+    crude[:rate] = 'crude'
+    crude[:algo] = ''
+    crude[:src_url] = (Array(raw[:src_url]) | Array(population[:src_url])).reject { |url| url.to_s.empty? }
+    OUTPUT_AGES.each { |age| crude[age] = nil }
+    rate_age_groups(population).each do |target, members|
+      value = annual_rate.call(members)
+      crude[target] = value.round(2) if value
+    end
+    rows[crude_id] = crude
+
+    standards = {
+      'whostd' => Mstats2026::WHO_WORLD_STANDARD.transform_keys(&:to_sym).
+                    transform_values { |weight| weight.to_f },
+      'jp2015std' => Mstats2026::JPN_2015_STANDARD.each_with_object({}) do |(age, weight), result|
+        members = age == 'age_95over' ? %i[age_95_99 age_100over] : [age.to_sym]
+        result[members] = weight.to_f
       end
-      rows[derived_id] = derived
+    }
+    standards['whostd'] = standards['whostd'].to_h { |age, weight| [[age], weight] }
+    standards.each do |algo, groups|
+      weighted = groups.sum do |members, weight|
+        value = annual_rate.call(members)
+        break nil unless value
+        value * weight
+      end
+      next unless weighted
+
+      asr_id = Mstats2026.record_id(loc_code: source[:loc_code], period: source[:yearmonth],
+                                    category: 'death', rate: 'asr', death_code: source[:death_code],
+                                    algo: algo, type: 'stmfrecon', sex: source[:sex])
+      asr = crude.slice(:loc_code, :location, :yearmonth, :category, :death_code, :death_cause,
+                        :type, :src_url, :date, :year, :month, :sex).merge(
+                          id: asr_id, rate: 'asr', algo: algo,
+                          age_all: (weighted / groups.values.sum).round(2)
+                        )
+      rows[asr_id] = asr
     end
   end
 end
@@ -171,7 +190,7 @@ def week_slices(first_date, last_date)
     first_year = first_date.cwyear
     last_year = last_date.cwyear
     (first_year..last_year).flat_map do |year|
-      (1..53).filter_map do |week|
+      (1..53).map do |week|
         sunday = Date.commercial(year, week, 7)
         monday = sunday - 6
         next if sunday < first_date || monday > last_date
@@ -183,9 +202,9 @@ def week_slices(first_date, last_date)
           [period, days.length, Date.new(calendar_year, month, -1).day]
         end
         [year, week, sunday, monday.month, sunday.month, sources]
-      rescue Date::Error
+      rescue ArgumentError
         nil
-      end
+      end.compact
     end.freeze
   end
 end
@@ -224,7 +243,7 @@ def weekly_series(monthly)
         value = source[age]
         next true if value.nil?
 
-        divisor = source[:rate] == 'amr' ? 7 : days_in_month
+        divisor = %w[crude asr].include?(source[:rate]) ? 7 : days_in_month
         total += value.to_f * days / divisor
         false
       end
@@ -281,12 +300,12 @@ def smooth_triplet(older, middle, newer, direction)
   end
 end
 
-# 月次死因recordと人口recordから週次raw・adj・amr系列を生成する。
-# Generate weekly raw, adj, and amr series from monthly deaths and populations.
+# 月次死因recordと人口recordから週次raw・crude・asr系列を生成する。
+# Generate weekly raw, crude, and ASR series from monthly deaths and populations.
 def build_weekly(deaths, populations)
   monthly = monthly_series(deaths, populations)
   monthly.values.group_by do |row|
-    [row[:loc_code], row[:rate], row[:death_code], row[:sex]]
+    [row[:loc_code], row[:rate], row[:death_code], row[:algo], row[:type], row[:sex]]
   end.each_with_object({}) do |(_key, series), rows|
     rows.merge!(weekly_series(series.to_h { |row| [row[:id], row] }))
   end

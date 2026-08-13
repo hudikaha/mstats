@@ -73,7 +73,7 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
            date: "#{year}-01-01", year: year, sex: sex }
   rows[id] = base.merge(ages.transform_keys(&:to_sym))
 
-  pop_type = %w[conf jpns est].find { |candidate| annual_pop.key?([loc, year, candidate, sex]) }
+  pop_type = %w[cfm est cfmjpns estjpns].find { |candidate| annual_pop.key?([loc, year, candidate, sex]) }
   next unless pop_type
   population = annual_pop.fetch([loc, year, pop_type, sex])
   rates = ages.to_h do |field, count|
@@ -98,6 +98,27 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
                                 death_code: code, algo: 'whostd', type: type, sex: sex)
   rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: 'whostd',
                             src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(asr_value))
+
+  # 日本語: 2015年モデル人口の95歳以上を一階級として日本基準ASRを作る。
+  # English: Build the Japanese-standard ASR with age 95-plus as one model-population band.
+  jp2015_rates = Mstats2026::JPN_2015_STANDARD.to_h do |field, _weight|
+    if field == 'age_95over'
+      count = ages['age_95_99'].to_f + ages['age_100over'].to_f
+      denominator = population['age_95_99'].to_f + population['age_100over'].to_f
+      [field, denominator.positive? ? count * 100_000.0 / denominator : nil]
+    else
+      [field, rates[field]]
+    end
+  end
+  next unless jp2015_rates.values.all?
+
+  jp2015_value = jp2015_rates.sum do |field, value|
+    value * Mstats2026::JPN_2015_STANDARD.fetch(field)
+  end / Mstats2026::JPN_2015_STANDARD.values.sum
+  jp2015_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'asr',
+                                   death_code: code, algo: 'jp2015std', type: type, sex: sex)
+  rows[jp2015_id] = base.merge(id: jp2015_id, rate: 'asr', algo: 'jp2015std',
+                               src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(jp2015_value))
 end
 
 Mstats2026.output_yearly(rows)

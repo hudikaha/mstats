@@ -158,13 +158,13 @@ ARGV.each do |file|
         end
         #pp $1, $2, $3
 
-        type = 'conf'
+        type = 'cfm'
         if row['時点'] =~ /概算値/
             type = 'est'
         end
 
         if row['人口区分'] =~ /日本人人口/
-            type = 'jpns'
+            type += 'jpns'
         end
         next if row['区分'] != '人口' || ! (age = $ages[row['年齢階級']])
         $sexes.each do |k, v|

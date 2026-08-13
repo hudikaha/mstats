@@ -55,9 +55,9 @@ def population_kind_rank(row)
   type = row['type'].to_s
   algo = row['algo'].to_s
   return 4 if %w[unwpp2024expest exposure_estimate].include?(type)
-  return 3 if %w[unwpp2024expproj exposure_projection].include?(type)
+  return 3 if %w[unwpp2024expprj exposure_projection].include?(type)
   return 2 if %w[unwpp2024est estimate].include?(type)
-  return 1 if %w[unwpp2024proj projection].include?(type)
+  return 1 if %w[unwpp2024prj projection].include?(type)
   return 0 unless algo.include?('wpp2024')
 
   type.include?('exposure') ? 3 : 1
@@ -142,21 +142,21 @@ observations.each_value do |item|
   period = format('%04dm%02d', year, month)
   common = {
     loc_code: item[:code], location: item[:location], yearmonth: period,
-    category: 'death', death_code: '00000', death_cause: 'All causes', algo: '', type: TYPE,
+    category: 'death', death_code: 'allcause', death_cause: 'All causes', algo: '', type: TYPE,
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: 'both'
   }
   count_id = Mstats2026.record_id(loc_code: item[:code], period: period, category: 'death',
-                                  death_code: '00000', type: TYPE, sex: 'both')
+                                  death_code: 'allcause', type: TYPE, sex: 'both')
   rows[count_id] = common.merge(id: count_id, rate: '', src_url: [UN_URL], age_all: item[:deaths].round)
 
   population = populations[[item[:code], year]]
   next unless population && population[:value].positive?
 
   days = Date.new(year, month, -1).day
-  amr = item[:deaths] * 365.2425 / days / population[:value] * 100_000
-  amr_id = Mstats2026.record_id(loc_code: item[:code], period: period, category: 'death', rate: 'amr',
-                                death_code: '00000', type: TYPE, sex: 'both')
-  rows[amr_id] = common.merge(id: amr_id, rate: 'amr', src_url: [UN_URL, WPP_URL], age_all: amr.round(2))
+  crude = item[:deaths] * 365.2425 / days / population[:value] * 100_000
+  crude_id = Mstats2026.record_id(loc_code: item[:code], period: period, category: 'death', rate: 'crude',
+                                  death_code: 'allcause', type: TYPE, sex: 'both')
+  rows[crude_id] = common.merge(id: crude_id, rate: 'crude', src_url: [UN_URL, WPP_URL], age_all: crude.round(2))
 end
 
 abort 'no monthly UN mortality records were generated' if rows.empty?

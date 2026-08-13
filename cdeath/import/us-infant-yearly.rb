@@ -18,24 +18,24 @@ CSV.foreach(ARGV[0], headers: true) do |input|
   common = { loc_code: 'usa', location: 'United States',
              date: "#{year}-01-01", year: year, sex: 'both' }
 
-  birth_id = Mstats2026.record_id(loc_code: 'usa', period: year, category: 'birth', type: 'conf', sex: 'both')
-  rows[birth_id] = common.merge(id: birth_id, category: 'birth', type: 'conf',
+  birth_id = Mstats2026.record_id(loc_code: 'usa', period: year, category: 'birth', type: 'cfm', sex: 'both')
+  rows[birth_id] = common.merge(id: birth_id, category: 'birth', type: 'cfm',
                                 src_url: [vital_stats_url], age_all: births)
 
   death_id = Mstats2026.record_id(loc_code: 'usa', period: year, category: 'death',
-                                  death_code: '00000', type: 'conf', sex: 'both')
-  rows[death_id] = common.merge(id: death_id, category: 'death', type: 'conf', death_code: '00000',
+                                  death_code: 'allcause', type: 'cfm', sex: 'both')
+  rows[death_id] = common.merge(id: death_id, category: 'death', type: 'cfm', death_code: 'allcause',
                                 death_cause: 'All causes', src_url: [vital_stats_url], age_0: infant_deaths)
 
-  # 日本語: PERMはICD死因ではなく、OECDの周産期死亡指標codeである。
-  # English: PERM is the OECD perinatal-mortality indicator code, not an ICD cause.
+  # 日本語: permはICD死因ではなく、OECDの周産期死亡指標codeである。
+  # English: perm is the OECD perinatal-mortality indicator code, not an ICD cause.
   perinatal = input['perinatal_deaths'].to_s
   next if perinatal.empty? || %w[NA .].include?(perinatal)
 
   perinatal_id = Mstats2026.record_id(loc_code: 'usa', period: year, category: 'death',
-                                      death_code: 'PERM', type: 'reconst', sex: 'both')
-  rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'PERM',
-                                    death_cause: 'Perinatal mortality', type: 'reconst',
+                                      death_code: 'perm', type: 'recon', sex: 'both')
+  rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'perm',
+                                    death_cause: 'Perinatal mortality', type: 'recon',
                                     src_url: [perinatal_url], age_all: Integer(perinatal))
 end
 
