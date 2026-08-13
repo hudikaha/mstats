@@ -2519,6 +2519,7 @@ else
       const startWeek = #{start_week};
       const displayStartDate = year => #{selected_period == 'calendar' ? '`${year}-01-01`' : 'new Date(Date.UTC(year, 0, 4 + (startWeek - 1) * 7 - ((new Date(Date.UTC(year, 0, 4)).getUTCDay() + 6) % 7))).toISOString().slice(0, 10)'};
       const annualTransforms = [
+        {filter: "toDate(datum.plot_date) >= toDate(display_start_date) && toDate(datum.plot_date) <= now()"},
         {filter: "datum.train_to == train_to"},
         {filter: "datum.model == model"},
         {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
@@ -2538,9 +2539,9 @@ else
           end)}}
         },
         layer: [
-          {transform: annualTransforms, mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
-          {transform: annualTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2}, encoding: {color:{field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#88733b","#246a9e"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
-          {transform: [...annualTransforms, {filter:"view_mode == 'annual'"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
+          {transform: annualTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
+          {transform: annualTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#88733b","#246a9e"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
+          {transform: [...annualTransforms, {filter:"view_mode == 'annual'"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
             {field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}},
             {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
             {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測値' : 'Expected')}},
@@ -2551,8 +2552,8 @@ else
             ,{field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}}
             ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週' : 'Week')}},{field:"observed",type:"quantitative",format:".2f",title:#{JSON.generate($l == :ja ? '週次死亡率' : 'Weekly mortality rate')}}]}},
-          {transform:[...annualTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual'"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週' : 'Week')}},{field:"observed",type:"quantitative",format:".2f",title:#{JSON.generate($l == :ja ? '週次死亡率' : 'Weekly mortality rate')}}]}},
+          {transform:[...annualTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual'"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {data:{values:[{series:key,plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"datum.plot_date >= display_start_date"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
