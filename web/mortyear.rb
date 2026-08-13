@@ -324,6 +324,20 @@ def metric_available?(code, rates, metric)
   end
 end
 
+# UN WPP由来か、予測値か、人口曝露量かをtypeだけから判定する。
+# Identify UN WPP, projected, and population-exposure records from type alone.
+def wpp_record?(row)
+  row[:type].to_s.start_with?('unwpp2024')
+end
+
+def projected_record?(row)
+  row[:type].to_s.end_with?('proj')
+end
+
+def exposure_record?(row)
+  row[:type].to_s.start_with?('unwpp2024exp')
+end
+
 def annual_metric_available?(code, catalog, metric)
   if catalog[:series]
     return catalog[:series].any? do |item|
@@ -336,7 +350,7 @@ def annual_metric_available?(code, catalog, metric)
   codes = catalog.fetch(:death_codes)
   case metric
   when 'deaths' then categories.include?('death') && codes.include?('00000')
-  when 'crude_rate' then rates.include?('crude_rate')
+  when 'crude_rate' then rates.include?('crude')
   when 'asr' then rates.include?('asr')
   when 'birth_rate'
     categories.include?('birth') &&
@@ -392,7 +406,7 @@ def available_death_codes(index:, fixture:, locations:, metric:)
 end
 
 def available_annual_death_codes(index:, fixture:, locations:, metric:)
-  wanted_rate = { 'crude_rate' => 'crude_rate', 'asr' => 'asr' }.fetch(metric, '')
+  wanted_rate = { 'crude_rate' => 'crude', 'asr' => 'asr' }.fetch(metric, '')
   if fixture
     return fixture.select do |row|
       locations.include?(row[:loc_code].to_s.upcase) && !row[:yearmonth] && !row[:yearweek] &&
@@ -833,9 +847,9 @@ end
 def annual_record_rows(records, locations, sex, causes, metric, ages)
   relevant = records.select do |row|
     locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
-      !row[:type].to_s.include?('projection')
+      !projected_record?(row)
   end
-  rank = ->(row) { row[:algo].to_s.start_with?('un_wpp2024') ? 1 : 0 }
+  rank = ->(row) { wpp_record?(row) ? 1 : 0 }
   rate_name = metric == 'asr' ? 'asr' : ''
   value_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) &&
@@ -865,10 +879,10 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
     population_candidates = populations.fetch([loc, year], []).
                             select { |candidate| !values_for.call(candidate).nil? }
     population = if ages.include?('age_all')
-                   population_candidates.reject { |item| item[:type].to_s.start_with?('exposure_') }.min_by(&rank)
+                   population_candidates.reject { |item| exposure_record?(item) }.min_by(&rank)
                  else
-                   population_candidates.reject { |item| item[:algo].to_s.start_with?('un_wpp2024') }.min_by(&rank) ||
-                     population_candidates.select { |item| item[:type].to_s.start_with?('exposure_') }.min_by(&rank)
+                   population_candidates.reject { |item| wpp_record?(item) }.min_by(&rank) ||
+                     population_candidates.select { |item| exposure_record?(item) }.min_by(&rank)
                  end
     deaths = values_for.call(raw)
     denominator = values_for.call(population)
@@ -900,11 +914,11 @@ end
 def stratified_asr_rows(records, locations, sex, causes)
   relevant = records.select do |row|
     locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
-      !row[:type].to_s.include?('projection')
+      !projected_record?(row)
   end
   source_rank = lambda do |row, population: false|
-    wpp = row[:algo].to_s.start_with?('un_wpp2024')
-    exposure = row[:type].to_s.start_with?('exposure_')
+    wpp = wpp_record?(row)
+    exposure = exposure_record?(row)
     wpp ? (population && exposure ? 1 : 2) : 0
   end
   death_groups = relevant.select do |row|
@@ -1341,8 +1355,8 @@ def catalog_series(metric, cause, sex, age, rows, period: 'calendar')
 end
 
 def catalog_location_series(records, loc)
-  relevant = records.reject { |row| row[:type].to_s.include?('projection') }
-  rank = ->(row) { row[:algo].to_s.start_with?('un_wpp2024') ? 1 : 0 }
+  relevant = records.reject { |row| projected_record?(row) }
+  rank = ->(row) { wpp_record?(row) ? 1 : 0 }
   deaths = relevant.select { |row| row[:category] == 'death' && row[:rate].to_s.empty? }.
            group_by { |row| [row[:sex].to_s, row[:death_code].to_s, row[:year].to_i] }
   populations = relevant.select { |row| row[:category] == 'pop' }.
@@ -1357,12 +1371,12 @@ def catalog_location_series(records, loc)
       next unless death
       rows_by_series[['deaths', cause, sex, age]] << { year: year }
       population = if age == 'age_all'
-                     population_candidates.reject { |row| row[:type].to_s.start_with?('exposure_') }.
+                     population_candidates.reject { |row| exposure_record?(row) }.
                      select { |row| !row[age.to_sym].nil? }.min_by(&rank)
                    else
-                     population_candidates.reject { |row| row[:algo].to_s.start_with?('un_wpp2024') }.
+                     population_candidates.reject { |row| wpp_record?(row) }.
                      select { |row| !row[age.to_sym].nil? }.min_by(&rank) ||
-                       population_candidates.select { |row| row[:type].to_s.start_with?('exposure_') && !row[age.to_sym].nil? }.
+                       population_candidates.select { |row| exposure_record?(row) && !row[age.to_sym].nil? }.
                        min_by(&rank)
                    end
       if population && population[age.to_sym].to_f.positive?
@@ -1372,7 +1386,7 @@ def catalog_location_series(records, loc)
     strata_complete = WHO_WORLD_STANDARD.keys.all? do |age|
       death = candidates.select { |row| !row[age.to_sym].nil? }.min_by(&rank)
       population = population_candidates.select do |row|
-        (!row[:algo].to_s.start_with?('un_wpp2024') || row[:type].to_s.start_with?('exposure_')) &&
+        (!wpp_record?(row) || exposure_record?(row)) &&
           !row[age.to_sym].nil? && row[age.to_sym].to_f.positive?
       end.min_by(&rank)
       death && population

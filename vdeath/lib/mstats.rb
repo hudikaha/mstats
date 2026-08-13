@@ -1,10 +1,14 @@
 # coding: utf-8
 
+require 'csv'
+require 'date'
+require 'pp'
 require_relative 'debug'
 
 # 死亡・人口統計を期間、地域、年齢別に保持して変換するHash拡張。
 # Hash extension for transforming mortality and population statistics by period, area, and age.
 class Mstats < Hash
+    ID_FIELDS = [:loc_code, :period, :category, :rate, :death_code, :algo, :type, :sex].freeze
     @@init_flag = false
     @@today = nil
     @@today_y = nil
@@ -62,6 +66,28 @@ class Mstats < Hash
 
         Log.debug PP.pp(@@ages100, '')
         Log.debug PP.pp(@@ages85, '')
+    end
+
+    # recordのfieldから8要素IDを生成し、ID文字列そのものの書換えを避ける。
+    # Build an eight-component ID from record fields instead of rewriting the ID string.
+    def self.document_id(record, **overrides)
+        period = overrides.fetch(:period) do
+            record[:yearmonth] || record[:yearweek] || record[:year]
+        end
+        values = {
+            loc_code: record[:loc_code], period: period, category: record[:category],
+            rate: record[:rate], death_code: record[:death_code], algo: record[:algo],
+            type: record[:type], sex: record[:sex]
+        }.merge(overrides)
+        components = ID_FIELDS.map { |field| values[field].to_s }
+        invalid = ID_FIELDS.zip(components).select { |_field, value| value.include?('_') }
+        raise ArgumentError, "ID component contains underscore: #{invalid.inspect}" unless invalid.empty?
+
+        components.join('_')
+    end
+
+    def document_id(record, **overrides)
+        self.class.document_id(record, **overrides)
     end
 
     # 変換結果をMstatsとして返す互換ラッパー。
@@ -161,16 +187,13 @@ class Mstats < Hash
 
             # いつまで適用?
             loc_code_first = self.first[1][:loc_code]
-            id_first = self.first[1][:doc_id]
-            sex_first = self.first[1][:sex]
+            first_record = self.first[1]
             ((to_year+1)..apply).each do |year|
-                id = id_first.sub(/^#{loc_code_first}_\d+w\d+/,
-                                  "#{loc_code_first}_#{year}w#{week_str}")
+                id = document_id(first_record, period: "#{year}w#{week_str}")
                 next if ! self[id]
                 [:min, :max, :avg,
                  :diff, :excess].each do |algo|
-                    id2 = id.sub(/_#{sex_first}/,
-                                 "#{algo.to_s}#{suffix}_#{sex_first}")
+                    id2 = document_id(self[id], algo: "#{algo}#{suffix}")
                     #next if year != to_year+1 && algo != :diff && algo != :excess
                     morts[id2] = self[id].dup
                     morts[id2][:doc_id] = id2
@@ -208,7 +231,7 @@ class Mstats < Hash
             next if mort0[:algo] !~ /^diff/
             mort0.each do |k, v|
                 next if k !~ /^age/
-                id = id0.sub(/_diff.*_#{mort0[:sex]}/, "_cumuldiff_#{mort0[:sex]}")
+                id = document_id(mort0, algo: 'cumuldiff')
                 if ! morts[id]
                     morts[id] = mort0.dup
                     morts[id][:doc_id] = id
@@ -255,10 +278,8 @@ class Mstats < Hash
             year2 = date.year
             month = date.month
             month_str = sprintf('%02d', month)
-            id2  = id_first.sub(/^.+_\d+m\d+/,
-                                    "#{first[:loc_code]}_#{year}w#{week_str}")
-            id   = id_first.sub(/^.+_\d+m\d+/,
-                                     "#{first[:loc_code]}_#{year2}m#{month_str}")
+            id2 = document_id(first, period: "#{year}w#{week_str}")
+            id = document_id(first, period: "#{year2}m#{month_str}")
             cause = self[id]
             if ! cause
                 #Log.debug "++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -314,8 +335,7 @@ class Mstats < Hash
                     year2 -= 1
                 end
                 month2_str = sprintf('%02d', month2)
-                id = id_first.sub(/^.+_\d+m\d+/,
-                                  "#{first[:loc_code]}_#{year2}m#{month2_str}")
+                id = document_id(first, period: "#{year2}m#{month2_str}")
                 cause = self[id]
                 if ! cause
                     Log.debug "DELETE #{id2} (not found #{id})"
@@ -447,11 +467,12 @@ class Mstats < Hash
         causes2 = Mstats.new
 
         Log.info("  reading popjp.csv...")
-        $pops = CSV.read('popjp.csv', headers: true).
-                    map{|pop| [pop['doc_id'],
-                               pop.to_h.
-                                   map{|k, v| [ k.to_sym,
-                                                v.is_a?(String) ? v.to_num : nil]}.to_h]}.to_h
+        $pops = CSV.read('popjp.csv', headers: true).map do |pop|
+            record = pop.to_h.map do |k, v|
+                [k.to_sym, v.is_a?(String) ? v.to_num : nil]
+            end.to_h
+            [document_id(record), record]
+        end.to_h
 
         pop_lasts = Hash.new
         ['both', 'male', 'female'].each do |sex|
@@ -473,8 +494,8 @@ class Mstats < Hash
             days_y = Date.leap?(cause0[:year]) ? 366 : 365
             days_m = Date.new(cause0[:year], cause0[:month], -1).day
 
-            id_pop = id0.sub(/death__.*__/, 'pop__conf__')
-            id_pop = id0.sub(/death__.*__/, 'pop__est__') if ! $pops[id_pop]
+            id_pop = document_id(cause0, category: 'pop', rate: '', death_code: '', algo: '', type: 'conf')
+            id_pop = document_id(cause0, category: 'pop', rate: '', death_code: '', algo: '', type: 'est') unless $pops[id_pop]
             pop = $pops[id_pop]
             Log.debug ""
 
@@ -495,7 +516,7 @@ class Mstats < Hash
                     causes3[rate] = cause0
                     Log.debug "TARGET: #{id} #{id0} #{id_pop}"
                 else
-                    id = id0.sub(/death_/, "death_#{rate}")
+                    id = document_id(cause0, rate: rate)
                     causes2[id] = self[id0].dup
                     causes2[id][:doc_id] = id
                     causes2[id][:rate] = rate
@@ -652,8 +673,7 @@ class Mstats < Hash
                 regs[week].each do |age, reg|
 
                     # regression line (AVG)
-                    id_reg = id0.sub(/_#{mort_first[:sex]}/,
-                                     "avg#{suffix}_#{mort_first[:sex]}")
+                    id_reg = document_id(mort0, algo: "avg#{suffix}")
                     if ! morts[id_reg]
                         morts[id_reg] = mort0.dup
                         morts[id_reg][:doc_id] = id_reg
@@ -669,8 +689,7 @@ class Mstats < Hash
                     next if morts[id_reg][:year] <= to_year
 
                     # diff
-                    id_diff = id0.sub(/_#{mort_first[:sex]}/,
-                                 "diff#{suffix}_#{mort_first[:sex]}")
+                    id_diff = document_id(mort0, algo: "diff#{suffix}")
                     if ! morts[id_diff]
                         morts[id_diff] = mort0.dup
                         morts[id_diff][:doc_id] = id_diff
@@ -687,8 +706,7 @@ class Mstats < Hash
                     end
 
                     # excess
-                    id_excess = id0.sub(/_#{mort_first[:sex]}/,
-                                 "excess#{suffix}_#{mort_first[:sex]}")
+                    id_excess = document_id(mort0, algo: "excess#{suffix}")
                     if ! morts[id_excess]
                         morts[id_excess] = mort0.dup
                         morts[id_excess][:doc_id] = id_excess
@@ -779,8 +797,7 @@ class Mstats < Hash
                     regs[week].each do |age, reg|
 
                         # regression line (AVG)
-                        id_reg = id0.sub(/_#{mort_first[:sex]}/,
-                                         "avg#{suffix}_#{mort_first[:sex]}")
+                        id_reg = document_id(mort0, algo: "avg#{suffix}")
                         if ! morts[id_reg]
                             morts[id_reg] = mort0.dup
                             morts[id_reg][:doc_id] = id_reg
@@ -796,8 +813,7 @@ class Mstats < Hash
                         next if morts[id_reg][:year] <= to_year2
 
                         # diff
-                        id_diff = id0.sub(/_#{mort_first[:sex]}/,
-                                          "diff#{suffix}_#{mort_first[:sex]}")
+                        id_diff = document_id(mort0, algo: "diff#{suffix}")
                         if ! morts[id_diff]
                             morts[id_diff] = mort0.dup
                             morts[id_diff][:doc_id] = id_diff
@@ -814,8 +830,7 @@ class Mstats < Hash
                         end
 
                         # excess
-                        id_excess = id0.sub(/_#{mort_first[:sex]}/,
-                                            "excess#{suffix}_#{mort_first[:sex]}")
+                        id_excess = document_id(mort0, algo: "excess#{suffix}")
                         if ! morts[id_excess]
                             morts[id_excess] = mort0.dup
                             morts[id_excess][:doc_id] = id_excess

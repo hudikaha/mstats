@@ -26,7 +26,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `death_code` | keyword | Cause-of-death code; `00000` means all causes |
 | `death_cause` | keyword | Cause-of-death name |
 | `sex` | keyword | `male`, `female`, `both`, and related source categories |
-| `rate` | keyword | Empty for counts, `crude_rate` for crude rates, `asr` for directly age-standardized rates, and legacy values such as `adj` or `amr` |
+| `rate` | keyword | Empty for counts, `crude` for crude rates, `asr` for directly age-standardized rates, and legacy values such as `adj` or `amr` |
 | `algo` | keyword | Method for a comparative or derived series; empty for source values |
 | `type` | keyword | Population-series class such as `conf`, `est`, or `jpns` |
 | `age_all` | scaled_float | Value for all ages |
@@ -37,8 +37,10 @@ counts and populations can therefore share fields with adjusted weekly values
 that have two decimal places. An empty value means that the source does not
 provide that group; it does not mean zero.
 
-IDs normally join location, period, category, rate, cause, algorithm, type, and
-sex with `_`. For example, `jpn_2009w02_death__00000__both` is the source-value
+IDs join exactly eight components—location, period, category, rate, cause,
+algorithm, type, and sex—with `_`. Underscores are not allowed inside a component;
+empty components remain as empty positions. For example,
+`jpn_2009w02_death__00000___both` is the source-value
 record for Japan, ISO week 2 of 2009, all causes, and both sexes.
 
 Annual records contain `year` but neither `yearmonth` nor `yearweek`. U.S. annual
@@ -46,30 +48,29 @@ birth records store births in `category=birth`, `age_all`. Infant deaths are the
 `age_0` value of the all-cause (`death_code=00000`) death record. The OECD
 perinatal-mortality indicator uses `death_code=PERM`; its `age_all` value is an
 approximate event count reconstructed from the published rounded rate and the
-available birth denominator, and is marked `algo=reconstructed`. `PERM` is an
+available birth denominator, and is marked `type=reconst`. `PERM` is an
 OECD indicator code, not an ICD cause code.
 
 For OECD-covered countries other than Japan and the United States, infant and
 perinatal death counts are reconstructed from OECD rates and the matching
 annual births in UN WPP 2024. These approximate series use
-`algo=reconstructed` and `type=oecd_wpp2024`. Missing OECD years are not
+`type=reconst`. Missing OECD years are not
 interpolated. Because rounded rates are combined with WPP-estimated births,
 these series are less precise than series based on national official counts.
 
 For Japanese perinatal mortality, deliveries (births plus fetal deaths at 22 completed
 weeks or later) are stored in `category=delivery`, `age_all`. Official `death_code=PERM`
-counts use this denominator, while approximate `algo=reconstructed` series use births.
+counts use this denominator, while approximate `type=reconst` series use births.
 
-UN World Population Prospects 2024 annual records use `algo=un_wpp2024` and
-cover 1950–2100. Values through 2023 have `type=estimate`; later medium-variant
-values have `type=projection_medium`. Population records with those types are
-1 July population. Separate `exposure_estimate` and
-`exposure_projection_medium` population records contain annual population
+UN World Population Prospects 2024 annual records cover 1950–2100 and identify
+their source and status in `type`: `unwpp2024est`, `unwpp2024proj`,
+`unwpp2024expest`, or `unwpp2024expproj`. The first two population series are
+1 July population; the `exp` variants contain annual population
 exposure and age groups used as mortality-rate denominators. All-cause death
-counts use `death_code=00000`; `rate=crude_rate` is per 100,000 population.
+counts use `death_code=00000`; `rate=crude` is per 100,000 population.
 `rate=asr` uses direct standardization to the WHO world standard population
 (world average for 2000–2025), is stored in `age_all`, and uses
-`algo=un_wpp2024_who_standard`. These WPP values are UN estimates and
+`algo=whostd`. These WPP values are UN estimates and
 projections, not reported vital-registration counts.
 
 ## kcor / CUMD-WK (public CSV: `*-CUMD-WK.csv.xz` in the [kkcor directory](https://fujikawa.org/pub/kkcor/))

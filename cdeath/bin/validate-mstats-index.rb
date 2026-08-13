@@ -6,7 +6,7 @@ require 'net/http'
 require 'uri'
 
 index = ARGV.fetch(0, 'mstats20260813')
-expected_total = Integer(ARGV.fetch(1, '1460948'))
+expected_total = Integer(ARGV.fetch(1, '1985975'))
 password_file = File.expand_path('~/.config/mstats/espass.txt')
 user = ENV.fetch('ES_USER', 'elastic')
 password = ENV['ES_PASSWORD']
@@ -58,15 +58,17 @@ queries = {
                   'must_not' => [{ 'term' => { 'loc_code' => 'jpn' } }] } },
     270_954
   ],
-  death_yearly_jpn: [
-    { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'term' => { 'loc_code' => 'jpn' } }],
-                  'must_not' => [{ 'exists' => { 'field' => 'yearmonth' } }, { 'exists' => { 'field' => 'yearweek' } }] } },
-    13_816
+  yearly_wpp: [
+    { 'terms' => { 'type' => %w[unwpp2024est unwpp2024expest unwpp2024proj unwpp2024expproj] } },
+    521_454
   ],
-  yearly_usa: [
-    { 'bool' => { 'must' => [{ 'term' => { 'loc_code' => 'usa' } }],
-                  'must_not' => [{ 'exists' => { 'field' => 'yearmonth' } }, { 'exists' => { 'field' => 'yearweek' } }] } },
-    73
+  yearly_reconstructed: [
+    { 'term' => { 'type' => 'reconst' } },
+    3_385
+  ],
+  who_standard: [
+    { 'term' => { 'algo' => 'whostd' } },
+    92_121
   ]
 }.freeze
 
@@ -78,11 +80,13 @@ queries.each do |label, (query, expected)|
 end
 
 representatives = {
-  'jpn_2024w09_death__00000__both' => %w[date age_all],
-  'usa_2025w53_death__00000__both' => %w[date age_all],
+  'jpn_2024w09_death__00000___both' => %w[date age_all],
+  'usa_2025w53_death__00000___both' => %w[date age_all],
   'jpn_2009_death__00000___both' => %w[date age_all src_url],
-  'usa_2024_birth____both' => %w[date age_all src_url],
-  'usa_2024_death__00000__both' => %w[date age_0 src_url],
+  'jpn_2014_death_asr_00000_whostd__both' => %w[date age_all src_url],
+  'swe_2023_death_asr_00000_whostd_unwpp2024est_both' => %w[date age_all src_url],
+  'usa_2024_birth____conf_both' => %w[date age_all src_url],
+  'usa_2024_death__00000__conf_both' => %w[date age_0 src_url],
   'usa_2022_death__PERM__reconst_both' => %w[date age_all src_url]
 }.freeze
 representatives.each do |id, fields|
@@ -91,3 +95,12 @@ representatives.each do |id, fields|
   values = fields.to_h { |field| [field, result.fetch('_source')[field]] }
   puts "#{id} #{values.map { |field, value| "#{field}=#{value}" }.join(' ')}"
 end
+
+
+invalid_ids = es_request(Net::HTTP::Post, "/#{index}/_count", user, password,
+                         'query' => { 'script' => { 'script' => {
+                           'lang' => 'painless',
+                           'source' => 'doc["id"].value.splitOnToken("_").length != 8'
+                         } } }).fetch('count')
+abort "non-canonical IDs=#{invalid_ids}" unless invalid_ids.zero?
+puts 'canonical_eight_component_ids=ok'

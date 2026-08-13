@@ -24,7 +24,7 @@
 | `death_code` | keyword | 死因code。全死因は`00000` |
 | `death_cause` | keyword | 死因名 |
 | `sex` | keyword | `male`、`female`、`both`など |
-| `rate` | keyword | 空欄は件数、`crude_rate`は粗死亡率、`asr`は直接法による年齢調整死亡率。`adj`、`amr`などの旧系列もある |
+| `rate` | keyword | 空欄は件数、`crude`は粗死亡率、`asr`は直接法による年齢調整死亡率。`adj`、`amr`などの旧系列もある |
 | `algo` | keyword | 比較・派生系列の計算法。元の値では空欄 |
 | `type` | keyword | 人口系列の区分。`conf`、`est`、`jpns`など |
 | `age_all` | scaled_float | 全年齢の値 |
@@ -34,33 +34,32 @@
 月次死亡数・人口と、小数を含む週次補正値を同じfieldで扱えます。空欄は0ではなく、元資料に
 その区分がないことを表します。
 
-IDは原則として地域、期間、category、rate、死因、algo、type、性別を`_`で連結します。
-例えば`jpn_2009w02_death__00000__both`は、日本、2009年第2週、全死因、男女計の元系列です。
+IDは地域、期間、category、rate、死因、algo、type、性別の正確に8要素を`_`で連結します。
+要素内のunderscoreは禁止し、空要素も空の位置として残します。
+例えば`jpn_2009w02_death__00000___both`は、日本、2009年第2週、全死因、男女計の元系列です。
 
 年次recordは`year`を持ち、`yearmonth`と`yearweek`を持ちません。米国年次dataでは、
 出生数を`category=birth`の`age_all`、乳児死亡数を全死因
 （`death_code=00000`）死亡recordの`age_0`へ格納します。OECDの周産期死亡指標は
 `death_code=PERM`を使い、公表された丸め済み率と利用可能な出生分母から逆算した近似件数を
-`age_all`へ格納して、`algo=reconstructed`とします。`PERM`はOECDの指標codeであり、
+`age_all`へ格納して、`type=reconst`とします。`PERM`はOECDの指標codeであり、
 ICD死因codeではありません。
 
 日本・米国以外のOECD収録国については、OECDの乳児死亡率・周産期死亡率と
-UN WPP 2024の同年の出生数から死亡数を逆算します。これらは`algo=reconstructed`、
-`type=oecd_wpp2024`の近似系列です。OECDの欠測年は補間しません。丸め済み率と
+UN WPP 2024の同年の出生数から死亡数を逆算します。これらは`type=reconst`の近似系列です。
+OECDの欠測年は補間しません。丸め済み率と
 WPP推計出生数を組み合わせるため、各国公式死亡数による系列より精度が劣ります。
 
 日本の周産期死亡では、分母となる出産数（出生数＋妊娠満22週以後の死産数）を
 `category=delivery`の`age_all`へ格納します。`death_code=PERM`の公式死亡数はこの分母を使い、
-`algo=reconstructed`の近似系列は出生数を分母に使います。
+`type=reconst`の近似系列は出生数を分母に使います。
 
-UN World Population Prospects 2024の年次recordは`algo=un_wpp2024`を使い、
-1950～2100年を収録します。2023年以前は`type=estimate`、2024年以降の中位推計は
-`type=projection_medium`です。このtypeの人口は7月1日人口です。死亡率の分母に使う年間
-population exposureは、別の人口recordとして`exposure_estimate`または
-`exposure_projection_medium`に格納します。全死因死亡数は`death_code=00000`、
-`rate=crude_rate`は人口10万人当たりです。`rate=asr`はWHO世界標準人口
+UN World Population Prospects 2024の年次recordは1950～2100年を収録し、由来と状態を
+`type=unwpp2024est`、`unwpp2024proj`、`unwpp2024expest`、`unwpp2024expproj`で区別します。
+最初の2系列の人口は7月1日人口、`exp`系列は死亡率の分母に使う年間population exposureです。
+全死因死亡数は`death_code=00000`、`rate=crude`は人口10万人当たりです。`rate=asr`はWHO世界標準人口
 （2000～2025年世界平均）への直接法による年齢調整死亡率を`age_all`へ格納し、
-`algo=un_wpp2024_who_standard`で区別します。WPPの値は国連推計・予測であり、各国が報告した
+`algo=whostd`で区別します。WPPの値は国連推計・予測であり、各国が報告した
 人口動態登録死亡数ではありません。
 
 ## kcor / CUMD-WK（公開CSV: [kkcor公開ディレクトリ](https://fujikawa.org/pub/kkcor/) の `*-CUMD-WK.csv.xz`）

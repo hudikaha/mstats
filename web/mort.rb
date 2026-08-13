@@ -404,7 +404,7 @@ data0 = elastic_search(
     :filter => $must,
     :should => [],
     :source => [ 'id', 'loc_code', 'yearweek', 'category', 'rate', 'death_code',
-                 'algo', 'date', 'year', 'week', 'sex', 'age_all' ] + $ages,
+                 'algo', 'type', 'date', 'year', 'week', 'sex', 'age_all' ] + $ages,
     #:debug => 'SHOWONLY_QUERY',
 )
 
@@ -485,7 +485,7 @@ data.each do |id0, datum|
                        datum[:year] : $oldest_year
 
     if datum[:algo] == $min || datum[:algo] == $max || datum[:algo] == $avg
-        id = id0.sub(/#{$min}|#{$max}|#{$avg}/, '')
+        id = Mstats.document_id(datum, algo: '')
         next if ! data[id]
         #if ! data[id]
         #    Log.debug "#{id} was not found #{id0}"
