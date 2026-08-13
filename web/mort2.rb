@@ -19,10 +19,10 @@ abort 'lib/mfacts.rb not found' unless mfacts
 require mfacts
 
 mstats = [
-    File.expand_path('../vdeath/lib/mstats.rb', __dir__),
-    File.expand_path('mstats.rb', __dir__)
+    File.expand_path('../vdeath/lib/mstats2.rb', __dir__),
+    File.expand_path('mstats2.rb', __dir__)
 ].find { |path| File.file?(path) }
-abort 'mstats.rb not found' unless mstats
+abort 'mstats2.rb not found' unless mstats
 require mstats
 require_relative 'mort-vars'
 
@@ -31,7 +31,7 @@ require_relative 'mort-vars'
 #
 $opts = {
     debug: false,
-    index: "mstats"
+    index: "mstats20260813"
 }
 
 op = OptionParser.new do |opts|
@@ -404,7 +404,7 @@ data0 = elastic_search(
     :filter => $must,
     :should => [],
     :source => [ 'id', 'loc_code', 'yearweek', 'category', 'rate', 'death_code',
-                 'algo', 'date', 'year', 'week', 'sex', 'age_all' ] + $ages,
+                 'algo', 'type', 'date', 'year', 'week', 'sex', 'age_all' ] + $ages,
     #:debug => 'SHOWONLY_QUERY',
 )
 
@@ -485,7 +485,7 @@ data.each do |id0, datum|
                        datum[:year] : $oldest_year
 
     if datum[:algo] == $min || datum[:algo] == $max || datum[:algo] == $avg
-        id = id0.sub(/#{$min}|#{$max}|#{$avg}/, '')
+        id = Mstats.document_id(datum, algo: '')
         next if ! data[id]
         #if ! data[id]
         #    Log.debug "#{id} was not found #{id0}"
