@@ -167,14 +167,40 @@ $l = if requested_language.match?(/^(en|english)/i) ||
 mode = cgi['mode'] == 'series' ? 'series' : 'country'
 requested_locations = cgi.params.fetch('c', []).flat_map { |value| value.split(/[~,]/) }.
                       map(&:upcase).uniq
-selected_ages = cgi.params.fetch('age', []).flat_map { |value| value.split(/[~,]/) }.
-                select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
+selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
+# 日本語: cod.rb互換のages範囲表記と旧来の反復age parameterを内部field名へ展開する。
+# English: Expand cod.rb-compatible age ranges and legacy repeated age parameters into field names.
+age_values = cgi.params.fetch('ages', []) + cgi.params.fetch('age', [])
+selected_ages = age_values.flat_map { |value| value.split(/[~,]/) }.flat_map do |token|
+  next 'age_all' if %w[all age_all].include?(token)
+  next 'age_0' if %w[0 age_0].include?(token)
+  next token if AGES.key?(token) || STMF_AGES.include?(token)
+
+  if selected_period != 'calendar'
+    stmf_age = STMF_AGE_LABELS.key(token)
+    next stmf_age if stmf_age
+  end
+  normalized = token.start_with?('age_') ? token : "age_#{token}"
+  next normalized if STANDARD_AGES.include?(normalized)
+
+  match = token.match(/\A(\d+)-(\d+|100over)\z/)
+  next [] unless match
+
+  lower = match[1].to_i
+  upper = match[2] == '100over' ? '100over' : match[2].to_i
+  first = STANDARD_AGES.index do |age|
+    age == 'age_100over' ? lower == 100 : age[/\Aage_(\d{2})_/, 1].to_i == lower
+  end
+  last = STANDARD_AGES.index do |age|
+    age == 'age_100over' ? upper == '100over' : age[/_(\d{2})\z/, 1].to_i == upper
+  end
+  first && last && first <= last ? STANDARD_AGES[first..last] : []
+end.flatten.select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
-selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
 $mortyear_period = selected_period
 $mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
 # 日本語: 暦年の英国とSTMF週次の英国地域を期間切替時に相互変換する。
@@ -2034,12 +2060,50 @@ puts <<~HTML
         const vis = document.getElementById('mortyear-vis');
         if (vis) vis.innerHTML = '<div class="mortyear-loading">#{ $l == :ja ? '読み込み中……' : 'Loading…' }</div>';
       }
-      document.querySelector('.mortyear-form').addEventListener('submit', () => {
+      function compactAges(values, period) {
+        if (values.includes('age_all')) return 'all';
+        if (period !== 'calendar') {
+          const labels = #{JSON.generate(STMF_AGE_LABELS)};
+          return values.map(value => labels[value] || value.replace(/^age_/, '')).join('~');
+        }
+        const order = #{JSON.generate(STANDARD_AGES)};
+        const indexes = [...new Set(values.map(value => order.indexOf(value)).filter(index => index >= 0))].sort((a, b) => a - b);
+        const compact = [];
+        for (let i = 0; i < indexes.length; i += 1) {
+          let j = i;
+          while (j + 1 < indexes.length && indexes[j + 1] === indexes[j] + 1) j += 1;
+          const first = order[indexes[i]].replace(/^age_/, '');
+          const last = order[indexes[j]].replace(/^age_/, '');
+          if (i === j) {
+            compact.push(first);
+          } else {
+            const lower = first.slice(0, 2);
+            const upper = last === '100over' ? '100over' : last.slice(3, 5);
+            compact.push(`${lower}-${upper}`);
+          }
+          i = j;
+        }
+        if (values.includes('age_0')) compact.push('0');
+        return compact.join('~');
+      }
+      document.querySelector('.mortyear-form').addEventListener('submit', event => {
+        event.preventDefault();
         // 日本語: all選択時は個別年齢をGET parameterに重複して送らない。
         // English: When all ages is selected, omit redundant individual age parameters.
         const allAges = document.querySelector('.age-special-option[value="age_all"]');
         if (allAges.checked) standardInputs().forEach(input => { input.disabled = true; });
+        // 日本語: 複数死因はcod.rbと同じく一つのdeath_codesへ~区切りで保存する。
+        // English: Store multiple causes in one tilde-delimited death_codes parameter, as cod.rb does.
+        const params = new URLSearchParams(new FormData(event.currentTarget));
+        const ages = params.getAll('age');
+        params.delete('age');
+        params.delete('ages');
+        if (ages.length) params.set('ages', compactAges(ages, params.get('period')));
+        const causes = params.getAll('death_codes');
+        params.delete('death_codes');
+        if (causes.length) params.set('death_codes', causes.join('~'));
         showLoading();
+        window.location.assign(`${window.location.pathname}?${params.toString().replace(/%7E/gi, '~')}`);
       });
       function setInputMode(inputs, type, name) {
         inputs.forEach(input => {
