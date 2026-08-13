@@ -332,6 +332,12 @@ def annual_metric_available?(code, catalog, metric)
   end
 end
 
+def period_metric_available?(catalog, metric, period)
+  catalog.fetch(:series, []).any? do |item|
+    (item[:period] || 'calendar') == period && item[:metric] == metric && item[:displayable]
+  end
+end
+
 # 日本語: 米国乳児死亡は既存の全死因recordのage_0にあるため、表示可能性を保存codeから変換する。
 # English: U.S. infant deaths use age_0 of the legacy all-cause record, so map storage codes to display availability.
 def birth_cause_available?(location, catalog, cause)
@@ -1808,16 +1814,26 @@ WORLD_REGIONS.each do |region, region_names|
   next if codes.empty?
   open = codes.any? { |code| selected_locations.include?(code) }
   selectable_count = codes.count do |code|
-    selected_metric == 'std_deaths' ? code == 'JPN' :
+    if selected_metric == 'std_deaths'
+      code == 'JPN'
+    elsif selected_period == 'calendar'
       annual_metric_available?(code, annual_catalog.fetch(code), selected_metric)
+    else
+      period_metric_available?(annual_catalog.fetch(code), selected_metric, selected_period)
+    end
   end
   toggle_label = $l == :ja ? 'この地域をすべて選択・解除' : 'Select or clear this region'
   puts %(<details class="location-region" #{open ? 'open' : ''}><summary><span class="location-region-name">#{CGI.escapeHTML(region_names.fetch($l))}</span>（<span class="location-region-count">#{selectable_count}</span>）<input class="location-region-toggle" type="checkbox" title="#{CGI.escapeHTML(toggle_label)}" aria-label="#{CGI.escapeHTML(toggle_label)}"></summary><div class="mortyear-options">)
   codes.each do |code|
     names = location_names(code)
     metrics = METRICS.keys.select do |metric|
-      metric == 'std_deaths' ? code == 'JPN' :
+      if metric == 'std_deaths'
+        selected_period == 'calendar' && code == 'JPN'
+      elsif selected_period == 'calendar'
         annual_metric_available?(code, annual_catalog.fetch(code), metric)
+      else
+        period_metric_available?(annual_catalog.fetch(code), metric, selected_period)
+      end
     end
     hidden = !metrics.include?(selected_metric)
     type = mode == 'country' ? 'checkbox' : 'radio'
