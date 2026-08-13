@@ -2198,7 +2198,10 @@ puts <<~HTML
         rememberLocations();
         syncMetric();
       }));
-      document.querySelectorAll('.period-option').forEach(input => input.addEventListener('change', () => {
+      document.querySelectorAll('.period-option').forEach(input => input.addEventListener('change', event => {
+        const trainTo = document.getElementById('train-to-hidden');
+        if (event.target.value === 'calendar' && trainTo.value === '2018') trainTo.value = '2019';
+        if (event.target.value !== 'calendar' && trainTo.value === '2019') trainTo.value = '2018';
         showLoading();
         document.querySelector('.mortyear-form').requestSubmit();
       }));
