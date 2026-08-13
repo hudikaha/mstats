@@ -1998,9 +1998,9 @@ else
                          ''
                        end
   unit_note = if $l == :ja
-                '実死亡数と標準人口換算死亡数は人数、粗死亡率と年齢調整死亡率は人口10万人当たりで表示しています。0歳人口当たり死亡率は0歳人口10万人当たりで、出生数を分母とする通常の乳児死亡率とは異なります。出生関連死亡率は、指標に対応する出生数または出産数を分母（offset）としたポアソン回帰を使用し、分母1,000当たりで表示しています。'
+                '実死亡数と標準人口換算死亡数は人数、粗死亡率と年齢調整死亡率は人口10万人当たりです。出生関連死亡率は出生数または出産数1,000当たりです。0歳人口当たり死亡率は0歳人口10万人当たりで、出生関連死亡率とは分母が異なります。'
               else
-                'Observed and standardized deaths are shown as counts. Crude and age-standardized mortality rates are shown per 100,000 population. The age-0 population rate is shown per 100,000 age-0 population and differs from the conventional infant mortality rate, which uses live births as its denominator. Birth-related mortality rates use births or deliveries as the offset in Poisson regression and are shown per 1,000 births or deliveries.'
+                'Observed and standardized deaths are shown as counts. Crude and age-standardized mortality rates are shown per 100,000 population. Birth-related mortality rates are shown per 1,000 births or deliveries. The age-0 population rate is shown per 100,000 age-0 population and uses a different denominator from birth-related mortality rates.'
               end
   sources_by_location = available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
     loc = mode == 'country' ? key : selected_locations.first
@@ -2012,14 +2012,14 @@ else
   if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
     method = if selected_metric == 'birth_rate' &&
                 selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL') && $l == :ja
-               'e-Statの確定数を使用。乳児死亡率の分母は出生数、周産期死亡率の分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
+               'e-Statの確定数を使用。乳児死亡率の分母は出生数です。周産期死亡数は妊娠満22週以後の死産数と生後1週未満の早期新生児死亡数の合計で、分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
              elsif selected_metric == 'birth_rate' &&
                    selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL')
-               'Uses final e-Stat counts. Infant mortality uses births as the denominator; perinatal mortality uses deliveries (births plus fetal deaths at 22 completed weeks or later).'
+               'Uses final e-Stat counts. Infant mortality uses births as the denominator. Perinatal deaths combine fetal deaths at 22 completed weeks or later with early neonatal deaths under 7 days; the denominator is deliveries (births plus fetal deaths at 22 completed weeks or later).'
              elsif selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL') && $l == :ja
-               'e-Statの確定数を使用。周産期死亡率の分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
+               'e-Statの確定数を使用。周産期死亡数は妊娠満22週以後の死産数と生後1週未満の早期新生児死亡数の合計で、分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
              elsif selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL')
-               'Uses final e-Stat counts and deliveries (births plus fetal deaths at 22 completed weeks or later) as the denominator.'
+               'Uses final e-Stat counts. Perinatal deaths combine fetal deaths at 22 completed weeks or later with early neonatal deaths under 7 days; the denominator is deliveries (births plus fetal deaths at 22 completed weeks or later).'
              elsif selected_metric == 'birth_rate' && $l == :ja
                'e-Statの確定出生数と乳児死亡数を使用しています。'
              elsif selected_metric == 'birth_rate'
