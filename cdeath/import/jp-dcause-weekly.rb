@@ -110,6 +110,9 @@ end
 # Derive the adj and amr series used by the existing mort.rb page.
 def monthly_series(deaths, populations)
   populations.each_value { |row| add_age_groups(row) }
+  populations_by_key = populations.values.to_h do |row|
+    [[row[:loc_code], row[:yearmonth], row[:type], row[:sex]], row]
+  end
   latest_population = populations.values.
                         select { |row| row[:type] == 'conf' }.
                         group_by { |row| row[:sex] }.
@@ -119,14 +122,15 @@ def monthly_series(deaths, populations)
     raw = add_age_groups(source.dup)
     rows[id] = raw
 
-    population_id = id.sub(/death__.*__/, 'pop__conf__')
-    population = populations[population_id]
-    population ||= populations[population_id.sub('pop__conf__', 'pop__est__')]
+    population = populations_by_key[[source[:loc_code], source[:yearmonth], 'conf', source[:sex]]]
+    population ||= populations_by_key[[source[:loc_code], source[:yearmonth], 'est', source[:sex]]]
     standard = latest_population[source[:sex]]
     next unless population && standard
 
     %w[adj amr].each do |rate|
-      derived_id = id.sub('_death_', "_death_#{rate}_")
+      derived_id = Mstats2026.record_id(loc_code: source[:loc_code], period: source[:yearmonth],
+                                        category: 'death', rate: rate, death_code: source[:death_code],
+                                        algo: source[:algo], type: source[:type], sex: source[:sex])
       derived = raw.dup
       derived[:id] = derived_id
       derived[:rate] = rate
@@ -203,15 +207,14 @@ def weekly_series(monthly)
     next unless sources.all? { |source, _days, _days_in_month| source }
 
     template = sources.first.first
-    weekly_id = template[:id].sub(/\d{4}m\d{2}/, format('%04dw%02d', year, week))
     row = template.dup
     row.delete(:yearmonth)
     row.delete(:month)
-    row[:id] = weekly_id
     row[:yearweek] = format('%04dw%02d', year, week)
     row[:year] = year
     row[:week] = week
     row[:date] = sunday.to_s
+    row[:id] = Mstats2026.record_id_for(row)
     row[:_month1] = month1
     row[:_month7] = month7
 
@@ -227,7 +230,7 @@ def weekly_series(monthly)
       end
       row[age] = missing ? nil : total.round(2)
     end
-    weeks[weekly_id] = row
+    weeks[row[:id]] = row
   end
   smooth(weeks)
 end

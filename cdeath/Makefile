@@ -46,7 +46,7 @@ DCAUSE_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&
 SERVER ?= fujikawa.org
 SERVER_MSTATS_DIR ?= mstats
 SERVER_WEB_DIR ?= fujikawa/covid19
-YEARLY_INDEX ?= mstats20260812
+YEARLY_INDEX ?= mstats20260813
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
@@ -130,11 +130,11 @@ help:
 	@echo 'make upload-hmd 最新のHMD週次CSVをserverへ送る（投入しない）'
 	@echo 'make upload-wpp 最新のWPP年次CSVをserverへ送る（投入しない）'
 	@echo 'make upload-oecd 最新のOECD乳児・周産期年次CSVをserverへ送る（投入しない）'
-	@echo 'make logstash-official YEARLY_INDEX=mstats20260812 各国公式dataを指定indexへ投入'
-	@echo 'make logstash-hmd YEARLY_INDEX=mstats20260812 HMDを指定indexへ投入'
-	@echo 'make logstash-wpp YEARLY_INDEX=mstats20260812 WPPを指定indexへ投入'
-	@echo 'make logstash-oecd YEARLY_INDEX=mstats20260812 OECD乳児・周産期dataを指定indexへ投入'
-	@echo 'make switch-mstats-alias YEARLY_INDEX=mstats20260812 mstats aliasをatomicに切替え'
+	@echo 'make logstash-official YEARLY_INDEX=mstats20260813 各国公式dataを指定indexへ投入'
+	@echo 'make logstash-hmd YEARLY_INDEX=mstats20260813 HMDを指定indexへ投入'
+	@echo 'make logstash-wpp YEARLY_INDEX=mstats20260813 WPPを指定indexへ投入'
+	@echo 'make logstash-oecd YEARLY_INDEX=mstats20260813 OECD乳児・周産期dataを指定indexへ投入'
+	@echo 'make switch-mstats-alias YEARLY_INDEX=mstats20260813 mstats aliasをatomicに切替え'
 	@echo 'make validate-csv FILES="..." 投入前に期間・ID・値・出典を検査'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
 	@echo 'make codtr    make codと同じデータ更新（codtr.rbは年未完の月も表示）'
@@ -330,7 +330,8 @@ us-yearly-csv:
 oecd-infant-yearly-csv:
 	@mkdir -p "$(OECD_DIR)" "$(DATA_DIR)"; tmp_source="$(OECD_MIM_SOURCE).tmp"; \
 	 if ! curl -fsSL -H 'Accept: text/csv' '$(OECD_MIM_URL)' -o "$$tmp_source"; then rm -f "$$tmp_source"; exit 1; fi; \
-	 if test "$$(head -1 "$$tmp_source")" != 'DATAFLOW,REF_AREA,FREQ,MEASURE,UNIT_MEASURE,AGE,SEX,SOCIO_ECON_STATUS,DEATH_CAUSE,CALC_METHODOLOGY,GESTATION_THRESHOLD,HEALTH_STATUS,DISEASE,CANCER_SITE,TIME_PERIOD,OBS_VALUE,DECIMALS,OBS_STATUS,OBS_STATUS2,OBS_STATUS3,UNIT_MULT'; then rm -f "$$tmp_source"; echo 'unexpected OECD CSV header'; exit 1; fi; \
+	 header=$$(head -1 "$$tmp_source" | tr -d '\r'); \
+	 if test "$$header" != 'DATAFLOW,REF_AREA,FREQ,MEASURE,UNIT_MEASURE,AGE,SEX,SOCIO_ECON_STATUS,DEATH_CAUSE,CALC_METHODOLOGY,GESTATION_THRESHOLD,HEALTH_STATUS,DISEASE,CANCER_SITE,TIME_PERIOD,OBS_VALUE,DECIMALS,OBS_STATUS,OBS_STATUS2,OBS_STATUS3,UNIT_MULT'; then rm -f "$$tmp_source"; echo 'unexpected OECD CSV header'; exit 1; fi; \
 	 mv "$$tmp_source" "$(OECD_MIM_SOURCE)"; stamp=$$(date +%Y%m%d-%H%M%S); \
 	 out="$(DATA_DIR)/oecd-infant-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
 	 if ! ruby "$(ROOT)/import/oecd-infant-yearly.rb" "$(OECD_MIM_SOURCE)" "$(WPP_DEMOGRAPHIC)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \

@@ -17,8 +17,8 @@ ARGV.each do |file|
     year = source['year'].to_i
     month = source['month'].to_i
     sex = source['sex']
-    id = format('jpn_%<year>dm%<month>02d_pop__%<type>s__%<sex>s',
-                year: year, month: month, type: type, sex: sex)
+    id = Mstats2026.record_id(loc_code: 'jpn', period: format('%<year>dm%<month>02d', year: year, month: month),
+                              category: 'pop', type: type, sex: sex)
     row = {
       id: id,
       loc_code: source['loc_code'].downcase,

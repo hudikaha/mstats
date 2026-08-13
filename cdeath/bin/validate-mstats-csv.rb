@@ -7,6 +7,7 @@ require 'date'
 require 'json'
 require 'optparse'
 require 'set'
+require_relative '../import/mstats2026'
 
 options = { require_src_url: false }
 OptionParser.new do |parser|
@@ -56,6 +57,13 @@ ARGV.each do |file|
       errors << "#{where}: duplicate id #{id} (first: #{ids[id]})"
     else
       ids[id] = where
+    end
+
+    begin
+      expected_id = Mstats2026.record_id_for(row)
+      errors << "#{where}: id differs from canonical 8-component ID #{expected_id}" unless id == expected_id
+    rescue ArgumentError => e
+      errors << "#{where}: #{e.message}"
     end
 
     %w[loc_code category date year sex].each do |field|
@@ -127,7 +135,7 @@ ARGV.each do |file|
       infant_rate_keys << [where, [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
     elsif category == 'death' && death_code == 'PERM'
       errors << "#{where}: PERM age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
-      denominator = row['algo'] == 'reconstructed' ? birth_keys : delivery_keys
+      denominator = row['type'] == 'reconst' ? birth_keys : delivery_keys
       birth_denominator_keys << [where, denominator,
                                  [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
     end
@@ -162,7 +170,7 @@ birth_denominator_keys.each do |where, denominators, key|
 end
 
 death_rates.each do |key, rates|
-  next unless (rates & Set.new(%w[adj amr crude_rate])).any?
+  next unless (rates & Set.new(%w[adj amr crude])).any?
   warnings << "derived death series has no raw-count row: #{key.join('/')}" unless rates.include?('')
 end
 

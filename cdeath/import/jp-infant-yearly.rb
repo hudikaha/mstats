@@ -37,24 +37,26 @@ common_years.each do |year|
   late_fetal_deaths = Integer(perinatal_row.fetch(5))
   deliveries = births + late_fetal_deaths
   common = { loc_code: 'jpn', location: 'Japan', date: "#{year}-01-01", year: year,
-             sex: 'both', type: 'final' }
+             sex: 'both', type: 'conf' }
 
-  birth_id = ['jpn', year, 'birth', '', '', 'vital_statistics', 'final', 'both'].join('_')
-  rows[birth_id] = common.merge(id: birth_id, category: 'birth', algo: 'vital_statistics',
+  birth_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'birth', type: 'conf', sex: 'both')
+  rows[birth_id] = common.merge(id: birth_id, category: 'birth',
                                 src_url: [INFANT_URL], age_all: births)
 
-  delivery_id = ['jpn', year, 'delivery', '', '', 'vital_statistics', 'final', 'both'].join('_')
-  rows[delivery_id] = common.merge(id: delivery_id, category: 'delivery', algo: 'vital_statistics',
+  delivery_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'delivery', type: 'conf', sex: 'both')
+  rows[delivery_id] = common.merge(id: delivery_id, category: 'delivery',
                                    src_url: [INFANT_URL, PERINATAL_URL], age_all: deliveries)
 
-  infant_id = ['jpn', year, 'death', '', 'INFANT', 'vital_statistics', 'final', 'both'].join('_')
+  infant_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'death',
+                                   death_code: 'INFANT', type: 'conf', sex: 'both')
   rows[infant_id] = common.merge(id: infant_id, category: 'death', death_code: 'INFANT',
-                                 death_cause: 'Infant mortality', algo: 'vital_statistics',
+                                 death_cause: 'Infant mortality',
                                  src_url: [INFANT_URL], age_all: infant_deaths)
 
-  perinatal_id = ['jpn', year, 'death', '', 'PERM', 'vital_statistics', 'final', 'both'].join('_')
+  perinatal_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'death',
+                                      death_code: 'PERM', type: 'conf', sex: 'both')
   rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'PERM',
-                                    death_cause: 'Perinatal mortality', algo: 'vital_statistics',
+                                    death_cause: 'Perinatal mortality',
                                     src_url: [PERINATAL_URL], age_all: perinatal_deaths)
 end
 

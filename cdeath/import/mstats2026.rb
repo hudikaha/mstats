@@ -6,6 +6,7 @@ require 'json'
 # 死因と人口を共通のmstats2026 CSV形式へ出力する。
 # Emit cause-of-death and population records in the shared mstats2026 CSV schema.
 module Mstats2026
+  ID_FIELDS = %i[loc_code period category rate death_code algo type sex].freeze
   WHO_WORLD_STANDARD = {
     'age_00_04' => 8.86, 'age_05_09' => 8.69, 'age_10_14' => 8.60,
     'age_15_19' => 8.47, 'age_20_24' => 8.22, 'age_25_29' => 7.93,
@@ -49,6 +50,28 @@ module Mstats2026
     id loc_code location category rate death_code death_cause
     algo type src_url date year sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
+
+  # 日本語: 文書IDを全category共通の8要素から生成し、要素内のunderscoreを拒否する。
+  # English: Build document IDs from eight shared components and reject underscores inside components.
+  def self.record_id(loc_code:, period:, category:, rate: '', death_code: '', algo: '', type: '', sex:)
+    values = [loc_code, period, category, rate, death_code, algo, type, sex].map(&:to_s)
+    invalid = ID_FIELDS.zip(values).select { |_field, value| value.include?('_') }
+    unless invalid.empty?
+      detail = invalid.map { |field, value| "#{field}=#{value.inspect}" }.join(', ')
+      raise ArgumentError, "ID component contains underscore: #{detail}"
+    end
+    values.join('_')
+  end
+
+  # 日本語: CSV recordの期間fieldを選び、同じ8要素規則でIDを再生成する。
+  # English: Select the CSV record's period field and rebuild its ID with the same eight-component rule.
+  def self.record_id_for(row)
+    fetch = ->(field) { row[field] || row[field.to_s] }
+    period = fetch.call(:yearmonth) || fetch.call(:yearweek) || fetch.call(:year)
+    record_id(loc_code: fetch.call(:loc_code), period: period, category: fetch.call(:category),
+              rate: fetch.call(:rate), death_code: fetch.call(:death_code), algo: fetch.call(:algo),
+              type: fetch.call(:type), sex: fetch.call(:sex))
+  end
 
   # フィールド順を固定し、空値を保ったままCSVを出力する。
   # Write CSV with stable field ordering while preserving missing values.

@@ -51,7 +51,7 @@ pop_groups.each do |(loc, location, year, type, sex), months|
     end.compact
     [field, weighted.length == 12 ? clean_number(weighted.sum / days) : nil]
   end
-  id = [loc, year, 'pop', '', type, '', sex].join('_')
+  id = Mstats2026.record_id(loc_code: loc, period: year, category: 'pop', type: type, sex: sex)
   src_url = months.flat_map { |row| urls(row['src_url'], Mstats2026::JPN_POP_URL) }.uniq
   rows[id] = { id: id, loc_code: loc, location: location, category: 'pop', type: type,
                src_url: src_url, date: "#{year}-01-01", year: year, sex: sex }.merge(ages.transform_keys(&:to_sym))
@@ -66,7 +66,8 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
     [field, values.all? ? clean_number(values.sum) : nil]
   end
   src_url = months.flat_map { |row| urls(row['src_url'], Mstats2026::JPN_DEATH_URL) }.uniq
-  id = [loc, year, 'death', '', code, algo, type, sex].join('_')
+  id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death',
+                            death_code: code, algo: algo, type: type, sex: sex)
   base = { id: id, loc_code: loc, location: location, category: 'death', death_code: code,
            death_cause: cause, algo: algo, type: type, src_url: src_url,
            date: "#{year}-01-01", year: year, sex: sex }
@@ -79,9 +80,11 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
     denominator = population[field]
     [field, count && denominator&.positive? ? clean_number(count * 100_000.0 / denominator) : nil]
   end
-  rate_id = [loc, year, 'death', 'crude_rate', code, algo, type, sex].join('_')
-  rows[rate_id] = base.merge(id: rate_id, rate: 'crude_rate',
-                             src_url: (src_url + rows.fetch([loc, year, 'pop', '', pop_type, '', sex].join('_'))[:src_url]).uniq)
+  rate_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'crude',
+                                 death_code: code, algo: algo, type: type, sex: sex)
+  pop_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'pop', type: pop_type, sex: sex)
+  rows[rate_id] = base.merge(id: rate_id, rate: 'crude',
+                             src_url: (src_url + rows.fetch(pop_id)[:src_url]).uniq)
                           .merge(rates.transform_keys(&:to_sym))
 
   # 日本語: 全標準年齢階級がある場合だけ、WHO世界標準人口によるASRを作る。
@@ -91,8 +94,9 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
 
   asr_value = standard_rates.sum { |field, value| value * Mstats2026::WHO_WORLD_STANDARD.fetch(field) } /
               Mstats2026::WHO_WORLD_STANDARD.values.sum
-  asr_id = [loc, year, 'death', 'asr', code, 'who_standard', type, sex].join('_')
-  rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: 'who_standard',
+  asr_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'asr',
+                                death_code: code, algo: 'whostd', type: type, sex: sex)
+  rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: 'whostd',
                             src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(asr_value))
 end
 

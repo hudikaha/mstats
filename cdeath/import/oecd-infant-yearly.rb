@@ -60,20 +60,23 @@ observations.sort.each do |(iso, year), measures|
   loc = iso.downcase
   location = locations.fetch(iso, iso)
   common = { loc_code: loc, location: location, date: "#{year}-01-01", year: year,
-             sex: 'both', algo: 'reconstructed', type: 'oecd_wpp2024' }
+             sex: 'both', type: 'reconst' }
 
-  birth_id = [loc, year, 'birth', '', '', 'reconstructed', 'oecd_wpp2024', 'both'].join('_')
+  birth_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'birth',
+                                  type: 'reconst', sex: 'both')
   rows[birth_id] ||= common.merge(id: birth_id, category: 'birth',
                                   src_url: [WPP_URL], age_all: denominator)
 
   if measures.key?('INM')
-    id = [loc, year, 'death', '', 'INFANT', 'reconstructed', 'oecd_wpp2024', 'both'].join('_')
+    id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death',
+                              death_code: 'INFANT', type: 'reconst', sex: 'both')
     rows[id] = common.merge(id: id, category: 'death', death_code: 'INFANT',
                             death_cause: 'Infant mortality', src_url: [OECD_URL, WPP_URL],
                             age_all: (measures.fetch('INM') * denominator / 1000.0).round)
   end
   if measures.key?('PERM')
-    id = [loc, year, 'death', '', 'PERM', 'reconstructed', 'oecd_wpp2024', 'both'].join('_')
+    id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death',
+                              death_code: 'PERM', type: 'reconst', sex: 'both')
     rows[id] = common.merge(id: id, category: 'death', death_code: 'PERM',
                             death_cause: 'Perinatal mortality', src_url: [OECD_URL, WPP_URL],
                             age_all: (measures.fetch('PERM') * denominator / 1000.0).round)

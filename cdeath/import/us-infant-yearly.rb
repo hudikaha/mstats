@@ -18,11 +18,13 @@ CSV.foreach(ARGV[0], headers: true) do |input|
   common = { loc_code: 'usa', location: 'United States',
              date: "#{year}-01-01", year: year, sex: 'both' }
 
-  birth_id = ['usa', year, 'birth', '', '', '', 'both'].join('_')
-  rows[birth_id] = common.merge(id: birth_id, category: 'birth', src_url: [vital_stats_url], age_all: births)
+  birth_id = Mstats2026.record_id(loc_code: 'usa', period: year, category: 'birth', type: 'conf', sex: 'both')
+  rows[birth_id] = common.merge(id: birth_id, category: 'birth', type: 'conf',
+                                src_url: [vital_stats_url], age_all: births)
 
-  death_id = "usa_#{year}_death__00000__both"
-  rows[death_id] = common.merge(id: death_id, category: 'death', death_code: '00000',
+  death_id = Mstats2026.record_id(loc_code: 'usa', period: year, category: 'death',
+                                  death_code: '00000', type: 'conf', sex: 'both')
+  rows[death_id] = common.merge(id: death_id, category: 'death', type: 'conf', death_code: '00000',
                                 death_cause: 'All causes', src_url: [vital_stats_url], age_0: infant_deaths)
 
   # 日本語: PERMはICD死因ではなく、OECDの周産期死亡指標codeである。
@@ -30,9 +32,10 @@ CSV.foreach(ARGV[0], headers: true) do |input|
   perinatal = input['perinatal_deaths'].to_s
   next if perinatal.empty? || %w[NA .].include?(perinatal)
 
-  perinatal_id = ['usa', year, 'death', '', 'PERM', 'reconstructed', 'both'].join('_')
+  perinatal_id = Mstats2026.record_id(loc_code: 'usa', period: year, category: 'death',
+                                      death_code: 'PERM', type: 'reconst', sex: 'both')
   rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'PERM',
-                                    death_cause: 'Perinatal mortality', algo: 'reconstructed',
+                                    death_cause: 'Perinatal mortality', type: 'reconst',
                                     src_url: [perinatal_url], age_all: Integer(perinatal))
 end
 

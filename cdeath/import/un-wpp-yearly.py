@@ -118,7 +118,7 @@ def record_id(loc, year, category, rate, code, algo, kind, sex):
 
 
 def base(loc, location, world_region, year, sex, category, kind, rate="", code="",
-         src_urls=None, algo="un_wpp2024"):
+         src_urls=None, algo=""):
     return {
         "id": record_id(loc, year, category, rate, code, algo, kind, sex),
         "loc_code": loc, "location": location, "world_region": world_region,
@@ -175,7 +175,7 @@ def main():
         loc, location, year = source["ISO3_code"].lower(), source["Location"], int(source["Time"])
         iso = source["ISO3_code"]
         locations[iso] = (location, world_region(source))
-        kind = "estimate" if year <= HISTORICAL_END else "projection_medium"
+        kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024proj"
         for sex, pop_col, death_col in (
             ("both", "TPopulation1July", "Deaths"),
             ("male", "TPopulationMale1July", "DeathsMale"),
@@ -196,8 +196,8 @@ def main():
             death_age = totals[sex]["death"]
             exposure_age = totals[sex]["exposure"]
             midyear_population, total_deaths = indicators[(loc, year, sex)]
-            kind = "estimate" if year <= HISTORICAL_END else "projection_medium"
-            exposure_kind = "exposure_estimate" if year <= HISTORICAL_END else "exposure_projection_medium"
+            kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024proj"
+            exposure_kind = "unwpp2024expest" if year <= HISTORICAL_END else "unwpp2024expproj"
             death = base(loc, location, world_region, year, sex, "death", kind, code="00000")
             death.update({field: clean(value * 1000) for field, value in death_age.items()})
             death["age_all"] = clean(total_deaths)
@@ -212,7 +212,7 @@ def main():
             rates["age_0"] = death_age["age_0"] * 100_000 / exposure_age["age_0"]
             rates["age_all"] = total_deaths * 100_000 / midyear_population
             crude = base(loc, location, world_region, year, sex, "death", kind,
-                         rate="crude_rate", code="00000")
+                         rate="crude", code="00000")
             crude.update({field: clean(value) for field, value in rates.items()})
             writer.writerow(crude)
             # 丸めによりpopulation exposureが0の階級があればASRを欠測とする。
@@ -222,7 +222,7 @@ def main():
                     / sum(WHO_STANDARD.values())
                 asr = base(loc, location, world_region, year, sex, "death", kind,
                            rate="asr", code="00000", src_urls=[WPP_URL, WHO_URL],
-                           algo="un_wpp2024_who_standard")
+                           algo="whostd")
                 asr["age_all"] = clean(asr_value)
                 writer.writerow(asr)
 

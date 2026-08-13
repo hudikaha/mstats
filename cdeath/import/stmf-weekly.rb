@@ -91,8 +91,8 @@ source_rows.each do |source|
   next unless sex
 
   ['', 'amr'].each_with_index do |rate, column_index|
-    id = format('%<loc>s_%<year>04dw%<week>02d_death_%<rate>s_00000__%<sex>s',
-                loc: loc_code, year: year, week: week, rate: rate, sex: sex)
+    id = Mstats2026.record_id(loc_code: loc_code, period: format('%04dw%02d', year, week),
+                              category: 'death', rate: rate, death_code: '00000', sex: sex)
     row = {
       id: id,
       loc_code: loc_code,

@@ -5,7 +5,7 @@ require 'json'
 require 'net/http'
 require 'uri'
 
-index = ARGV.fetch(0, 'mstats20260812')
+index = ARGV.fetch(0, 'mstats20260813')
 expected_total = Integer(ARGV.fetch(1, '1460948'))
 password_file = File.expand_path('~/.config/mstats/espass.txt')
 user = ENV.fetch('ES_USER', 'elastic')
@@ -83,7 +83,7 @@ representatives = {
   'jpn_2009_death__00000___both' => %w[date age_all src_url],
   'usa_2024_birth____both' => %w[date age_all src_url],
   'usa_2024_death__00000__both' => %w[date age_0 src_url],
-  'usa_2022_death__PERM_reconstructed_both' => %w[date age_all src_url]
+  'usa_2022_death__PERM__reconst_both' => %w[date age_all src_url]
 }.freeze
 representatives.each do |id, fields|
   result = es_request(Net::HTTP::Get, "/#{index}/_doc/#{id}", user, password)
