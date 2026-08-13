@@ -728,6 +728,9 @@ data0 = elastic_search(
     # English: Keep the UN monthly supplement out of Japanese official monthly series.
     :must_not => [
         { 'term' => {'type' => 'unmonth'} },
+        # 日本語: 死亡数と平均死亡年齢へadj・amr・asrなどの率recordを混入させない。
+        # English: Keep adj, amr, asr, and other rate records out of deaths and mean age at death.
+        { 'exists' => {'field' => 'rate'} },
     ],
     :should => death_codes.map{|code| {'term' => {'death_code' => code}}},
     :source => ['date', 'sex', 'death_code'] + source_age_fields,

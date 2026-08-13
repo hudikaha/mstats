@@ -1590,7 +1590,12 @@ should = [
             'must' => [
                 {'term' => {'category' => 'death'}},
                 {'terms' => {'death_code' => death_code_terms}},
-            ]
+            ],
+            # 日本語: 死亡数画面へadj・amr・asrなどの率recordを混入させない。
+            # English: Keep adj, amr, asr, and other rate records out of the death-count screen.
+            'must_not' => [
+                {'exists' => {'field' => 'rate'}},
+            ],
         }
     }
 ]
