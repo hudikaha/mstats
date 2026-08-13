@@ -724,6 +724,11 @@ data0 = elastic_search(
         { 'term' => {'sex' => SexCodes.fetch($sex)} },
         { 'exists' => {'field' => 'yearmonth'} },
     ],
+    # 日本語: UN月次補完系列はmortyear.rb専用とし、日本公式月次系列へ混在させない。
+    # English: Keep the UN monthly supplement out of Japanese official monthly series.
+    :must_not => [
+        { 'term' => {'type' => 'unmonth'} },
+    ],
     :should => death_codes.map{|code| {'term' => {'death_code' => code}}},
     :source => ['date', 'sex', 'death_code'] + source_age_fields,
 )

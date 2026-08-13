@@ -1626,6 +1626,11 @@ data0 = elastic_search(
         {'term' => {'sex' => $sex}},
         {'exists' => {'field' => 'yearmonth'}},
     ],
+    # 日本語: UN月次補完系列はmortyear.rb専用とし、日本公式月次系列へ混在させない。
+    # English: Keep the UN monthly supplement out of Japanese official monthly series.
+    :must_not => [
+        {'term' => {'type' => 'unmonth'}},
+    ],
     :should => should,
     :source => ['id', 'category', 'date', 'year', 'month', 'death_code', 'death_cause', 'sex', 'type'] +
                age_sources,
