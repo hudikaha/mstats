@@ -180,7 +180,8 @@ selected_ages = ['age_all'] if selected_ages.empty?
 selected_ages = ['age_all'] if selected_period != 'calendar' && selected_ages.include?('age_all')
 requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.uniq
 requested_start_year = cgi['start_year'].to_i
-default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : 2000
+period_start_year = selected_period == 'calendar' ? 2000 : 1999
+default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : period_start_year
 
 def location_names(code)
   known = COUNTRY_NAME_OVERRIDES[code] || COUNTRY_NAMES[code]
@@ -2340,7 +2341,7 @@ else
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
         <input id="start-year-slider" type="range" min="1950" max="2015" step="1" value="#{default_start_year}">
-        <output id="start-year-output">#{default_start_year}</output>
+        <output id="start-year-output">#{cutoff_label.call(default_start_year)}</output>
       </label>
       &nbsp;
       <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999/00'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999/00'}–" }
@@ -2375,7 +2376,7 @@ else
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
       const influenzaPeriod = #{selected_period == 'calendar' ? 'false' : 'true'};
-      const trainLabel = year => influenzaPeriod ? `${year}/${String(year + 1).slice(-2)}` : String(year);
+      const periodYearLabel = year => influenzaPeriod ? `${year}/${String(year + 1).slice(-2)}` : String(year);
       const modelDefault = #{JSON.generate(default_model)};
       const intervalModeDefault = #{JSON.generate(interval_mode)};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
@@ -2449,13 +2450,13 @@ else
         */
         startSlider.addEventListener("input", () => {
           const value = Number(startSlider.value);
-          startOutput.value = value;
+          startOutput.value = periodYearLabel(value);
           document.getElementById("start-year-hidden").value = value;
           result.view.signal("display_start", value).runAsync();
         });
         slider.addEventListener("input", () => {
           const value = Number(slider.value);
-          output.value = trainLabel(value);
+          output.value = periodYearLabel(value);
           // updateDispersion(value); // 推定φは現在非表示。Estimated phi is currently hidden.
           result.view.signal("train_to", value).runAsync();
         });
