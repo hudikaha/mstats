@@ -235,6 +235,9 @@ def available_annual_catalog(index:, fixture:)
         rates: rows.map { |row| row[:rate].to_s }.uniq,
         categories: rows.map { |row| row[:category].to_s }.uniq,
         death_codes: rows.map { |row| row[:death_code].to_s }.reject(&:empty?).uniq,
+        death_code_max_years: rows.select { |row| !row[:death_code].to_s.empty? }.
+                              group_by { |row| row[:death_code].to_s }.
+                              transform_values { |items| items.map { |row| row[:year].to_i }.max },
         algos: rows.map { |row| row[:algo].to_s }.uniq
       }
     end
@@ -254,7 +257,8 @@ def available_annual_catalog(index:, fixture:)
                        aggs: { hit: { top_hits: { size: 1, _source: %w[location world_region] } } } },
       rates: { terms: { field: 'rate', size: 20 } },
       categories: { terms: { field: 'category', size: 20 } },
-      death_codes: { terms: { field: 'death_code', size: 1000 } },
+      death_codes: { terms: { field: 'death_code', size: 1000 },
+                     aggs: { max_year: { max: { field: 'year' } } } },
       algos: { terms: { field: 'algo', size: 20 } }
     } } }
   )
@@ -268,7 +272,11 @@ def available_annual_catalog(index:, fixture:)
     [bucket['key'].upcase, {
       location: source['location'].to_s, world_region: source['world_region'].to_s,
       rates: values.call('rates'), categories: values.call('categories'),
-      death_codes: values.call('death_codes'), algos: values.call('algos')
+      death_codes: values.call('death_codes'),
+      death_code_max_years: bucket.dig('death_codes', 'buckets').to_h do |entry|
+        [entry['key'].to_s, entry.dig('max_year', 'value').to_i]
+      end,
+      algos: values.call('algos')
     }]
   end
 end
@@ -304,8 +312,10 @@ end
 # English: U.S. infant deaths use age_0 of the legacy all-cause record, so map storage codes to display availability.
 def birth_cause_available?(location, catalog, cause)
   codes = catalog.fetch(:death_codes)
-  return codes.include?('PERM') if cause == 'PERINATAL'
-  codes.include?('INFANT') || (location == 'USA' && codes.include?('00000'))
+  stored_code = cause == 'PERINATAL' ? 'PERM' : location == 'USA' ? '00000' : 'INFANT'
+  # 日本語: 最短cutoff 2015と、その後2年の予測評価を作れる系列だけを表示対象にする。
+  # English: Require enough data for the earliest 2015 cutoff plus two evaluation years.
+  codes.include?(stored_code) && catalog.fetch(:death_code_max_years, {}).fetch(stored_code, 0) >= 2017
 end
 
 def available_death_codes(index:, fixture:, locations:, metric:)
@@ -1076,6 +1086,17 @@ selected_locations = requested_locations.select { |code| available_locations.inc
 selected_locations &= metric_locations
 selected_locations = %w[JPN USA DEU].select { |code| metric_locations.include?(code) } if selected_locations.empty?
 selected_locations = [metric_locations.first].compact if selected_locations.empty?
+requested_birth_causes = requested_causes.select { |cause| SPECIAL_CAUSES.key?(cause) }
+if selected_metric == 'birth_rate' && requested_birth_causes.any?
+  selected_locations.select! do |loc|
+    requested_birth_causes.all? { |cause| birth_cause_available?(loc, annual_catalog.fetch(loc), cause) }
+  end
+  if selected_locations.empty?
+    selected_locations = metric_locations.select do |loc|
+      requested_birth_causes.all? { |cause| birth_cause_available?(loc, annual_catalog.fetch(loc), cause) }
+    end.first(1)
+  end
+end
 selected_locations = [selected_locations.first] if mode == 'series'
 available_causes = if selected_metric == 'std_deaths'
                      available_death_codes(index: opts[:index], fixture: fixture_data,
@@ -1724,6 +1745,10 @@ puts <<~HTML
       restoreLocations();
       syncAgeSlider();
       syncMetric();
+      if (document.querySelector('.metric-option:checked').value === 'birth_rate' &&
+          document.querySelector('.cause-option[data-cause-scope="birth"]:checked')) {
+        syncCauseVisibility(true);
+      }
       window.addEventListener('resize', alignAgeSlider);
     }());
   </script>
