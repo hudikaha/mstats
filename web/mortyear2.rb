@@ -1660,6 +1660,13 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label|
                   use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1')
 end
 
+# 日本語: start_year省略時は分析開始境界以後にある選択系列の最初の値から表示する。
+# English: Without start_year, begin at the first selected value on or after the analysis boundary.
+unless requested_start_year.between?(1950, 2015)
+  first_value_year = chart_data.map { |row| row[:year] }.min
+  default_start_year = [period_start_year, first_value_year || period_start_year].max
+end
+
 cutoffs = chart_data.map { |row| row[:train_to] }.uniq.sort
 requested_cutoff = cgi['train_to'].to_i
 preferred_cutoff = selected_period == 'calendar' ? 2019 : 2018
