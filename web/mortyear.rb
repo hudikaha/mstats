@@ -601,7 +601,7 @@ rescue JSON::ParserError, Zlib::GzipFile::Error, Errno::ENOENT
 end
 
 def write_queue_entry(path, entry)
-  FileUtils.mkdir_p(File.dirname(path), mode: 0o755)
+  FileUtils.mkdir_p(File.dirname(path), mode: 0o770)
   lock_path = File.join(cache_root, 'queue', '.write.lock')
   File.open(lock_path, File::RDWR | File::CREAT, 0o666) do |lock|
     lock.flock(File::LOCK_EX)
@@ -625,10 +625,14 @@ def cached_scenarios(rows, calculator_type, analytic_calculator)
   return [queued[:analytic], []] if queued
 
   analytic = analytic_calculator.call(rows, '', '')
-  write_queue_entry(queue_path, {
-    key: key, analytic: analytic, simulation: nil,
-    created_at: Time.now.utc.iso8601, simulated_at: nil
-  })
+  begin
+    write_queue_entry(queue_path, {
+      key: key, analytic: analytic, simulation: nil,
+      created_at: Time.now.utc.iso8601, simulated_at: nil
+    })
+  rescue SystemCallError => error
+    warn "mortyear cache queue write failed: #{error.message}"
+  end
   [analytic, []]
 end
 
