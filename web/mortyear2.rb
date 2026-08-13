@@ -2094,6 +2094,30 @@ else
                  'UN WPP means the United Nations World Population Prospects, published by the UN Population Division.'
                end
              end
+  coverage_items = if menu_catalog
+                     available_count = lambda do |metric, cause: nil, age: nil|
+                       menu_catalog.count do |_loc, entry|
+                         entry.fetch(:series).any? do |item|
+                           item[:metric] == metric && item[:displayable] &&
+                             (!cause || item[:cause] == cause) && (!age || item[:age] == age)
+                         end
+                       end
+                     end
+                     general = [available_count.call('deaths'), available_count.call('crude_rate'),
+                                available_count.call('deaths', age: 'age_0'),
+                                available_count.call('crude_rate', age: 'age_0')].min
+                     [
+                       [$l == :ja ? '実死亡数・粗死亡率・0歳の両指標' : 'Deaths, crude rates, and both age-0 measures', general],
+                       [$l == :ja ? '年齢調整死亡率' : 'Age-standardized mortality rates', available_count.call('asr')],
+                       [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'INFANT')],
+                       [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'PERINATAL')]
+                     ]
+                   end
+  coverage_html = if coverage_items
+                    coverage_items.map do |label, count|
+                      "<li>#{CGI.escapeHTML(label)}：#{count}#{CGI.escapeHTML($l == :ja ? 'か国・地域' : ' countries or areas')}</li>"
+                    end.join
+                  end
   display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
   selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
@@ -2260,6 +2284,7 @@ else
     <p class="mortyear-note">
       #{ interval_note + ' ' + unit_note + (selected_metric == 'std_deaths' ? ($l == :ja ? ' 日本の週次派生系列を完全な暦年へ集計し、年境界週の死亡数は日数按分しています。' : ' Japanese derived weekly series are aggregated into complete calendar years, and boundary weeks are prorated by days.') : '') + approximation_note }
     </p>
+    #{coverage_html ? %(<section class="mortyear-coverage" style="text-align:left"><h2>#{CGI.escapeHTML($l == :ja ? '対応している国・地域数' : 'Countries and areas covered')}</h2><ul>#{coverage_html}</ul></section>) : ''}
     <section class="mortyear-sources" style="text-align:left">
       <h2>#{ $l == :ja ? 'グラフに使用したデータ' : 'Data used for the graphs' }</h2>
       #{wpp_note ? %(<p class="mortyear-note">#{CGI.escapeHTML(wpp_note)}</p>) : ''}
