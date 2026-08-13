@@ -80,6 +80,12 @@ AGES = {
   'age_100over' => { ja: '100+', en: '100+' }
 }.freeze
 STANDARD_AGES = AGES.keys.grep(/age_(?:\d{2}_\d{2}|100over)/).freeze
+STMF_AGES = %w[age_00_14 age_15_64 age_65_74 age_75_84 age_85over age_all].freeze
+STMF_AGE_LABELS = {
+  'age_00_14' => '00-14', 'age_15_64' => '15-64', 'age_65_74' => '65-74',
+  'age_75_84' => '75-84', 'age_85over' => '85+', 'age_all' => 'all'
+}.freeze
+STMF_ASR_AGES = %w[age_00_14 age_15_64 age_65_74 age_75_84 age_85over].freeze
 WHO_WORLD_STANDARD = {
   'age_00_04' => 8.86, 'age_05_09' => 8.69, 'age_10_14' => 8.60,
   'age_15_19' => 8.47, 'age_20_24' => 8.22, 'age_25_29' => 7.93,
@@ -158,13 +164,19 @@ mode = cgi['mode'] == 'series' ? 'series' : 'country'
 requested_locations = cgi.params.fetch('c', []).flat_map { |value| value.split(/[~,]/) }.
                       map(&:upcase).uniq
 selected_ages = cgi.params.fetch('age', []).flat_map { |value| value.split(/[~,]/) }.
-                select { |age| AGES.key?(age) }.uniq
+                select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
+selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
+$mortyear_period = selected_period
 selected_ages = ['age_all'] if selected_metric == 'asr' || selected_metric == 'birth_rate'
+selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_rate asr].include?(selected_metric)
+selected_ages &= STMF_AGES if selected_period != 'calendar'
+selected_ages = ['age_all'] if selected_ages.empty?
+selected_ages = ['age_all'] if selected_period != 'calendar' && selected_ages.include?('age_all')
 requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.uniq
 requested_start_year = cgi['start_year'].to_i
 default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : 2000
@@ -537,6 +549,7 @@ def cache_key(rows, calculator_type)
   canonical_value(
     cache_schema: CACHE_SCHEMA,
     algorithm: 'poisson-linear-trend-dual-cache-v2',
+    period: { type: $mortyear_period, aggregation_version: 1 },
     calculator_type: calculator_type,
     simulations: POISSON_SIMULATIONS,
     seed_method: 'sha256-input-cutoff-v1',
@@ -663,6 +676,93 @@ def annualize_weekly(count_rows, rate_rows, age)
       src_url: values[:src_url].empty? ? default_source_urls(loc_code) : values[:src_url]
     }
   end.compact.sort_by { |row| [row[:loc_code], row[:year]] }
+end
+
+def influenza_year_start(date, start_week)
+  start = Date.commercial(date.cwyear, start_week, 1)
+  date < start ? Date.commercial(date.cwyear - 1, start_week, 1) : start
+end
+
+# 日本語: 週次死亡数と率を、第27週または第36週開始の完全なインフルエンザ年へ集計する。
+# English: Aggregate weekly deaths and rates into complete influenza years starting in W27 or W36.
+def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = 'crude_rate')
+  rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
+  seasons = Hash.new do |hash, key|
+    hash[key] = { deaths: 0.0, population_days: 0.0, covered_days: {}, src_url: [] }
+  end
+  count_rows.each do |count|
+    rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
+    next unless rate
+    deaths = ages.sum { |age| count[age.to_sym].to_f }
+    rate_values = ages.map { |age| rate[age.to_sym] }
+    count_values = ages.map { |age| count[age.to_sym] }
+    next if count_values.any?(&:nil?) || rate_values.any? { |value| value.nil? || value.to_f <= 0 }
+
+    populations = ages.each_index.sum do |index|
+      count_values[index].to_f * DAYS_PER_YEAR * 100_000 / (7 * rate_values[index].to_f)
+    end
+    week_end = Date.parse(count[:date].to_s)
+    week_start = week_end - 6
+    (week_start..week_end).group_by { |date| influenza_year_start(date, start_week) }.each do |season_start, dates|
+      key = [count[:loc_code], count[:sex], count[:death_code], season_start]
+      target = seasons[key]
+      target[:deaths] += deaths * dates.length / 7.0
+      target[:population_days] += populations * dates.length
+      dates.each { |date| target[:covered_days][date] = true }
+      target[:src_url] |= (Array(count[:src_url]) + Array(rate[:src_url])).compact
+    end
+  end
+  seasons.filter_map do |(loc, sex, cause, season_start), values|
+    season_end = Date.commercial(season_start.cwyear + 1, start_week, 1) - 1
+    required_days = (season_start..season_end).count
+    next unless season_start.cwyear >= 2000 && values[:covered_days].length == required_days
+    population = values[:population_days] / required_days
+    next unless population.positive?
+
+    crude_rate = values[:deaths] / population * 100_000
+    count_metric = metric == 'deaths'
+    { loc_code: loc.upcase, sex: sex, death_code: cause, year: season_start.cwyear,
+      season: "#{season_start.cwyear}/#{format('%02d', (season_start.cwyear + 1) % 100)}",
+      deaths: values[:deaths], population: count_metric ? 1.0 : population,
+      observed: count_metric ? values[:deaths] : crude_rate,
+      unit_scale: count_metric ? 1.0 : 100_000.0,
+      src_url: values[:src_url].empty? ? default_source_urls(loc) : values[:src_url] }
+  end.sort_by { |row| [row[:loc_code], row[:year]] }
+end
+
+# 日本語: STMFの年齢階級へまとめたWHO標準人口でインフルエンザ年のASRを計算する。
+# English: Calculate influenza-year ASR with WHO standard weights grouped to STMF ages.
+def annualize_influenza_asr(count_rows, rate_rows, start_week)
+  age_members = {
+    'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
+    'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
+    'age_65_74' => %w[age_65_69 age_70_74],
+    'age_75_84' => %w[age_75_79 age_80_84],
+    'age_85over' => %w[age_85_89 age_90_94 age_95_99 age_100over]
+  }
+  weights = age_members.transform_values { |ages| ages.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
+  weight_total = weights.values.sum
+  grouped = STMF_ASR_AGES.flat_map do |age|
+    annualize_influenza_year(count_rows, rate_rows, [age], start_week, 'crude_rate').map do |row|
+      [row, age]
+    end
+  end.group_by { |row, _age| [row[:loc_code], row[:sex], row[:death_code], row[:year]] }
+
+  grouped.filter_map do |(_loc, _sex, _cause, _year), items|
+    next unless items.map(&:last).sort == STMF_ASR_AGES.sort
+
+    strata = items.map do |row, age|
+      { age: age, deaths: row[:deaths], population: row[:population],
+        weight: weights.fetch(age) / weight_total, src_url: row[:src_url] }
+    end
+    first = items.first.first
+    first.merge(
+      strata: strata, deaths: strata.sum { |item| item[:deaths] },
+      population: strata.sum { |item| item[:population] },
+      observed: strata.sum { |item| item[:deaths] / item[:population] * 100_000 * item[:weight] },
+      unit_scale: 100_000.0, src_url: strata.flat_map { |item| item[:src_url] }.uniq
+    )
+  end.sort_by { |row| [row[:loc_code], row[:year]] }
 end
 
 # 日本語: 年次recordを直接使い、同じ指標では各国公式系列をWPPより優先する。
@@ -881,13 +981,14 @@ end
 def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
   return [] if rows.empty?
 
+  stratum_ages = rows.first.fetch(:strata).map { |item| item.fetch(:age) }
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
     rows.count { |row| row[:year].between?(2000, cutoff) } >= MIN_TRAINING_YEARS
   end
   candidates.flat_map do |cutoff|
     training = rows.select { |row| row[:year].between?(2000, cutoff) }
-    fits = WHO_WORLD_STANDARD.keys.to_h do |age|
+    fits = stratum_ages.to_h do |age|
       age_rows = training.map do |row|
         stratum = row[:strata].find { |item| item[:age] == age }
         { year: row[:year], deaths: stratum[:deaths], population: stratum[:population] }
@@ -952,6 +1053,7 @@ end
 def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
   return [] if rows.empty?
 
+  stratum_ages = rows.first.fetch(:strata).map { |item| item.fetch(:age) }
   input_digest = Digest::SHA256.hexdigest(canonical_json(rows.map { |row| canonical_value(row) }))
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
@@ -959,7 +1061,7 @@ def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
   end
   candidates.flat_map do |cutoff|
     training = rows.select { |row| row[:year].between?(2000, cutoff) }
-    fits = WHO_WORLD_STANDARD.keys.to_h do |age|
+    fits = stratum_ages.to_h do |age|
       age_rows = training.map do |row|
         stratum = row[:strata].find { |item| item[:age] == age }
         { year: row[:year], deaths: stratum[:deaths], population: stratum[:population] }
@@ -1126,9 +1228,11 @@ rescue Errno::ENOENT, JSON::ParserError, KeyError
   nil
 end
 
-def catalog_combination_available?(entry, metric, cause, sex, ages)
+def catalog_combination_available?(entry, metric, cause, sex, ages, period = 'calendar')
   series = entry.fetch(:series).select do |item|
-    item[:metric] == metric && item[:cause] == cause && item[:sex] == sex && ages.include?(item[:age])
+    item_period = item[:period] || 'calendar'
+    item[:metric] == metric && item[:cause] == cause && item[:sex] == sex &&
+      item_period == period && ages.include?(item[:age])
   end
   return false unless ages.all? { |age| series.any? { |item| item[:age] == age } }
 
@@ -1151,21 +1255,24 @@ def catalog_year_span(years)
   { from: years.min, to: years.max, missing: (years.min..years.max).to_a - years }
 end
 
-def catalog_available_causes(catalog, locations, metric, sex, ages)
+def catalog_available_causes(catalog, locations, metric, sex, ages, period = 'calendar')
   candidates = locations.flat_map do |loc|
-    catalog.fetch(loc).fetch(:series).select { |item| item[:metric] == metric && item[:sex] == sex }.
+    catalog.fetch(loc).fetch(:series).select do |item|
+      item_period = item[:period] || 'calendar'
+      item[:metric] == metric && item[:sex] == sex && item_period == period
+    end.
       map { |item| item[:cause] }
   end.uniq
   candidates.select do |cause|
-    locations.all? { |loc| catalog_combination_available?(catalog.fetch(loc), metric, cause, sex, ages) }
+    locations.all? { |loc| catalog_combination_available?(catalog.fetch(loc), metric, cause, sex, ages, period) }
   end.sort
 end
 
-def catalog_series(metric, cause, sex, age, rows)
+def catalog_series(metric, cause, sex, age, rows, period: 'calendar')
   years = rows.map { |row| row[:year].to_i }.uniq.sort
   cutoffs = scenario_cutoffs(years)
   {
-    metric: metric, cause: cause, sex: sex, age: age, years: catalog_year_span(years),
+    period: period, metric: metric, cause: cause, sex: sex, age: age, years: catalog_year_span(years),
     train_to: catalog_year_span(cutoffs), displayable: !cutoffs.empty?
   }
 end
@@ -1221,6 +1328,7 @@ end
 # English: Build final display series per location and atomically update the menu catalog.
 def rebuild_mortyear_catalog(index)
   base = available_annual_catalog(index: index, fixture: nil)
+  weekly_rates = available_location_rates(index: index, fixture: nil)
   fields = %w[loc_code location world_region category rate death_code algo type year sex src_url] + AGES.keys
   locations = {}
   total = base.length
@@ -1233,6 +1341,30 @@ def rebuild_mortyear_catalog(index)
       source: fields
     )
     series = catalog_location_series(records, loc)
+    if weekly_rates.fetch(loc, []).include?('') && weekly_rates.fetch(loc, []).include?('amr')
+      weekly = elastic_search(
+        index: index, size: 100_000,
+        filter: [{ 'term' => { 'loc_code' => loc.downcase } },
+                 { 'term' => { 'category' => 'death' } }, { 'term' => { 'death_code' => '00000' } },
+                 { 'exists' => { 'field' => 'yearweek' } }],
+        source: %w[loc_code yearweek category rate death_code date year week sex src_url] + STMF_AGES
+      )
+      weekly.group_by { |row| row[:sex].to_s }.each do |sex, sex_rows|
+        counts = sex_rows.select { |row| row[:rate].to_s.empty? }
+        rates = sex_rows.select { |row| row[:rate].to_s == 'amr' }
+        { 'flu27' => 27, 'flu36' => 36 }.each do |period, start_week|
+          STMF_AGES.each do |age|
+            rows = annualize_influenza_year(counts, rates, [age], start_week, 'crude_rate')
+            next if rows.empty?
+            %w[deaths crude_rate].each do |metric|
+              series << catalog_series(metric, '00000', sex, age, rows, period: period)
+            end
+          end
+          asr_rows = annualize_influenza_asr(counts, rates, start_week)
+          series << catalog_series('asr', '00000', sex, 'age_all', asr_rows, period: period) unless asr_rows.empty?
+        end
+      end
+    end
     locations[loc] = {
       location: base.dig(loc, :location), world_region: base.dig(loc, :world_region), series: series
     }
@@ -1285,9 +1417,22 @@ fixture_data = if opts[:fixture]
 location_rates = {}
 menu_catalog = fixture_data ? nil : load_mortyear_catalog(opts[:index])
 annual_catalog = menu_catalog || available_annual_catalog(index: opts[:index], fixture: fixture_data)
+if selected_period != 'calendar'
+  location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
+  weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('amr') }.keys
+  if menu_catalog
+    weekly_codes.select! do |code|
+      menu_catalog.fetch(code, {}).fetch(:series, []).any? do |item|
+        item[:period] == selected_period && item[:metric] == selected_metric && item[:displayable]
+      end
+    end
+  end
+  annual_catalog.select! { |code, _entry| weekly_codes.include?(code) }
+end
 $annual_catalog = annual_catalog
 metric_locations = annual_catalog.select do |code, catalog|
-  annual_metric_available?(code, catalog, selected_metric)
+  selected_period == 'calendar' ? annual_metric_available?(code, catalog, selected_metric) :
+    %w[deaths crude_rate asr].include?(selected_metric)
 end.keys.sort
 metric_locations = ['JPN'].select { |code| annual_catalog.key?(code) } if selected_metric == 'std_deaths'
 available_locations = annual_catalog.keys.sort
@@ -1307,7 +1452,9 @@ if selected_metric == 'birth_rate' && requested_birth_causes.any?
   end
 end
 selected_locations = [selected_locations.first] if mode == 'series'
-available_causes = if selected_metric == 'std_deaths'
+available_causes = if selected_period != 'calendar'
+                     ['00000']
+                   elsif selected_metric == 'std_deaths'
                      available_death_codes(index: opts[:index], fixture: fixture_data,
                                            locations: selected_locations, metric: selected_metric)
                    elsif menu_catalog
@@ -1330,7 +1477,7 @@ if selected_metric == 'birth_rate'
   selected_causes = [selected_causes.first] if mode == 'country'
 end
 available_menu_ages = AGES.keys
-if menu_catalog && selected_metric != 'birth_rate' && selected_metric != 'std_deaths'
+if menu_catalog && selected_period == 'calendar' && selected_metric != 'birth_rate' && selected_metric != 'std_deaths'
   available_menu_ages = AGES.keys.select do |age|
     selected_locations.all? do |loc|
       selected_causes.all? do |cause|
@@ -1351,7 +1498,9 @@ end
 locations_for_query = selected_locations.map(&:downcase)
 ages_for_query = selected_ages
 annual_source_fields = %w[id loc_code location world_region category rate death_code algo type date year sex src_url] + AGES.keys
-annual_records_all = if opts[:fixture]
+annual_records_all = if selected_period != 'calendar'
+                       []
+                     elsif opts[:fixture]
                        fixture_data.reject { |row| row[:yearmonth] || row[:yearweek] }
                      elsif selected_metric == 'std_deaths'
                        []
@@ -1365,7 +1514,7 @@ annual_records_all = if opts[:fixture]
                          source: annual_source_fields
                        )
                      end
-source_fields = %w[id loc_code yearweek category rate death_code algo date year week sex src_url] + AGES.keys
+source_fields = %w[id loc_code yearweek category rate death_code algo date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
 common_filters = [
   { 'term' => { 'category' => 'death' } },
   { 'terms' => { 'loc_code' => locations_for_query } },
@@ -1374,7 +1523,7 @@ common_filters = [
   { 'exists' => { 'field' => 'yearweek' } }
 ]
 
-if selected_metric != 'std_deaths'
+if selected_period == 'calendar' && selected_metric != 'std_deaths'
   count_rows = []
   rate_rows = []
 elsif opts[:fixture]
@@ -1384,11 +1533,11 @@ elsif opts[:fixture]
       row[:category] == 'death' && selected_causes.include?(row[:death_code]) &&
       row[:sex] == selected_sex && row[:yearweek]
   end
-  count_rate = %w[std_deaths asr].include?(selected_metric) ? 'adj' : ''
+  count_rate = selected_period == 'calendar' && %w[std_deaths asr].include?(selected_metric) ? 'adj' : ''
   count_rows = fixture.select { |row| row[:rate].to_s == count_rate }
   rate_rows = fixture.select { |row| row[:rate] == 'amr' }
 else
-  count_rate = %w[std_deaths asr].include?(selected_metric) ? 'adj' : ''
+  count_rate = selected_period == 'calendar' && %w[std_deaths asr].include?(selected_metric) ? 'adj' : ''
   count_rate_filter = if count_rate.empty?
                         {
                           'bool' => {
@@ -1418,7 +1567,9 @@ sex_labels = {
   'male' => { ja: '男性', en: 'Male' },
   'female' => { ja: '女性', en: 'Female' }
 }.freeze
-age_selection_label = if selected_ages.include?('age_all')
+age_selection_label = if selected_period != 'calendar'
+                        selected_ages.map { |age| STMF_AGE_LABELS.fetch(age) }.join(', ')
+                      elsif selected_ages.include?('age_all')
                         $l == :ja ? '全年齢' : 'All ages'
                       elsif selected_ages == ['age_0']
                         $l == :ja ? '0歳' : 'Age 0'
@@ -1470,7 +1621,14 @@ series_specs = if mode == 'country'
                end
 
 annual_by_age = { selected_ages => begin
-  annual = if selected_metric == 'asr'
+  annual = if selected_period != 'calendar' && selected_metric == 'asr'
+             annualize_influenza_asr(count_rows, rate_rows,
+                                     selected_period == 'flu27' ? 27 : 36)
+           elsif selected_period != 'calendar'
+             annualize_influenza_year(count_rows, rate_rows, selected_ages,
+                                      selected_period == 'flu27' ? 27 : 36,
+                                      selected_metric)
+           elsif selected_metric == 'asr'
              stratified_asr_rows(annual_records_all, selected_locations, selected_sex, selected_causes)
            elsif selected_metric != 'std_deaths'
              annual_record_rows(annual_records_all, selected_locations, selected_sex,
@@ -1591,11 +1749,18 @@ puts <<~HTML
     <fieldset><legend>#{ $l == :ja ? '比較方法' : 'Comparison mode' }</legend>
       <label><input class="comparison-mode" type="radio" name="mode" value="country" #{checked(mode == 'country')}>#{ $l == :ja ? '複数国・共通条件' : 'Countries, common condition' }</label>
       <label><input class="comparison-mode" type="radio" name="mode" value="series" #{checked(mode == 'series')}>#{ $l == :ja ? '一国・複数系列' : 'One country, multiple series' }</label>
+    </fieldset>
+    <fieldset><legend>#{ $l == :ja ? '集計期間' : 'Period' }</legend>
+      <label><input class="period-option" type="radio" name="period" value="calendar" #{checked(selected_period == 'calendar')}>#{ $l == :ja ? '暦年' : 'Calendar year' }</label>
+      <span>#{ $l == :ja ? 'インフルエンザ年（開始:' : 'Influenza year (start:' }</span>
+      <label><input class="period-option" type="radio" name="period" value="flu27" #{checked(selected_period == 'flu27')}>#{ $l == :ja ? '第27週' : 'W27' }</label>
+      <label><input class="period-option" type="radio" name="period" value="flu36" #{checked(selected_period == 'flu36')}>#{ $l == :ja ? '第36週）' : 'W36)' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
 METRICS.each do |metric, names|
-  hidden_style = metric == 'std_deaths' ? ' style="display:none"' : ''
+  hidden = metric == 'std_deaths' || (selected_period != 'calendar' && !%w[deaths crude_rate asr].include?(metric))
+  hidden_style = hidden ? ' style="display:none"' : ''
   puts %(<label#{hidden_style}><input class="metric-option" type="radio" name="metric" value="#{metric}" #{checked(selected_metric == metric)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts <<~HTML
@@ -1629,7 +1794,14 @@ WORLD_REGIONS.each do |region, region_names|
 end
 puts <<~HTML
     </fieldset><br>
-    <fieldset id="age-fieldset" style="#{selected_metric == 'birth_rate' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
+    <fieldset id="season-age-fieldset" style="#{selected_period == 'calendar' || selected_metric == 'asr' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
+HTML
+STMF_AGES.each do |age|
+  puts %(<label><input class="age-season-option" type="checkbox" name="age" value="#{age}" #{checked(selected_ages.include?(age))}>#{STMF_AGE_LABELS.fetch(age)}</label>)
+end
+puts <<~HTML
+    </fieldset>
+    <fieldset id="age-fieldset" style="#{selected_metric == 'birth_rate' || selected_period != 'calendar' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
       <div class="age-scroll"><div id="age-scale">
         <div id="age-slider-row"><div id="age-range-slider"><input id="age-start" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"><input id="age-end" type="range" min="0" max="#{STANDARD_AGES.length - 1}" step="1"></div><output id="age-range-output"></output></div>
         <div id="age-options">
@@ -1639,12 +1811,12 @@ STANDARD_AGES.each_with_index do |age, index|
   short_label = index == STANDARD_AGES.length - 1 ? '100+' : format('%02d', index * 5)
   terminal_class = index == STANDARD_AGES.length - 1 ? ' class="age-terminal"' : ''
   unavailable = !available_menu_ages.include?(age)
-  puts %(<label#{terminal_class}><input class="age-option age-standard" type="checkbox" name="age" value="#{age}" #{checked(active && !unavailable)} #{disabled(unavailable)}>#{short_label}</label>)
+  puts %(<label#{terminal_class}><input class="age-option age-standard" type="checkbox" name="age" value="#{age}" #{checked(active && !unavailable)} #{disabled(unavailable || selected_period != 'calendar')}>#{short_label}</label>)
 end
 %w[age_0 age_all].each do |age|
   names = AGES.fetch(age)
   unavailable = !available_menu_ages.include?(age)
-  puts %(<label class="age-special"><input class="age-option age-special-option" type="checkbox" name="age" value="#{age}" #{checked(selected_ages.include?(age) && !unavailable)} #{disabled(unavailable)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  puts %(<label class="age-special"><input class="age-option age-special-option" type="checkbox" name="age" value="#{age}" #{checked(selected_ages.include?(age) && !unavailable)} #{disabled(unavailable || selected_period != 'calendar')}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts <<~HTML
         </div>
@@ -1654,7 +1826,7 @@ HTML
 show_cause_fieldset = if selected_metric == 'birth_rate'
                         true
                       else
-                        selected_locations == ['JPN']
+                        selected_period == 'calendar' && selected_locations == ['JPN']
                       end
 puts <<~HTML
     <fieldset id="cause-fieldset" style="#{show_cause_fieldset ? '' : 'display:none'}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
@@ -1783,11 +1955,12 @@ puts <<~HTML
         const causes = Array.from(document.querySelectorAll('.cause-option'));
         let selectedLocations = Array.from(document.querySelectorAll('.location-option:checked:not(:disabled)')).map(input => input.value);
         const metric = document.querySelector('input[name="metric"]:checked').value;
+        const calendarPeriod = document.querySelector('.period-option:checked').value === 'calendar';
         const birthLocations = selectedLocations.length > 0 && selectedLocations.every(location => {
           const input = document.querySelector(`.location-option[value="${location}"]`);
           return input && input.closest('label').dataset.metrics.split(' ').includes('birth_rate');
         });
-        const scope = selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
+        const scope = calendarPeriod && selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
           metric === 'birth_rate' && (selectedLocations.length === 0 || birthLocations) ? 'birth' : null;
         const hidden = scope === null;
         fieldset.style.display = hidden ? 'none' : '';
@@ -1899,6 +2072,7 @@ puts <<~HTML
         applyAgeRange();
       });
       const storageKey = "mortyear-location-selection";
+      const isCalendarPeriod = #{selected_period == 'calendar' ? 'true' : 'false'};
       const hasRequestedLocations = #{requested_locations.empty? ? 'false' : 'true'};
       function rememberLocations() {
         const values = Array.from(document.querySelectorAll('.location-option:checked')).map(input => input.value);
@@ -1915,7 +2089,12 @@ puts <<~HTML
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
         const fixedAllAges = metric === 'asr' || metric === 'birth_rate';
-        document.getElementById('age-fieldset').style.display = metric === 'birth_rate' ? 'none' : '';
+        document.getElementById('age-fieldset').style.display = isCalendarPeriod && metric !== 'birth_rate' ? '' : 'none';
+        document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod && metric !== 'asr' ? '' : 'none';
+        document.querySelectorAll('.age-season-option').forEach(input => {
+          input.disabled = metric === 'asr';
+          if (metric === 'asr') input.checked = input.value === 'age_all';
+        });
         document.querySelectorAll('.age-option').forEach(input => {
           input.disabled = metric === 'birth_rate' || (metric === 'asr' && input.value !== 'age_all');
           if (fixedAllAges) input.checked = input.value === 'age_all';
@@ -1958,6 +2137,10 @@ puts <<~HTML
       document.querySelectorAll('.metric-option').forEach(input => input.addEventListener('change', () => {
         rememberLocations();
         syncMetric();
+      }));
+      document.querySelectorAll('.period-option').forEach(input => input.addEventListener('change', () => {
+        showLoading();
+        document.querySelector('.mortyear-form').requestSubmit();
       }));
       restoreLocations();
       syncAgeSlider();
@@ -2106,12 +2289,25 @@ else
                      general = [available_count.call('deaths'), available_count.call('crude_rate'),
                                 available_count.call('deaths', age: 'age_0'),
                                 available_count.call('crude_rate', age: 'age_0')].min
-                     [
-                       [$l == :ja ? '実死亡数・粗死亡率・0歳の両指標' : 'Deaths, crude rates, and both age-0 measures', general],
-                       [$l == :ja ? '年齢調整死亡率' : 'Age-standardized mortality rates', available_count.call('asr')],
-                       [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'INFANT')],
-                       [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'PERINATAL')]
-                     ]
+                     if selected_period == 'calendar'
+                       [
+                         [$l == :ja ? '実死亡数・粗死亡率・0歳の両指標' : 'Deaths, crude rates, and both age-0 measures', general],
+                         [$l == :ja ? '年齢調整死亡率' : 'Age-standardized mortality rates', available_count.call('asr')],
+                         [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'INFANT')],
+                         [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'PERINATAL')]
+                       ]
+                     else
+                       counts = %w[deaths crude_rate asr].map do |metric|
+                         menu_catalog.count do |_loc, entry|
+                           entry.fetch(:series).any? do |item|
+                             item[:period] == selected_period && item[:metric] == metric &&
+                               item[:age] == 'age_all' && item[:displayable]
+                           end
+                         end
+                       end
+                       [[$l == :ja ? '実死亡数・粗死亡率・年齢調整死亡率' :
+                                      'Deaths, crude rates, and age-standardized rates', counts.min]]
+                     end
                    end
   coverage_html = if coverage_items
                     coverage_items.map do |label, count|
@@ -2188,7 +2384,7 @@ else
           {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
         ],
         encoding: {
-          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate($l == :ja ? '年' : 'Year')}}
+          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1#{selected_period == 'calendar' ? '' : ', labelExpr: "datum.value + \'/\' + substring(toString(datum.value + 1), 2, 4)"'}}, title: #{JSON.generate(selected_period == 'calendar' ? ($l == :ja ? '年' : 'Year') : ($l == :ja ? 'インフルエンザ年' : 'Influenza year'))}}
         },
         layer: [
           {mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
