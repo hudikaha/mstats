@@ -2459,7 +2459,7 @@ else
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
-            $l == :ja ? "インフルエンザ年（開始年・第#{start_week}週開始）" : "Influenza year (start year, from W#{start_week})"
+            $l == :ja ? "インフルエンザ年（表示年の第#{start_week}週開始）" : "Influenza year (starts in W#{start_week} of the displayed year)"
           end)}}
         },
         layer: [
