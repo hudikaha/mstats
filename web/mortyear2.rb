@@ -794,6 +794,40 @@ def annualize_influenza_asr(count_rows, rate_rows, start_week)
   end.sort_by { |row| [row[:loc_code], row[:year]] }
 end
 
+# 日本語: 選択系列の週次死亡率を年率換算のまま補助表示用に作る。
+# English: Build annualized weekly mortality rates for the contextual view.
+def weekly_rate_rows(count_rows, rate_rows, metric, ages)
+  rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
+  age_members = {
+    'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
+    'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
+    'age_65_74' => %w[age_65_69 age_70_74], 'age_75_84' => %w[age_75_79 age_80_84],
+    'age_85over' => %w[age_85_89 age_90_94 age_95_99 age_100over]
+  }
+  weights = age_members.transform_values { |members| members.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
+  weight_total = weights.values.sum
+  count_rows.filter_map do |count|
+    rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
+    next unless rate
+
+    observed = if metric == 'asr'
+                 next unless STMF_ASR_AGES.all? { |age| rate[age.to_sym]&.to_f&.positive? }
+                 STMF_ASR_AGES.sum { |age| rate[age.to_sym].to_f * weights.fetch(age) / weight_total }
+               else
+                 values = ages.map { |age| count[age.to_sym] }
+                 rate_values = ages.map { |age| rate[age.to_sym] }
+                 next if values.any?(&:nil?) || rate_values.any? { |value| value.nil? || value.to_f <= 0 }
+                 deaths = values.sum(&:to_f)
+                 population = ages.each_index.sum do |index|
+                   values[index].to_f * DAYS_PER_YEAR * 100_000 / (7 * rate_values[index].to_f)
+                 end
+                 deaths * DAYS_PER_YEAR * 100_000 / (7 * population)
+               end
+    { loc_code: count[:loc_code].to_s.upcase, death_code: count[:death_code],
+      date: count[:date], observed: observed }
+  end.sort_by { |row| [row[:loc_code], row[:date].to_s] }
+end
+
 # 日本語: 年次recordを直接使い、同じ指標では各国公式系列をWPPより優先する。
 # English: Read annual records directly and prefer national series over WPP for the same measure.
 def annual_record_rows(records, locations, sex, causes, metric, ages)
@@ -1697,6 +1731,21 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label|
                   use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1')
 end
 
+start_week = selected_period == 'flu27' ? 27 : 36
+chart_data.each do |row|
+  date = selected_period == 'calendar' ? Date.new(row[:year], 1, 1) : Date.commercial(row[:year], start_week, 1)
+  row[:plot_date] = date.iso8601
+end
+weekly_context = if selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)
+                   weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages).map do |row|
+                     series_key = mode == 'country' ? row[:loc_code] :
+                       "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:death_code]}"
+                     row.merge(series: series_key)
+                   end
+                 else
+                   []
+                 end
+
 # 日本語: start_year省略時は分析開始境界以後にある選択系列の最初の値から表示する。
 # English: Without start_year, begin at the first selected value on or after the analysis boundary.
 unless requested_start_year.between?(1950, 2015)
@@ -2402,7 +2451,6 @@ else
                       "<li>#{CGI.escapeHTML(label)}：#{count}#{CGI.escapeHTML($l == :ja ? 'か国・地域' : ' countries or areas')}</li>"
                     end.join
                   end
-  display_year_max = chart_data.map { |row| row[:year] }.max + 11.0 / 12.0
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
   selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
   default_model = selected_chart_model
@@ -2434,6 +2482,11 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
+      #{selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric) ? %(
+      &nbsp;
+      <label><input id="weekly-view-checkbox" type="checkbox">
+        #{ $l == :ja ? '週次表示' : 'Weekly view' }
+      </label>) : ''}
       &nbsp;
       <span>#{ $l == :ja ? 'モデル' : 'Model' }:</span>
       <label><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
@@ -2453,6 +2506,7 @@ else
     <div id="mortyear-vis"></div>
     <script>
       const values = #{JSON.generate(chart_data)};
+      const weeklyValues = #{JSON.generate(weekly_context)};
       const displayStartDefault = #{default_start_year};
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
@@ -2462,18 +2516,21 @@ else
       const intervalModeDefault = #{JSON.generate(interval_mode)};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
+      const startWeek = #{start_week};
+      const displayStartDate = year => #{selected_period == 'calendar' ? '`${year}-01-01`' : 'new Date(Date.UTC(year, 0, 4 + (startWeek - 1) * 7 - ((new Date(Date.UTC(year, 0, 4)).getUTCDay() + 6) % 7))).toISOString().slice(0, 10)'};
+      const annualTransforms = [
+        {filter: "datum.train_to == train_to"},
+        {filter: "datum.model == model"},
+        {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
+      ];
       const panelSpecs = panels.map(([key, label]) => ({
         title: {text: label, anchor: "start"},
         width: "container", height: 260,
         transform: [
-          {filter: `datum.series == '${key}'`},
-          {filter: "datum.year >= display_start"},
-          {filter: "datum.train_to == train_to"},
-          {filter: "datum.model == model"},
-          {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
+          {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate(if selected_period == 'calendar'
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {format: "%Y"}, title: #{JSON.generate(if selected_period == 'calendar'
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
@@ -2481,9 +2538,9 @@ else
           end)}}
         },
         layer: [
-          {mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
-          {mark: {type: "line", strokeDash: [6,4], strokeWidth: 2}, encoding: {color:{field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#88733b","#246a9e"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
-          {mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
+          {transform: annualTransforms, mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
+          {transform: annualTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2}, encoding: {color:{field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#88733b","#246a9e"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
+          {transform: [...annualTransforms, {filter:"view_mode == 'annual'"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
             {field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}},
             {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
             {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測値' : 'Expected')}},
@@ -2494,9 +2551,10 @@ else
             ,{field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}}
             ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
-          {transform:[{filter:"datum.outside_pi"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
-          {data:{values:[{year:#{$mortyear_training_start}}]}, transform:[{filter:"datum.year >= display_start"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"year",type:"quantitative"}}},
-          {transform:[{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}}
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週' : 'Week')}},{field:"observed",type:"quantitative",format:".2f",title:#{JSON.generate($l == :ja ? '週次死亡率' : 'Weekly mortality rate')}}]}},
+          {transform:[...annualTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual'"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
+          {data:{values:[{series:key,plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"datum.plot_date >= display_start_date"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}},
+          {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
       }));
       const spec = {
@@ -2504,10 +2562,12 @@ else
         data: {values},
         params: [
           {name:"display_start", value:displayStartDefault},
+          {name:"display_start_date", value:displayStartDate(displayStartDefault)},
           {name:"train_to", value:trainDefault},
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
-          {name:"zero_base", value:false}
+          {name:"zero_base", value:false},
+          {name:"view_mode", value:"annual"}
         ],
         vconcat: panelSpecs,
         autosize: {type:"fit-x", contains:"padding", resize:true},
@@ -2523,6 +2583,7 @@ else
         const zeroBase = document.getElementById("zero-base-checkbox");
         const simulationControl = document.getElementById("simulation-interval-control");
         const simulationInterval = document.getElementById("simulation-interval-checkbox");
+        const weeklyView = document.getElementById("weekly-view-checkbox");
         /* 推定φ表示を再開するときのために残す。Keep for restoring the estimated-phi display.
         const dispersionOutput = document.getElementById("dispersion-output");
         function updateDispersion(value) {
@@ -2538,7 +2599,7 @@ else
           const value = Number(startSlider.value);
           startOutput.value = periodYearLabel(value);
           document.getElementById("start-year-hidden").value = value;
-          result.view.signal("display_start", value).runAsync();
+          result.view.signal("display_start", value).signal("display_start_date", displayStartDate(value)).runAsync();
         });
         slider.addEventListener("input", () => {
           const value = Number(slider.value);
@@ -2563,6 +2624,9 @@ else
           if (simulationInterval.checked) url.searchParams.delete("interval");
           else url.searchParams.set("interval", "analytic");
           history.replaceState(null, "", url);
+        });
+        if (weeklyView) weeklyView.addEventListener("change", () => {
+          result.view.signal("view_mode", weeklyView.checked ? "weekly" : "annual").runAsync();
         });
         result.view.addSignalListener("train_to", (_name, value) => {
           const url = new URL(window.location.href);
