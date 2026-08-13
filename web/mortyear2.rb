@@ -44,7 +44,9 @@ COUNTRY_NAME_OVERRIDES = {
   'VIR' => { ja: 'アメリカ領ヴァージン諸島', en: 'United States Virgin Islands' },
   'ASM' => { ja: 'アメリカ領サモア', en: 'American Samoa' },
   'GUM' => { ja: 'グアム', en: 'Guam' },
-  'MNP' => { ja: '北マリアナ諸島', en: 'Northern Mariana Islands' }
+  'MNP' => { ja: '北マリアナ諸島', en: 'Northern Mariana Islands' },
+  'ENG' => { ja: 'イングランド・ウェールズ（英国）', en: 'England and Wales (GBR)' },
+  'SCO' => { ja: 'スコットランド（英国）', en: 'Scotland (GBR)' }
 }.freeze
 
 mort_vars = [
@@ -311,7 +313,9 @@ end
 
 def annual_metric_available?(code, catalog, metric)
   if catalog[:series]
-    return catalog[:series].any? { |item| item[:metric] == metric && item[:displayable] }
+    return catalog[:series].any? do |item|
+      (item[:period] || 'calendar') == 'calendar' && item[:metric] == metric && item[:displayable]
+    end
   end
 
   rates = catalog.fetch(:rates)
@@ -1331,6 +1335,12 @@ end
 def rebuild_mortyear_catalog(index)
   base = available_annual_catalog(index: index, fixture: nil)
   weekly_rates = available_location_rates(index: index, fixture: nil)
+  {
+    'ENG' => { location: 'England and Wales', world_region: 'Europe' },
+    'SCO' => { location: 'Scotland', world_region: 'Europe' }
+  }.each do |code, entry|
+    base[code] ||= entry if weekly_rates.key?(code)
+  end
   fields = %w[loc_code location world_region category rate death_code algo type year sex src_url] + AGES.keys
   locations = {}
   total = base.length
@@ -1570,7 +1580,11 @@ sex_labels = {
   'female' => { ja: '女性', en: 'Female' }
 }.freeze
 age_selection_label = if selected_period != 'calendar'
-                        selected_ages.map { |age| STMF_AGE_LABELS.fetch(age) }.join(', ')
+                        if selected_ages.include?('age_all')
+                          $l == :ja ? '全年齢' : 'All ages'
+                        else
+                          selected_ages.map { |age| STMF_AGE_LABELS.fetch(age) }.join(', ')
+                        end
                       elsif selected_ages.include?('age_all')
                         $l == :ja ? '全年齢' : 'All ages'
                       elsif selected_ages == ['age_0']
@@ -1607,7 +1621,13 @@ panel_label = lambda do |loc, cause|
          elsif %w[deaths std_deaths].include?(selected_metric)
            $l == :ja ? '（人）' : '(persons)'
          end
-  [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
+  title = [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
+  if selected_period != 'calendar'
+    start_week = selected_period == 'flu27' ? 27 : 36
+    period_label = $l == :ja ? "インフルエンザ年（第#{start_week}週開始）" : "Influenza year (starts W#{start_week})"
+    title = [title, period_label].join(' ')
+  end
+  title
 end
 
 series_specs = if mode == 'country'
@@ -1678,7 +1698,7 @@ default_cutoff = if cutoffs.include?(requested_cutoff)
                    cutoffs.last
                  end
 cutoff_label = lambda do |year|
-  selected_period == 'calendar' ? year.to_s : "#{year}/#{format('%02d', (year + 1) % 100)}"
+  year.to_s
 end
 available_specs = series_specs.select { |key, _age, _cause, _label| chart_data.any? { |row| row[:series] == key } }
 
@@ -2351,7 +2371,7 @@ else
         <output id="start-year-output">#{cutoff_label.call(default_start_year)}</output>
       </label>
       &nbsp;
-      <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999/00'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999/00'}–" }
+      <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999'}–" }
         <input id="train-to-slider" type="range" min="#{cutoffs.min}" max="#{cutoffs.max}" step="1" value="#{default_cutoff}">
         <output id="train-to-output">#{cutoff_label.call(default_cutoff)}</output>
       </label>
@@ -2382,8 +2402,7 @@ else
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
       const trainDefault = #{default_cutoff};
-      const influenzaPeriod = #{selected_period == 'calendar' ? 'false' : 'true'};
-      const periodYearLabel = year => influenzaPeriod ? `${year}/${String(year + 1).slice(-2)}` : String(year);
+      const periodYearLabel = year => String(year);
       const modelDefault = #{JSON.generate(default_model)};
       const intervalModeDefault = #{JSON.generate(interval_mode)};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
@@ -2399,7 +2418,7 @@ else
           {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
         ],
         encoding: {
-          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1#{selected_period == 'calendar' ? '' : ', labelExpr: "datum.value + \'/\' + substring(toString(datum.value + 1), 2, 4)"'}}, title: #{JSON.generate(selected_period == 'calendar' ? ($l == :ja ? '年' : 'Year') : ($l == :ja ? 'インフルエンザ年' : 'Influenza year'))}}
+          x: {field: "year", type: "quantitative", scale: {domainMin: {expr: "display_start"}, domainMax: #{[display_year_max, 2025 + 11.0 / 12.0].max}, nice: false, zero: false}, axis: {format: "d", tickMinStep: 1}, title: #{JSON.generate(selected_period == 'calendar' ? ($l == :ja ? '年' : 'Year') : ($l == :ja ? 'インフルエンザ年（開始年）' : 'Influenza year (start year)'))}}
         },
         layer: [
           {mark: {type: "area", opacity: 0.55}, encoding: {color: {field:"interval_method", type:"nominal", scale:{domain:["simulation","analytic"], range:["#eadfc2","#c7dff0"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
