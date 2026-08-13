@@ -2409,7 +2409,7 @@ else
             ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
           {transform:[{filter:"datum.outside_pi"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2}, encoding:{y:{field:"observed",type:"quantitative"}}},
-          {data:{values:[{year:#{$mortyear_training_start}}]}, mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}},
+          {data:{values:[{year:#{$mortyear_training_start}}]}, transform:[{filter:"datum.year >= display_start"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"year",type:"quantitative"}}},
           {transform:[{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}, encoding:{x:{field:"year",type:"quantitative"}}}
         ]
       }));
