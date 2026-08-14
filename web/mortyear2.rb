@@ -2773,6 +2773,19 @@ else
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const startWeek = #{start_week};
       const displayStartDate = year => #{selected_period == 'calendar' ? '`${year}-01-01`' : '`${year + 1}-01-01`'};
+      const annualTooltip = [
+        #{selected_period == 'calendar' ?
+          %({field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}}) :
+          %({field:"season", type:"nominal", title:#{JSON.generate($l == :ja ? '期間' : 'Season')}})},
+        {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
+        {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測値' : 'Expected')}},
+        {field:"pi_lower", type:"quantitative", format:".2f", title:"PI lower"},
+        {field:"pi_upper", type:"quantitative", format:".2f", title:"PI upper"},
+        {field:"deaths", type:"quantitative", format:",.2f", title:#{JSON.generate($l == :ja ? '年境界按分後死亡数' : 'Prorated deaths')}},
+        {field:"population", type:"quantitative", format:",d", title:#{JSON.generate(denominator_title)}},
+        {field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}},
+        {field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
+      ];
       const annualTransforms = [
         {filter: "toDate(datum.plot_date) >= toDate(display_start_date) && toDate(datum.plot_date) <= now()"},
         {filter: "datum.train_to == train_to"},
@@ -2797,21 +2810,10 @@ else
         layer: [
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
-          {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
-            #{selected_period == 'calendar' ?
-              %({field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}}) :
-              %({field:"season", type:"nominal", title:#{JSON.generate($l == :ja ? '期間' : 'Season')}})},
-            {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
-            {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測値' : 'Expected')}},
-            {field:"pi_lower", type:"quantitative", format:".2f", title:"PI lower"},
-            {field:"pi_upper", type:"quantitative", format:".2f", title:"PI upper"},
-            {field:"deaths", type:"quantitative", format:",.2f", title:#{JSON.generate($l == :ja ? '年境界按分後死亡数' : 'Prorated deaths')}},
-            {field:"population", type:"quantitative", format:",d", title:#{JSON.generate(denominator_title)}}
-            ,{field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}}
-            ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
-          ]}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '日付' : 'Date')}},{field:"detail_period",type:"nominal",title:#{JSON.generate($l == :ja ? '単位' : 'Period')}},{field:"observed",type:"quantitative",format:".2f",title:#{JSON.generate($l == :ja ? '年率換算死亡率' : 'Annualized mortality rate')}}]}},
+          {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}}},
           {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
+          {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
           {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
