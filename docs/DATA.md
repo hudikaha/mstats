@@ -23,12 +23,12 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `yearmonth` / `yearweek` | keyword | Period code such as `2009m01` / `2009w02` |
 | `year`, `month`, `week` | integer | Calendar year, month, or week number; units that do not apply are absent |
 | `category` | keyword | `death` or `pop` |
-| `death_code` | keyword | Cause-of-death code; `00000` means all causes |
+| `death_code` | keyword | Cause-of-death code; `allcause` means all causes |
 | `death_cause` | keyword | Cause-of-death name |
 | `sex` | keyword | `male`, `female`, `both`, and related source categories |
-| `rate` | keyword | Empty for counts, `crude` for crude rates, `asr` for directly age-standardized rates, and legacy values such as `adj` or `amr` |
+| `rate` | keyword | Empty for counts, `crude` for crude rates, and `asr` for directly age-standardized rates |
 | `algo` | keyword | Method for a comparative or derived series; empty for source values |
-| `type` | keyword | Population-series class such as `conf`, `est`, or `jpns` |
+| `type` | keyword | Minimal series identifier, such as `cfm`, `est`, `stmf`, or `recon` |
 | `src_url` | keyword array, not indexed | One or more URLs identifying the source data used for the record |
 | `age_all` | scaled_float | Value for all ages |
 | `age_*` | scaled_float | Age-group value such as `age_00_04`, `age_80_84`, or `age_100over` |
@@ -41,7 +41,7 @@ provide that group; it does not mean zero.
 IDs join exactly eight components—location, period, category, rate, cause,
 algorithm, type, and sex—with `_`. Underscores are not allowed inside a component;
 empty components remain as empty positions. For example,
-`jpn_2009w02_death__00000___both` is the source-value
+`jpn_2009w02_death__allcause__stmfrecon_both` is the source-value
 record for Japan, ISO week 2 of 2009, all causes, and both sexes.
 
 Every record has `src_url`. In the source CSV it is a JSON array, because a
@@ -52,29 +52,29 @@ and display, but it cannot be used as a search condition or aggregation field.
 
 Annual records contain `year` but neither `yearmonth` nor `yearweek`. U.S. annual
 birth records store births in `category=birth`, `age_all`. Infant deaths are the
-`age_0` value of the all-cause (`death_code=00000`) death record. The OECD
-perinatal-mortality indicator uses `death_code=PERM`; its `age_all` value is an
+`age_0` value of the all-cause (`death_code=allcause`) death record. The OECD
+perinatal-mortality indicator uses `death_code=perm`; its `age_all` value is an
 approximate event count reconstructed from the published rounded rate and the
-available birth denominator, and is marked `type=reconst`. `PERM` is an
+available birth denominator, and is marked `type=recon`. `perm` is an
 OECD indicator code, not an ICD cause code.
 
 For OECD-covered countries other than Japan and the United States, infant and
 perinatal death counts are reconstructed from OECD rates and the matching
 annual births in UN WPP 2024. These approximate series use
-`type=reconst`. Missing OECD years are not
+`type=recon`. Missing OECD years are not
 interpolated. Because rounded rates are combined with WPP-estimated births,
 these series are less precise than series based on national official counts.
 
 For Japanese perinatal mortality, deliveries (births plus fetal deaths at 22 completed
-weeks or later) are stored in `category=delivery`, `age_all`. Official `death_code=PERM`
-counts use this denominator, while approximate `type=reconst` series use births.
+weeks or later) are stored in `category=delivery`, `age_all`. Official `death_code=perm`
+counts use this denominator, while approximate `type=recon` series use births.
 
 UN World Population Prospects 2024 annual records cover 1950–2100 and identify
-their source and status in `type`: `unwpp2024est`, `unwpp2024proj`,
-`unwpp2024expest`, or `unwpp2024expproj`. The first two population series are
+their source and status in `type`: `unwpp2024est`, `unwpp2024prj`,
+`unwpp2024expest`, or `unwpp2024expprj`. The first two population series are
 1 July population; the `exp` variants contain annual population
 exposure and age groups used as mortality-rate denominators. All-cause death
-counts use `death_code=00000`; `rate=crude` is per 100,000 population.
+counts use `death_code=allcause`; `rate=crude` is per 100,000 population.
 `rate=asr` uses direct standardization to the WHO world standard population
 (world average for 2000–2025), is stored in `age_all`, and uses
 `algo=whostd`. These WPP values are UN estimates and

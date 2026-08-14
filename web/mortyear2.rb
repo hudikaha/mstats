@@ -22,10 +22,10 @@ abort 'lib/mfacts.rb not found' unless mfacts
 require mfacts
 
 country_names_library = [
-  File.expand_path('mstats.rb', __dir__),
-  File.expand_path('../vdeath/lib/mstats.rb', __dir__)
+  File.expand_path('mstats2.rb', __dir__),
+  File.expand_path('../vdeath/lib/mstats2.rb', __dir__)
 ].find { |path| File.file?(path) }
-abort 'country-name source mstats.rb not found' unless country_names_library
+abort 'country-name source mstats2.rb not found' unless country_names_library
 require country_names_library
 COUNTRY_NAMES = Locs.transform_values(&:dup).freeze
 Object.send(:remove_const, :Locs)
@@ -50,10 +50,10 @@ COUNTRY_NAME_OVERRIDES = {
 }.freeze
 
 mort_vars = [
-  File.expand_path('mort-vars.rb', __dir__),
-  File.expand_path('../../../web/mort-vars.rb', __dir__)
+  File.expand_path('mort-vars2.rb', __dir__),
+  File.expand_path('../../../web/mort-vars2.rb', __dir__)
 ].find { |path| File.file?(path) }
-abort 'web/mort-vars.rb not found' unless mort_vars
+abort 'web/mort-vars2.rb not found' unless mort_vars
 require mort_vars
 
 AGES = {
@@ -106,8 +106,8 @@ METRICS = {
   'birth_rate' => { ja: '出生関連死亡率', en: 'Birth-based mortality rate' }
 }.freeze
 SPECIAL_CAUSES = {
-  'INFANT' => { ja: '乳児死亡率', en: 'Infant mortality rate' },
-  'PERINATAL' => { ja: '周産期死亡率', en: 'Perinatal mortality rate' }
+  'infant' => { ja: '乳児死亡率', en: 'Infant mortality rate' },
+  'perm' => { ja: '周産期死亡率', en: 'Perinatal mortality rate' }
 }.freeze
 WORLD_REGIONS = {
   'Africa' => { ja: 'アフリカ', en: 'Africa' },
@@ -134,7 +134,7 @@ CACHE_MAX_BYTES = 1024 * 1024 * 1024
 CACHE_MAX_AGE = 30 * 24 * 60 * 60
 DEFAULT_CACHE_DIR = '/var/cache/medicalfacts/mortyear'
 
-opts = { index: 'mstats', debug: false, fixture: nil, summary: false,
+opts = { index: 'mstats20260814', debug: false, fixture: nil, summary: false,
          process_cache_jobs: nil, verify_cache: false, rebuild_catalog: false,
          cache_dir: DEFAULT_CACHE_DIR }
 OptionParser.new do |parser|
@@ -219,7 +219,12 @@ selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_
 selected_ages &= STMF_AGES if selected_period != 'calendar'
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_ages = ['age_all'] if selected_period != 'calendar' && selected_ages.include?('age_all')
-requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.uniq
+requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.
+                   map do |code|
+                     normalized = code.downcase
+                     %w[all 00000].include?(normalized) ? 'allcause' :
+                       (normalized == 'perinatal' ? 'perm' : normalized)
+                   end.uniq
 requested_start_year = cgi['start_year'].to_i
 period_start_year = selected_period == 'calendar' ? 2000 : 1999
 default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : period_start_year
@@ -265,7 +270,7 @@ def available_location_rates(index:, fixture:)
     size: 0,
     query: { bool: { filter: [
       { term: { category: 'death' } },
-      { term: { death_code: '00000' } },
+      { term: { death_code: 'allcause' } },
       { exists: { field: 'yearweek' } }
     ] } },
     aggs: { locations: { terms: { field: 'loc_code', size: 300 },
@@ -296,7 +301,7 @@ def available_annual_catalog(index:, fixture:)
                               group_by { |row| row[:death_code].to_s }.
                               transform_values { |items| items.map { |row| row[:year].to_i }.max },
         infant_all_cause_max_year: rows.select do |row|
-          row[:category] == 'death' && row[:death_code] == '00000' && row[:type] == 'conf' &&
+          row[:category] == 'death' && row[:death_code] == 'allcause' && row[:type] == 'cfm' &&
             row[:rate].to_s.empty? && row[:algo].to_s.empty? && !row[:age_0].nil?
         end.map { |row| row[:year].to_i }.max.to_i,
         algos: rows.map { |row| row[:algo].to_s }.uniq
@@ -321,8 +326,8 @@ def available_annual_catalog(index:, fixture:)
       death_codes: { terms: { field: 'death_code', size: 1000 },
                      aggs: { max_year: { max: { field: 'year' } } } },
       infant_all_cause: { filter: { bool: { filter: [
-        { term: { category: 'death' } }, { term: { death_code: '00000' } },
-        { term: { type: 'conf' } }, { exists: { field: 'age_0' } }
+        { term: { category: 'death' } }, { term: { death_code: 'allcause' } },
+        { term: { type: 'cfm' } }, { exists: { field: 'age_0' } }
       ], must_not: [{ exists: { field: 'rate' } }, { exists: { field: 'algo' } }] } },
                           aggs: { max_year: { max: { field: 'year' } } } },
       algos: { terms: { field: 'algo', size: 20 } }
@@ -352,9 +357,9 @@ def metric_available?(code, rates, metric)
   raw = rates.include?('')
   case metric
   when 'deaths' then raw
-  when 'std_deaths' then code == 'JPN' && rates.include?('adj')
-  when 'crude_rate' then code != 'JPN' && raw && rates.include?('amr')
-  when 'asr' then code == 'JPN' && rates.include?('adj') && rates.include?('amr')
+  when 'std_deaths' then false
+  when 'crude_rate' then raw && rates.include?('crude')
+  when 'asr' then raw && rates.include?('crude')
   when 'birth_rate' then true
   else false
   end
@@ -367,7 +372,7 @@ def wpp_record?(row)
 end
 
 def projected_record?(row)
-  row[:type].to_s.end_with?('proj')
+  row[:type].to_s.end_with?('prj')
 end
 
 def exposure_record?(row)
@@ -385,12 +390,12 @@ def annual_metric_available?(code, catalog, metric)
   categories = catalog.fetch(:categories)
   codes = catalog.fetch(:death_codes)
   case metric
-  when 'deaths' then categories.include?('death') && codes.include?('00000')
+  when 'deaths' then categories.include?('death') && codes.include?('allcause')
   when 'crude_rate' then rates.include?('crude')
   when 'asr' then rates.include?('asr')
   when 'birth_rate'
     categories.include?('birth') &&
-      (codes.include?('INFANT') || codes.include?('PERM') || catalog.fetch(:infant_all_cause_max_year, 0).positive?)
+      (codes.include?('infant') || codes.include?('perm') || catalog.fetch(:infant_all_cause_max_year, 0).positive?)
   else false
   end
 end
@@ -414,16 +419,16 @@ def birth_cause_available?(_location, catalog, cause)
   # 日本語: 最短cutoff 2015と、その後2年の予測評価を作れる系列だけを表示対象にする。
   # English: Require enough data for the earliest 2015 cutoff plus two evaluation years.
   max_years = catalog.fetch(:death_code_max_years, {})
-  if cause == 'PERINATAL'
-    codes.include?('PERM') && max_years.fetch('PERM', 0) >= 2017
+  if cause == 'perm'
+    codes.include?('perm') && max_years.fetch('perm', 0) >= 2017
   else
-    explicit = codes.include?('INFANT') && max_years.fetch('INFANT', 0) >= 2017
+    explicit = codes.include?('infant') && max_years.fetch('infant', 0) >= 2017
     explicit || catalog.fetch(:infant_all_cause_max_year, 0) >= 2017
   end
 end
 
 def available_death_codes(index:, fixture:, locations:, metric:)
-  wanted_rate = %w[std_deaths asr].include?(metric) ? 'adj' : ''
+  wanted_rate = metric == 'asr' ? 'asr' : ''
   if fixture
     return fixture.select do |row|
       locations.include?(row[:loc_code].to_s.upcase) && row[:yearweek] && row[:rate].to_s == wanted_rate
@@ -890,7 +895,7 @@ def replace_japan_weekly_crude_rates(count_rows, rate_rows, population_rows)
   population_rows.each do |row|
     key = row[:yearmonth].to_s
     current = populations[key]
-    rank = row[:type] == 'conf' ? 2 : 1
+    rank = row[:type] == 'cfm' ? 2 : 1
     populations[key] = [rank, row] if current.nil? || rank > current.first
   end
 
@@ -906,15 +911,15 @@ def replace_japan_weekly_crude_rates(count_rows, rate_rows, population_rows)
     end
     next unless population_days.positive?
 
-    count.merge(rate: 'amr', age_all: (deaths.to_f * DAYS_PER_YEAR * 100_000 /
+    count.merge(rate: 'crude', age_all: (deaths.to_f * DAYS_PER_YEAR * 100_000 /
                                        population_days).round(2))
   end
   rate_rows.reject { |row| row[:loc_code].to_s.casecmp('JPN').zero? } + corrected
 end
 
-# 日本語: UN月次AMRを、同じ系列のSTMF週次値が始まる前だけ短期変動表示へ加える。
-# English: Add UN monthly AMR to the detailed view only before the matching STMF weekly series begins.
-def prepend_monthly_amr(weekly_rows, monthly_rows, mode, selected_locations, selected_ages)
+# 日本語: UN月次crude rateを、同じ系列のSTMF週次値が始まる前だけ短期変動表示へ加える。
+# English: Add UN monthly crude rate to the detailed view only before the matching STMF weekly series begins.
+def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, selected_ages)
   weekly_first = weekly_rows.group_by { |row| [row[:loc_code], row[:death_code]] }
                             .transform_values { |rows| rows.map { |row| Date.iso8601(row[:date].to_s) }.min }
   monthly_rows.filter_map do |row|
@@ -1082,8 +1087,8 @@ def birth_rate_rows(records)
   # English: Prefer official values when international estimates coexist for the same year.
   source_rank = lambda do |row|
     case row[:type].to_s
-    when 'conf' then 0
-    when 'reconst' then 1
+    when 'cfm' then 0
+    when 'recon' then 1
     else 2
     end
   end
@@ -1096,23 +1101,23 @@ def birth_rate_rows(records)
   deliveries = choose_by_year.call('delivery')
   numerators = records.filter_map do |row|
     loc = row[:loc_code].to_s.upcase
-    cause, value = if row[:category] == 'death' && row[:death_code] == 'INFANT'
-                     ['INFANT', row[:age_all]]
-                   elsif row[:category] == 'death' && row[:death_code] == '00000' &&
-                         row[:rate].to_s.empty? && row[:algo].to_s.empty? && row[:type].to_s == 'conf'
-                     ['INFANT', row[:age_0]]
-                   elsif row[:category] == 'death' && row[:death_code] == 'PERM'
-                     ['PERINATAL', row[:age_all]]
+    cause, value = if row[:category] == 'death' && row[:death_code] == 'infant'
+                     ['infant', row[:age_all]]
+                   elsif row[:category] == 'death' && row[:death_code] == 'allcause' &&
+                         row[:rate].to_s.empty? && row[:algo].to_s.empty? && row[:type].to_s == 'cfm'
+                     ['infant', row[:age_0]]
+                   elsif row[:category] == 'death' && row[:death_code] == 'perm'
+                     ['perm', row[:age_all]]
                    end
     next unless cause && value
 
     key = [loc, row[:year].to_i]
-    denominator = cause == 'PERINATAL' ? deliveries[key] || births[key] : births[key]
+    denominator = cause == 'perm' ? deliveries[key] || births[key] : births[key]
     next unless denominator && denominator[:age_all].to_f.positive?
 
     population = denominator[:age_all].to_f
     urls = (Array(denominator[:src_url]) + Array(row[:src_url])).compact.uniq
-    numerator_rank = [row[:death_code] == '00000' ? 1 : 0, source_rank.call(row)]
+    numerator_rank = [row[:death_code] == 'allcause' ? 1 : 0, source_rank.call(row)]
     { loc_code: loc, sex: 'both', death_code: cause, year: row[:year].to_i,
       deaths: value.to_f, population: population, observed: value.to_f / population * 1000.0,
       unit_scale: 1000.0, src_url: urls, source_rank: numerator_rank }
@@ -1427,7 +1432,9 @@ def verify_mortyear_cache
 end
 
 def mortyear_catalog_file
-  File.join(cache_root, 'catalog.json')
+  # 日本語: 並行検査中は公開版catalogを上書きせず、物理index別に保存する。
+  # English: Keep a per-index catalog during parallel testing without replacing the public catalog.
+  File.join(cache_root, 'catalog-mstats20260814.json')
 end
 
 def load_mortyear_catalog(index)
@@ -1558,27 +1565,27 @@ def rebuild_mortyear_catalog(index)
       source: fields
     )
     series = catalog_location_series(records, loc)
-    if weekly_rates.fetch(loc, []).include?('') && weekly_rates.fetch(loc, []).include?('amr')
+    if weekly_rates.fetch(loc, []).include?('') && weekly_rates.fetch(loc, []).include?('crude')
       weekly = elastic_search(
         index: index, size: 100_000,
         filter: [{ 'term' => { 'loc_code' => loc.downcase } },
-                 { 'term' => { 'category' => 'death' } }, { 'term' => { 'death_code' => '00000' } },
+                 { 'term' => { 'category' => 'death' } }, { 'term' => { 'death_code' => 'allcause' } },
                  { 'exists' => { 'field' => 'yearweek' } }],
         source: %w[loc_code yearweek category rate death_code date year week sex src_url] + STMF_AGES
       )
       weekly.group_by { |row| row[:sex].to_s }.each do |sex, sex_rows|
         counts = sex_rows.select { |row| row[:rate].to_s.empty? }
-        rates = sex_rows.select { |row| row[:rate].to_s == 'amr' }
+        rates = sex_rows.select { |row| row[:rate].to_s == 'crude' }
         { 'flu27' => 27, 'flu36' => 36 }.each do |period, start_week|
           STMF_AGES.each do |age|
             rows = annualize_influenza_year(counts, rates, [age], start_week, 'crude_rate')
             next if rows.empty?
             %w[deaths crude_rate].each do |metric|
-              series << catalog_series(metric, '00000', sex, age, rows, period: period)
+              series << catalog_series(metric, 'allcause', sex, age, rows, period: period)
             end
           end
           asr_rows = annualize_influenza_asr(counts, rates, start_week)
-          series << catalog_series('asr', '00000', sex, 'age_all', asr_rows, period: period) unless asr_rows.empty?
+          series << catalog_series('asr', 'allcause', sex, 'age_all', asr_rows, period: period) unless asr_rows.empty?
         end
       end
     end
@@ -1636,7 +1643,7 @@ menu_catalog = fixture_data ? nil : load_mortyear_catalog(opts[:index])
 annual_catalog = menu_catalog || available_annual_catalog(index: opts[:index], fixture: fixture_data)
 if selected_period != 'calendar'
   location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
-  weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('amr') }.keys
+  weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('crude') }.keys
   if menu_catalog
     weekly_codes.select! do |code|
       menu_catalog.fetch(code, {}).fetch(:series, []).any? do |item|
@@ -1670,7 +1677,7 @@ if selected_metric == 'birth_rate' && requested_birth_causes.any?
 end
 selected_locations = [selected_locations.first] if mode == 'series'
 available_causes = if selected_period != 'calendar'
-                     ['00000']
+                     ['allcause']
                    elsif selected_metric == 'std_deaths'
                      available_death_codes(index: opts[:index], fixture: fixture_data,
                                            locations: selected_locations, metric: selected_metric)
@@ -1682,7 +1689,7 @@ available_causes = if selected_period != 'calendar'
                                                   locations: selected_locations, metric: selected_metric)
                    end
 selected_causes = requested_causes.select { |code| available_causes.include?(code) }
-selected_causes = ['00000'].select { |code| available_causes.include?(code) } if selected_causes.empty?
+selected_causes = ['allcause'].select { |code| available_causes.include?(code) } if selected_causes.empty?
 selected_causes = [available_causes.first].compact if selected_causes.empty?
 selected_causes = [selected_causes.first] if mode == 'country'
 if selected_metric == 'birth_rate'
@@ -1690,7 +1697,7 @@ if selected_metric == 'birth_rate'
     selected_locations.all? { |loc| birth_cause_available?(loc, annual_catalog.fetch(loc), cause) }
   end
   selected_causes = requested_causes.select { |code| available_causes.include?(code) }
-  selected_causes = mode == 'series' ? SPECIAL_CAUSES.keys : ['INFANT'] if selected_causes.empty?
+  selected_causes = mode == 'series' ? SPECIAL_CAUSES.keys : ['infant'] if selected_causes.empty?
   selected_causes = [selected_causes.first] if mode == 'country'
 end
 available_menu_ages = AGES.keys
@@ -1708,8 +1715,8 @@ if menu_catalog && selected_period == 'calendar' && selected_metric != 'birth_ra
 end
 # 日本語: 複数国比較では死因選択を使わず、共通の全死因へ固定する。
 # English: Multi-country comparisons use the common all-cause series without a cause selector.
-if mode == 'country' && selected_locations.length > 1 && available_causes.include?('00000')
-  selected_causes = ['00000']
+if mode == 'country' && selected_locations.length > 1 && available_causes.include?('allcause')
+  selected_causes = ['allcause']
 end
 
 locations_for_query = selected_locations.map(&:downcase)
@@ -1750,24 +1757,18 @@ elsif opts[:fixture]
       row[:category] == 'death' && selected_causes.include?(row[:death_code]) &&
       row[:sex] == selected_sex && row[:yearweek]
   end
-  count_rate = selected_period == 'calendar' && %w[std_deaths asr].include?(selected_metric) ? 'adj' : ''
-  count_rows = fixture.select { |row| row[:rate].to_s == count_rate }
-  rate_rows = fixture.select { |row| row[:rate] == 'amr' }
+  count_rows = fixture.select { |row| row[:rate].to_s.empty? }
+  rate_rows = fixture.select { |row| row[:rate] == 'crude' }
 else
-  count_rate = selected_period == 'calendar' && %w[std_deaths asr].include?(selected_metric) ? 'adj' : ''
-  count_rate_filter = if count_rate.empty?
-                        {
-                          'bool' => {
-                            'should' => [
-                              { 'term' => { 'rate' => '' } },
-                              { 'bool' => { 'must_not' => [{ 'exists' => { 'field' => 'rate' } }] } }
-                            ],
-                            'minimum_should_match' => 1
-                          }
-                        }
-                      else
-                        { 'term' => { 'rate' => count_rate } }
-                      end
+  count_rate_filter = {
+    'bool' => {
+      'should' => [
+        { 'term' => { 'rate' => '' } },
+        { 'bool' => { 'must_not' => [{ 'exists' => { 'field' => 'rate' } }] } }
+      ],
+      'minimum_should_match' => 1
+    }
+  }
   count_rows = elastic_search(
     index: opts[:index], size: 100_000,
     filter: common_filters + [count_rate_filter],
@@ -1775,36 +1776,14 @@ else
   )
   rate_rows = opts[:debug] ? [] : elastic_search(
     index: opts[:index], size: 100_000,
-    filter: common_filters + [{ 'term' => { 'rate' => 'amr' } }],
+    filter: common_filters + [{ 'term' => { 'rate' => 'crude' } }],
     source: source_fields
   )
 end
 
 monthly_supplement_enabled = selected_period != 'calendar' && selected_metric == 'crude_rate' &&
                              selected_ages == ['age_all'] && selected_sex == 'both' &&
-                             selected_causes == ['00000']
-if monthly_supplement_enabled && selected_locations.include?('JPN')
-  population_source = %w[loc_code yearmonth category type date year month sex age_all]
-  japan_populations = if opts[:fixture]
-                        fixture_data.select do |row|
-                          row[:loc_code].to_s.casecmp('JPN').zero? && row[:yearmonth] &&
-                            row[:category] == 'pop' && %w[conf est].include?(row[:type]) &&
-                            row[:sex] == 'both'
-                        end
-                      else
-                        elastic_search(
-                          index: opts[:index], size: 100_000,
-                          filter: [{ 'term' => { 'loc_code' => 'jpn' } },
-                                   { 'term' => { 'category' => 'pop' } },
-                                   { 'terms' => { 'type' => %w[conf est] } },
-                                   { 'term' => { 'sex' => 'both' } },
-                                   { 'exists' => { 'field' => 'yearmonth' } }],
-                          source: population_source
-                        )
-                      end
-  rate_rows = replace_japan_weekly_crude_rates(count_rows, rate_rows, japan_populations)
-end
-
+                             selected_causes == ['allcause']
 sex_labels = {
   'male' => { ja: '男性', en: 'Male' },
   'female' => { ja: '女性', en: 'Female' }
@@ -1839,7 +1818,7 @@ panel_label = lambda do |loc, cause|
   parts << sex_labels.fetch(selected_sex).fetch($l) unless selected_sex == 'both'
   parts << cause_name
   unit = if selected_metric == 'birth_rate'
-           if cause == 'INFANT'
+           if cause == 'infant'
              $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
            elsif loc == 'JPN'
              $l == :ja ? '（出産1,000件当たり）' : '(per 1,000 deliveries)'
@@ -1919,31 +1898,31 @@ weekly_context = if selected_period != 'calendar' && %w[crude_rate asr].include?
                    []
                  end
 
-# 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次AMRで補完する。
-# English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly AMR.
+# 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次crude rateで補完する。
+# English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly crude rate.
 if monthly_supplement_enabled
   monthly_source = %w[loc_code yearmonth category rate death_code type date year month sex age_all]
   monthly_rows = if opts[:fixture]
                    fixture_data.select do |row|
                      locations_for_query.include?(row[:loc_code].to_s.downcase) &&
-                       row[:yearmonth] && row[:category] == 'death' && row[:rate] == 'amr' &&
-                       row[:type] == 'unmonth' && row[:death_code] == '00000' && row[:sex] == 'both'
+                       row[:yearmonth] && row[:category] == 'death' && row[:rate] == 'crude' &&
+                       row[:type] == 'unmonth' && row[:death_code] == 'allcause' && row[:sex] == 'both'
                    end
                  else
                    elastic_search(
                      index: opts[:index], size: 100_000,
                      filter: [{ 'terms' => { 'loc_code' => locations_for_query } },
                               { 'term' => { 'category' => 'death' } },
-                              { 'term' => { 'rate' => 'amr' } },
+                              { 'term' => { 'rate' => 'crude' } },
                               { 'term' => { 'type' => 'unmonth' } },
-                              { 'term' => { 'death_code' => '00000' } },
+                              { 'term' => { 'death_code' => 'allcause' } },
                               { 'term' => { 'sex' => 'both' } },
                               { 'exists' => { 'field' => 'yearmonth' } }],
                      source: monthly_source
                    )
                  end
-  weekly_context = prepend_monthly_amr(weekly_context, monthly_rows, mode,
-                                       selected_locations, selected_ages)
+  weekly_context = prepend_monthly_crude(weekly_context, monthly_rows, mode,
+                                         selected_locations, selected_ages)
 else
   weekly_context = weekly_context.map do |row|
     row.merge(detail_period: $l == :ja ? '週' : 'Week')
@@ -2151,7 +2130,7 @@ japan_causes = if menu_catalog
                  annual_catalog.dig('JPN', :death_codes).to_a
                end.select { |cause| cause.match?(/\A\d{5}\z/) }
 japan_causes.each do |cause|
-  next unless cause == '00000'
+  next unless cause == 'allcause'
   names = Death_codes.fetch(cause, { ja: cause, en: cause })
   type = mode == 'country' ? 'radio' : 'checkbox'
   puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
@@ -2163,7 +2142,7 @@ SPECIAL_CAUSES.each do |cause, names|
   puts %(<label><input class="cause-option" data-cause-scope="birth" data-locations="#{locations.join(' ')}" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts %(</div></details>)
-top_causes = japan_causes.select { |cause| cause.match?(/\A\d{2}000\z/) && cause != '00000' }
+top_causes = japan_causes.select { |cause| cause.match?(/\A\d{2}000\z/) && cause != 'allcause' }
 top_causes.each do |parent|
   children = japan_causes.select { |cause| cause != parent && cause.start_with?(parent[0, 2]) }
   names = Death_codes.fetch(parent, { ja: parent, en: parent })
@@ -2233,6 +2212,9 @@ puts <<~HTML
         const causes = params.getAll('death_codes');
         params.delete('death_codes');
         if (causes.length) params.set('death_codes', causes.join('~'));
+        const locations = params.getAll('c').map(value => value.toLowerCase());
+        params.delete('c');
+        if (locations.length) params.set('c', locations.join('~'));
         showLoading();
         window.location.assign(`${window.location.pathname}?${params.toString().replace(/%7E/gi, '~')}`);
       });
@@ -2333,7 +2315,7 @@ puts <<~HTML
           if (scope === 'birth' && document.querySelector('.comparison-mode:checked').value === 'series') {
             active.forEach(input => { input.checked = true; });
           } else {
-            const preferred = active.find(input => input.value === (scope === 'birth' ? 'INFANT' : '00000')) || active[0];
+            const preferred = active.find(input => input.value === (scope === 'birth' ? 'infant' : 'allcause')) || active[0];
             preferred.checked = true;
           }
         }
@@ -2523,15 +2505,15 @@ else
                       else
                         $l == :ja ? '人口' : 'Population'
                       end
-  oecd_reconstructed = chart_data.any? do |row|
+  oecd_reconructed = chart_data.any? do |row|
     urls = Array(row[:src_url])
     urls.any? { |url| url.to_s.include?('data-explorer.oecd.org') } &&
       urls.any? { |url| url.to_s.include?('population.un.org') }
   end
-  approximation_note = if oecd_reconstructed && (selected_locations - %w[JPN USA]).any?
-                         $l == :ja ? ' OECD公表率とUN WPP 2024の出生数から死亡数を逆算した近似系列です。欠測年は補間していません。' : ' Approximate death counts are reconstructed from OECD-published rates and UN WPP 2024 births. Missing years are not interpolated.'
-                       elsif selected_locations.include?('USA') && selected_causes.include?('PERINATAL')
-                         $l == :ja ? ' 米国の周産期死亡数は、丸められた公表率と出生数から逆算した近似値です。2006年と2010年は欠測のままです。' : ' U.S. perinatal death counts are approximate values reconstructed from rounded published rates and births; 2006 and 2010 remain missing.'
+  approximation_note = if oecd_reconructed && (selected_locations - %w[JPN USA]).any?
+                         $l == :ja ? ' OECD公表率とUN WPP 2024の出生数から死亡数を逆算した近似系列です。欠測年は補間していません。' : ' Approximate death counts are reconructed from OECD-published rates and UN WPP 2024 births. Missing years are not interpolated.'
+                       elsif selected_locations.include?('USA') && selected_causes.include?('perm')
+                         $l == :ja ? ' 米国の周産期死亡数は、丸められた公表率と出生数から逆算した近似値です。2006年と2010年は欠測のままです。' : ' U.S. perinatal death counts are approximate values reconructed from rounded published rates and births; 2006 and 2010 remain missing.'
                        else
                          ''
                        end
@@ -2553,14 +2535,14 @@ else
              elsif selected_period != 'calendar'
                'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years. UN WPP is not used.'
              elsif selected_metric == 'birth_rate' &&
-                selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL') && $l == :ja
+                selected_causes.include?('infant') && selected_causes.include?('perm') && $l == :ja
                'e-Statの確定数を使用。乳児死亡率の分母は出生数です。周産期死亡数は妊娠満22週以後の死産数と生後1週未満の早期新生児死亡数の合計で、分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
              elsif selected_metric == 'birth_rate' &&
-                   selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL')
+                   selected_causes.include?('infant') && selected_causes.include?('perm')
                'Uses final e-Stat counts. Infant mortality uses births as the denominator. Perinatal deaths combine fetal deaths at 22 completed weeks or later with early neonatal deaths under 7 days; the denominator is deliveries (births plus fetal deaths at 22 completed weeks or later).'
-             elsif selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL') && $l == :ja
+             elsif selected_metric == 'birth_rate' && selected_causes.include?('perm') && $l == :ja
                'e-Statの確定数を使用。周産期死亡数は妊娠満22週以後の死産数と生後1週未満の早期新生児死亡数の合計で、分母は出産数（出生数＋妊娠満22週以後の死産数）です。'
-             elsif selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL')
+             elsif selected_metric == 'birth_rate' && selected_causes.include?('perm')
                'Uses final e-Stat counts. Perinatal deaths combine fetal deaths at 22 completed weeks or later with early neonatal deaths under 7 days; the denominator is deliveries (births plus fetal deaths at 22 completed weeks or later).'
              elsif selected_metric == 'birth_rate' && $l == :ja
                'e-Statの確定出生数と乳児死亡数を使用しています。'
@@ -2589,17 +2571,17 @@ else
              elsif selected_period != 'calendar' && urls.include?(HMD_URL)
                'Aggregates HMD STMF weekly deaths and mortality rates into influenza years.'
              elsif loc == 'USA' && selected_metric == 'birth_rate' &&
-                selected_causes.include?('INFANT') && selected_causes.include?('PERINATAL')
+                selected_causes.include?('infant') && selected_causes.include?('perm')
                if $l == :ja
                  '乳児死亡率には米国CDCの年次出生数・乳児死亡数を使用しています。周産期死亡率には米国の年次出生数と、OECD公表率から逆算した近似死亡数を使用しています。'
                else
-                 'Infant mortality uses annual U.S. CDC birth and infant death counts. Perinatal mortality uses annual U.S. births and approximate death counts reconstructed from OECD-published rates.'
+                 'Infant mortality uses annual U.S. CDC birth and infant death counts. Perinatal mortality uses annual U.S. births and approximate death counts reconructed from OECD-published rates.'
                end
-             elsif loc == 'USA' && selected_metric == 'birth_rate' && selected_causes.include?('PERINATAL')
+             elsif loc == 'USA' && selected_metric == 'birth_rate' && selected_causes.include?('perm')
                if $l == :ja
                  '米国の年次出生数と、OECD公表率から逆算した周産期死亡数を使用しています。死亡数は近似値です。'
                else
-                 'Uses annual U.S. births and perinatal death counts reconstructed from OECD-published rates. The death counts are approximate.'
+                 'Uses annual U.S. births and perinatal death counts reconructed from OECD-published rates. The death counts are approximate.'
                end
              elsif loc == 'USA' && selected_metric == 'birth_rate'
                if $l == :ja
@@ -2611,7 +2593,7 @@ else
                if $l == :ja
                  'OECD公表率とUN WPP 2024の出生数から再構成した近似死亡数を使用しています。'
                else
-                 'Uses approximate death counts reconstructed from OECD-published rates and UN WPP 2024 births.'
+                 'Uses approximate death counts reconructed from OECD-published rates and UN WPP 2024 births.'
                end
              elsif urls.include?(WPP_URL)
                $l == :ja ? 'UN WPP 2024の年次推計値（2023年まで）。' : 'UN WPP 2024 annual estimates through 2023.'
@@ -2673,8 +2655,8 @@ else
                        [
                          [$l == :ja ? '全年齢・0歳・年齢区間別の死亡数と粗死亡率' : 'Death counts and crude mortality rates for all ages, age 0, and selected age ranges', general],
                          [$l == :ja ? '年齢調整死亡率' : 'Age-standardized mortality rates', available_count.call('asr')],
-                         [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'INFANT')],
-                         [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'PERINATAL')]
+                         [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'infant')],
+                         [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'perm')]
                        ]
                      else
                        counts = %w[deaths crude_rate asr].map do |metric|

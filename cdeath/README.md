@@ -97,9 +97,9 @@ with annual births from UN WPP 2024 and does not import the resulting CSV.
 The Makefile keeps the rebuild courses separate: `upload-official` /
 `logstash-official`, `upload-hmd` / `logstash-hmd`, and `upload-wpp` /
 `logstash-wpp`. Every Logstash target requires an explicit physical destination,
-whose default is `YEARLY_INDEX=mstats20260813`. After validation, switch the
+whose default is `YEARLY_INDEX=mstats20260814`. After validation, switch the
 public logical name atomically with
-`make switch-mstats-alias YEARLY_INDEX=mstats20260813`. `mortyear.rb` reads
+`make switch-mstats-alias YEARLY_INDEX=mstats20260814`. `mortyear.rb` reads
 annual records from Elasticsearch and does not read a Web-local CSV.
 
 Monthly and weekly cause-of-death CSVs in one pass:
