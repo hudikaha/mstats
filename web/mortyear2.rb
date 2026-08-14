@@ -1649,10 +1649,22 @@ fixture_data = if opts[:fixture]
                end
 menu_catalog = fixture_data ? nil : load_mortyear_catalog(opts[:index])
 annual_catalog = menu_catalog || available_annual_catalog(index: opts[:index], fixture: fixture_data)
+if selected_period != 'calendar'
+  location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
+  weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('crude') }.keys
+  if menu_catalog
+    weekly_codes.select! do |code|
+      menu_catalog.fetch(code, {}).fetch(:series, []).any? do |item|
+        item[:period] == selected_period && item[:metric] == selected_metric && item[:displayable]
+      end
+    end
+  end
+  annual_catalog.select! { |code, _entry| weekly_codes.include?(code) }
+end
 $annual_catalog = annual_catalog
 metric_locations = annual_catalog.select do |code, catalog|
-  annual_metric_available?(code, catalog, selected_metric) ||
-    (selected_period != 'calendar' && period_metric_available?(catalog, selected_metric, selected_period))
+  selected_period == 'calendar' ? annual_metric_available?(code, catalog, selected_metric) :
+    %w[deaths crude_rate asr].include?(selected_metric)
 end.keys.sort
 metric_locations = ['JPN'].select { |code| annual_catalog.key?(code) } if selected_metric == 'std_deaths'
 available_locations = annual_catalog.keys.sort
@@ -1718,7 +1730,9 @@ end
 locations_for_query = selected_locations.map(&:downcase)
 ages_for_query = selected_ages
 annual_source_fields = %w[id loc_code location world_region category rate death_code algo type date year sex src_url] + AGES.keys
-annual_records_all = if opts[:fixture]
+annual_records_all = if selected_period != 'calendar'
+                       []
+                     elsif opts[:fixture]
                        fixture_data.reject { |row| row[:yearmonth] || row[:yearweek] }
                      elsif selected_metric == 'std_deaths'
                        []
@@ -1868,18 +1882,6 @@ annual_by_age = { selected_ages => begin
            else
              annualize_weekly(count_rows, rate_rows, selected_ages.first)
            end
-  if selected_period != 'calendar'
-    fallback = if selected_metric == 'asr'
-                 stratified_asr_rows(annual_records_all, selected_locations, selected_sex, selected_causes)
-               elsif selected_metric != 'std_deaths'
-                 annual_record_rows(annual_records_all, selected_locations, selected_sex,
-                                    selected_causes, selected_metric, selected_ages)
-               else
-                 []
-               end
-    available_series = annual.to_h { |row| [[row[:loc_code], row[:death_code]], true] }
-    annual += fallback.reject { |row| available_series[[row[:loc_code], row[:death_code]]] }
-  end
   annual
 end }
 
