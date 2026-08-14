@@ -2736,7 +2736,7 @@ else
       &nbsp;
       <label><input id="weekly-view-checkbox" type="checkbox">
         #{ if monthly_supplement_enabled
-             $l == :ja ? '月次・週次表示' : 'Monthly/weekly view'
+             $l == :ja ? '週次・月次表示' : 'Weekly/monthly view'
            else
              $l == :ja ? '週次表示' : 'Weekly view'
            end }
