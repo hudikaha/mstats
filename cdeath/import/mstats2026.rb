@@ -110,7 +110,13 @@ module Mstats2026
       csv << fields.map do |field|
         value = row[field.to_sym]
         value = JSON.generate(value) if value.is_a?(Array)
-        %w[- ・].include?(value) ? nil : value
+        # 日本語: 原表の記号の意味は入力ごとに異なるため、共通層で欠測へ変換しない。
+        # English: Source-marker meanings vary, so never silently convert them to missing here.
+        if %w[- ・].include?(value)
+          raise ArgumentError, "unresolved source marker: id=#{id} field=#{field} value=#{value.inspect}"
+        end
+
+        value
       end
     end
   end

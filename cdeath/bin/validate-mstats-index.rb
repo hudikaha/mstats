@@ -6,7 +6,7 @@ require 'net/http'
 require 'uri'
 
 index = ARGV.fetch(0, 'mstats20260814')
-expected_total = Integer(ARGV.fetch(1, '1876527'))
+expected_total = Integer(ARGV.fetch(1, '2577857'))
 password_file = File.expand_path('~/.config/mstats/espass.txt')
 user = ENV.fetch('ES_USER', 'elastic')
 password = ENV['ES_PASSWORD']
@@ -56,7 +56,7 @@ queries = {
   ],
   death_weekly_reconstructed_jpn: [
     { 'term' => { 'type' => 'stmfrecon' } },
-    757_938
+    1_446_600
   ],
   death_weekly_stmf: [
     { 'term' => { 'type' => 'stmf' } },
@@ -72,11 +72,11 @@ queries = {
   ],
   who_standard: [
     { 'term' => { 'algo' => 'whostd' } },
-    243_129
+    593_794
   ],
   japan_2015_standard: [
     { 'term' => { 'algo' => 'jp2015std' } },
-    15_642
+    366_307
   ]
 }.freeze
 

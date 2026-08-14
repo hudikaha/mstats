@@ -16,11 +16,46 @@ end
 
 def number(value)
   return nil if value.nil? || value.empty?
-  value.to_f
+
+  Float(value)
 end
 
 def clean_number(value)
   value&.round(9).then { |v| v == v.to_i ? v.to_i : v }
+end
+
+# 日本語: 人口が85歳以上一括の年は、死亡数と標準人口weightも85歳以上へ合算してASRを求める。
+# English: When population has only an 85-plus band, combine deaths and standard weights at 85-plus for ASR.
+def standard_groups(population, standard)
+  groups = standard.to_h do |field, weight|
+    members = field == 'age_95over' ? %w[age_95_99 age_100over] : [field]
+    [members, weight.to_f]
+  end
+  return groups if population['age_85_89']
+
+  older = %w[age_85_89 age_90_94 age_95_99 age_100over]
+  younger = groups.reject { |members, _weight| (members & older).any? }
+  older_weight = groups.sum { |members, weight| (members & older).any? ? weight : 0.0 }
+  younger.merge(%w[age_85over] => older_weight)
+end
+
+def standardized_rate(ages, population, standard)
+  groups = standard_groups(population, standard)
+  weighted = groups.sum do |members, weight|
+    count_values = members.map do |field|
+      if field == 'age_85over' && ages[field].nil?
+        detailed = %w[age_85_89 age_90_94 age_95_99 age_100over].map { |age| ages[age] }
+        detailed.sum if detailed.all?
+      else
+        ages[field]
+      end
+    end
+    pop_values = members.map { |field| population[field] }
+    break nil if count_values.any?(&:nil?) || pop_values.any? { |value| !value&.positive? }
+
+    count_values.sum * 100_000.0 / pop_values.sum * weight
+  end
+  weighted && weighted / groups.values.sum
 end
 
 death_groups = Hash.new { |hash, key| hash[key] = [] }
@@ -87,34 +122,15 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
                              src_url: (src_url + rows.fetch(pop_id)[:src_url]).uniq)
                           .merge(rates.transform_keys(&:to_sym))
 
-  # 日本語: 全標準年齢階級がある場合だけ、WHO世界標準人口によるASRを作る。
-  # English: Build a WHO-world-standard ASR only when every standard age group is available.
-  standard_rates = Mstats2026::WHO_WORLD_STANDARD.keys.to_h { |field| [field, rates[field]] }
-  next unless standard_rates.values.all?
-
-  asr_value = standard_rates.sum { |field, value| value * Mstats2026::WHO_WORLD_STANDARD.fetch(field) } /
-              Mstats2026::WHO_WORLD_STANDARD.values.sum
+  asr_value = standardized_rate(ages, population, Mstats2026::WHO_WORLD_STANDARD)
+  next unless asr_value
   asr_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'asr',
                                 death_code: code, algo: 'whostd', type: type, sex: sex)
   rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: 'whostd',
                             src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(asr_value))
 
-  # 日本語: 2015年モデル人口の95歳以上を一階級として日本基準ASRを作る。
-  # English: Build the Japanese-standard ASR with age 95-plus as one model-population band.
-  jp2015_rates = Mstats2026::JPN_2015_STANDARD.to_h do |field, _weight|
-    if field == 'age_95over'
-      count = ages['age_95_99'].to_f + ages['age_100over'].to_f
-      denominator = population['age_95_99'].to_f + population['age_100over'].to_f
-      [field, denominator.positive? ? count * 100_000.0 / denominator : nil]
-    else
-      [field, rates[field]]
-    end
-  end
-  next unless jp2015_rates.values.all?
-
-  jp2015_value = jp2015_rates.sum do |field, value|
-    value * Mstats2026::JPN_2015_STANDARD.fetch(field)
-  end / Mstats2026::JPN_2015_STANDARD.values.sum
+  jp2015_value = standardized_rate(ages, population, Mstats2026::JPN_2015_STANDARD)
+  next unless jp2015_value
   jp2015_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'asr',
                                    death_code: code, algo: 'jp2015std', type: type, sex: sex)
   rows[jp2015_id] = base.merge(id: jp2015_id, rate: 'asr', algo: 'jp2015std',

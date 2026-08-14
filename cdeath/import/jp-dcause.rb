@@ -128,7 +128,9 @@ files.each do |file|
             if ! health[id]["age_#{k}".to_sym]
                 raise "No health[#{id}][age_#{k}]"
             end
-            health[id]["age_#{k}".to_sym] = v
+            # 日本語: 人口動態統計の死亡数表では「-」は欠測ではなく0件を表す。
+            # English: In the Japanese vital-statistics death-count table, "-" means zero, not missing.
+            health[id]["age_#{k}".to_sym] = v == '-' ? 0 : (v == '・' ? nil : v)
             #STDERR.puts "age_#{k}: #{v}" if k == 'all' && id == 'jpn_2020_m06_death_all_both'
             count += 1
         end

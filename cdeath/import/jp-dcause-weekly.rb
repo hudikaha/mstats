@@ -39,11 +39,15 @@ WEEK_SLICES = {}
 # CSVの空欄を欠測のまま数値へ変換する。
 # Convert CSV values to numbers while preserving empty fields as missing.
 def number(value)
-  return nil if value.nil? || value.empty? || %w[- ・].include?(value)
+  return value if value.is_a?(Numeric)
+  return nil if value.nil? || value.empty?
+  # 日本語: 月次死亡CSVの「-」はjp-dcause.rbで0へ解決済みでなければならない。
+  # English: jp-dcause.rb must resolve monthly death CSV dashes to zero before this stage.
+  if %w[- ・].include?(value)
+    raise ArgumentError, "unresolved source marker in canonical monthly CSV: #{value.inspect}"
+  end
 
   value.include?('.') ? Float(value) : Integer(value)
-rescue ArgumentError
-  nil
 end
 
 # mstats2026 CSVをIDで検索できるレコードへ変換する。
@@ -162,6 +166,15 @@ def monthly_series(deaths, populations)
       end
     }
     standards['whostd'] = standards['whostd'].to_h { |age, weight| [[age], weight] }
+    unless population[:age_85_89]
+      standards.transform_values! do |groups|
+        younger = groups.reject { |members, _weight| members.any? { |age| BASE_AGE_GROUPS[:age_85over].include?(age) } }
+        older_weight = groups.sum do |members, weight|
+          members.any? { |age| BASE_AGE_GROUPS[:age_85over].include?(age) } ? weight : 0.0
+        end
+        younger.merge([:age_85over] => older_weight)
+      end
+    end
     standards.each do |algo, groups|
       weighted = groups.sum do |members, weight|
         value = annual_rate.call(members)

@@ -75,6 +75,14 @@ $ages = {
     '85歳以上' => 'age_85over',
 }
 
+# 日本語: 空欄や欠測記号をRubyのto_iで0へ変えず、人口値は明示的な整数だけを受け入れる。
+# English: Accept only explicit integer populations instead of coercing blanks or markers to zero.
+def population_value(value, multiplier)
+    Integer(value, 10) * multiplier
+rescue ArgumentError, TypeError
+    raise ArgumentError, "invalid population value: #{value.inspect}"
+end
+
 ARGV.each do |file|
     $firstflag = true
     csvtext = ''
@@ -188,9 +196,9 @@ ARGV.each do |file|
             end
             #pp id, age, k, row[k]
             if row['単位'] == '万人'
-                $health[id][age.to_sym] = row[k].to_i * 10000
+                $health[id][age.to_sym] = population_value(row[k], 10000)
             elsif row['単位'] == '千人'
-                $health[id][age.to_sym] = row[k].to_i * 1000
+                $health[id][age.to_sym] = population_value(row[k], 1000)
             end
             #pp $health[id]
        end
