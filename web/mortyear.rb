@@ -661,7 +661,9 @@ rescue JSON::ParserError, Zlib::GzipFile::Error, Errno::ENOENT
 end
 
 def write_queue_entry(path, entry)
-  FileUtils.mkdir_p(File.dirname(path), mode: 0o770)
+  # 日本語: CGIとcron workerが同じgroupを継承できるよう、queue directoryにsetgidを付ける。
+  # English: Set setgid on queue directories so the CGI and cron worker inherit the shared group.
+  FileUtils.mkdir_p(File.dirname(path), mode: 0o2770)
   lock_path = File.join(cache_root, 'queue', '.write.lock')
   File.open(lock_path, File::RDWR | File::CREAT, 0o666) do |lock|
     lock.flock(File::LOCK_EX)
