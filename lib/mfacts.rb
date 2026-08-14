@@ -177,9 +177,6 @@ end
 # Use the read-only Nginx API on loopback for public datasets.
 PUBLIC_ELASTIC_INDEXES = {
     'mstats' => 'mstats',
-    # 日本語: alias切替前の並行CGIだけがloopbackから物理indexを検査する。
-    # English: Parallel CGIs use the physical index through loopback before the alias switch.
-    'mstats20260814' => 'mstats20260814',
     'kcor' => 'kcor',
     'kcor2025' => 'kcor',
     'vdeath' => 'vdeath',

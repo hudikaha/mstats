@@ -68,17 +68,20 @@ Consts = {
     'vaxx'  => { hash: Vaxx,   defaults: ['false'],      selected: 'checked' },
     'cmpys' => { hash: Cmpys,  defaults: ['5'],          selected: 'selected'},
     'cmpto' => { hash: Cmpto,  defaults: ['2019'],       selected: 'selected'},
-    'types' => { hash: Types,  defaults: ['death_amr'],  selected: 'checked', keys: [] },
+    'types' => { hash: Types,  defaults: ['death_crude'],  selected: 'checked', keys: [] },
     'ages'  => { hash: Ages,   defaults: ['age_all'],    selected: 'checked', keys: [] },
     'sexes' => { hash: Sexes,  defaults: ['both'],       selected: 'checked', keys: [] },
     'c'     => { hash: Locs,   defaults: ['JPN','SWE','ENG'], selected: 'checked', keys: [] },
-    'death_codes' => { hash: Death_codes, defaults: ['00000'], selected: 'selected',keys: []},
+    'death_codes' => { hash: Death_codes, defaults: ['allcause'], selected: 'selected',keys: []},
 }
 
 Consts.each do |k, v|
 
     # 選択されたものだけチェック
     keys = $cgi[k].split(/,|~|、/)
+    keys = keys.map(&:upcase) if k == 'c'
+    keys = keys.map{|key| %w[all 00000].include?(key.downcase) ? 'allcause' : key.downcase} if k == 'death_codes'
+    keys = keys.map{|key| key.sub(/^death_amr/, 'death_crude')} if k == 'types'
     keys.each do |key|
         v[:hash][key][:sel] = v[:selected] if v[:hash][key]
     end
@@ -193,7 +196,7 @@ if IFrame['false'][:sel]
     var death_codes = Array.from(document.querySelectorAll('select[name="death_codes"] option:checked'),
                            option => option.value);
     var c =     Array.from(document.querySelectorAll('input[name="c"]:checked'),
-                           checkbox => checkbox.value);
+                           checkbox => checkbox.value.toLowerCase());
 
     var queryString = 'mort.rb?l=' + l
         + '&cmpys=' + cmpys
@@ -343,7 +346,7 @@ elsif Cmpto['ereg2019'][:sel] || Cmpto['ereg2020'][:sel]
   #{yosoku_str}
 EOS
 else
-    if $types.include?('death') || $types.include?('death_amr')
+    if $types.include?('death') || $types.include?('death_crude')
         if $cmpys > 1
             print <<EOS
   <span style="color: #{Mincolor};">██</span>
@@ -546,7 +549,7 @@ $types.each do |type|
     algo += "#{$cmpys}to#{$cmpto}" if algo != '' && algo != 'cumuldiff'
 
     yformat = ',.0d'
-    if rate == 'amr'
+    if rate == 'crude'
         yformat = ',.2f'
     end
     if algo =~ /excess/
@@ -558,22 +561,22 @@ $types.each do |type|
     $ages.each do |age|
         $sexes.each do |sex|
 
-            # Arrange MIN, MAX for all the country when AMR
+            # Arrange MIN, MAX for all the country when crude rate
             min = nil
             max = nil
             scale = ''
-            if rate == 'amr' #&& $locs.count > 1
+            if rate == 'crude' #&& $locs.count > 1
                 data_sex = $data.select{|k, v| v[:sex] == sex}
 
                 if algo == ''
-                    data2 = data_sex.select{|k, v| v[:rate] == 'amr' && v[:algo] == ''}.
+                    data2 = data_sex.select{|k, v| v[:rate] == 'crude' && v[:algo] == ''}.
                                 map{|k, v| v[age.to_sym]}.compact
                     (min, max) = (data2 != []) ? data2.minmax : [nil, nil]
                     #max = max < 100000 ? max : 100000
                     scale = '"scale": { "domain": [0, ' +
                             (max * BAI).round(2).to_s + '] },' if max
                 else
-                    data2 = data_sex.select{|k, v| v[:rate] == 'amr' &&
+                    data2 = data_sex.select{|k, v| v[:rate] == 'crude' &&
                                             v[:algo] =~ /^#{algo}/}.
                                 map{|k, v| v[age.to_sym]}.compact
                     (min, max) = (data2 != []) ? data2.minmax : [nil, nil]
@@ -635,7 +638,7 @@ $types.each do |type|
                 end
 
                 # Title (Cumuldiff)
-                if type == 'death_amr_cumuldiff'
+                if type == 'death_crude_cumuldiff'
                     data_cumuldiff = $data.select{|k, v| v[:loc_code] == loc &&
                                                   v[:sex] == sex &&
                                                   v[:algo] == 'cumuldiff'}
@@ -706,7 +709,7 @@ EOS
                 { "filter": "datum.sex  == '#{sex}'" }
               ],
 EOS
-                if type =~ /^death$|^death_amr$/
+                if type =~ /^death$|^death_crude$/
                     stroke = '"strokeDash": [5,3], "strokeWidth": 5'
                     regtrans = ''
                     if $regflag

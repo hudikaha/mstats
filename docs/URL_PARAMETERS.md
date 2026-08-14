@@ -20,7 +20,7 @@ multi-value cause and age parameters.
 Use one `death_codes` parameter and join multiple codes with `~`.
 
 ```text
-death_codes=INFANT~PERINATAL
+death_codes=infant~perm
 death_codes=04000~05000~06000
 ```
 
@@ -63,4 +63,3 @@ years=2019~2021-2025
 ```
 
 These are URL representations, not Elasticsearch document-ID components.
-

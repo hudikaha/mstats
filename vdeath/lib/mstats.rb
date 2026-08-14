@@ -291,7 +291,7 @@ class Mstats < Hash
             days = date.day
             days = 7 if days > 7
             range = 7
-            range = Date.new(year, month, -1).day if first[:rate] !~ /amr/
+            range = Date.new(year, month, -1).day if first[:rate] !~ /crude/
 
             Log.debug "++++++++++++++++++++++++++++++++++++++++++++++++"
             Log.debug "#{cause[:year]}w#{week_str}" +
@@ -344,7 +344,7 @@ class Mstats < Hash
                     next
                 end
                 days = 7 - days
-                range = Date.new(year2, month2, -1).day if first[:rate] !~ /amr/
+                range = Date.new(year2, month2, -1).day if first[:rate] !~ /crude/
                 Log.debug "#{id2} <= #{id} * #{days} / #{range}"
 
                 cause.each do |k, v|
@@ -461,119 +461,10 @@ class Mstats < Hash
         end
     end
 
-    # 年齢階級別人口を用いて年齢調整系列を計算する。
-    # Calculate age-adjusted series from age-specific populations.
+    # 旧adjustは廃止し、尺度が明示されたgeneratorでcrude/asrを作る。
+    # Retire legacy adjustment; explicit generators now create crude rates and ASRs.
     def adjust
-        causes2 = Mstats.new
-
-        Log.info("  reading popjp.csv...")
-        $pops = CSV.read('popjp.csv', headers: true).map do |pop|
-            record = pop.to_h.map do |k, v|
-                [k.to_sym, v.is_a?(String) ? v.to_num : nil]
-            end.to_h
-            [document_id(record), record]
-        end.to_h
-
-        pop_lasts = Hash.new
-        ['both', 'male', 'female'].each do |sex|
-            pop_lasts[sex] = $pops.select{|k, v| v[:sex] == sex}.to_a.last[1]
-        end
-        Log.debug "Last pop:"
-        Log.debug PP.pp(pop_lasts.map{|k, v| v[:doc_id]}, '')
-
-        prev_pref = ''
-        self.each do |id0, cause0|
-            #next if cause0[:death_code] != 'all' || cause0[:sex] != 'both' # XXX for debug
-            pref = id0.sub(/(^\w+_\d+m\d+)_.*$/, '\1')
-            if pref != prev_pref
-                Log.info "  #{pref}"
-                prev_pref = pref
-            end
-
-            sex = cause0[:sex]
-            days_y = Date.leap?(cause0[:year]) ? 366 : 365
-            days_m = Date.new(cause0[:year], cause0[:month], -1).day
-
-            id_pop = document_id(cause0, category: 'pop', rate: '', death_code: '', algo: '', type: 'conf')
-            id_pop = document_id(cause0, category: 'pop', rate: '', death_code: '', algo: '', type: 'est') unless $pops[id_pop]
-            pop = $pops[id_pop]
-            Log.debug ""
-
-            if ! pop[:age_85_89]
-                ages = @@ages85
-            else
-                #Log.error PP.pp(cause0, '')
-                #Log.error "++++++++++++++++++ #{cause0[:age_85_89]}"
-                #exit
-                ages = @@ages100
-            end
-
-            causes3 = Hash.new
-            rates = ['', 'adj', 'per100k', 'amr']
-            rates.each do |rate|
-                if rate == ''
-                    id = id0
-                    causes3[rate] = cause0
-                    Log.debug "TARGET: #{id} #{id0} #{id_pop}"
-                else
-                    id = document_id(cause0, rate: rate)
-                    causes2[id] = self[id0].dup
-                    causes2[id][:doc_id] = id
-                    causes2[id][:rate] = rate
-
-                    causes3[rate] = causes2[id] # 利便性のため
-                    Log.debug PP.pp(causes3[rate], '        ')
-                end
-            end
-
-            ages.each do |age, ages2|
-                if ! ages2
-                    causes3.each do |rate, cause|
-                        cause[age] = nil if rate != ''
-                    end
-                    next
-                end
-                sum = sum_adj = sum_pop = sum_pop_last = 0
-                ages2.each do |age2|
-                    if ! cause0[age2]
-                        Log.error "#{id}, #{age2}\n"
-                        exit
-                    end
-                    next if cause0[age2] == ''
-
-                    Log.debug "  #{age} <- #{age2}"
-                    sum += cause0[age2]
-                    Log.debug "    sum:          <- #{cause0[age2]}"
-
-                    sum_adj += cause0[age2].to_f * pop_lasts[sex][age2] / pop[age2]
-                    Log.debug "    sum_adj:      <- #{cause0[age2]} * #{pop_lasts[sex][age2]} / #{pop[age2]}"
-                    sum_pop += pop[age2]
-                    Log.debug "    sum_pop:      <- #{pop[age2]}"
-
-                    sum_pop_last += pop_lasts[sex][age2]
-                    Log.debug "    sum_pop_last: <- #{pop_lasts[sex][age2]}"
-
-                end
-                causes3.each do |rate, cause|
-                    append = ''
-                    if rate == ''
-                        cause[age] = sum # XXX for age_all
-                    elsif rate == 'adj'
-                        cause[age] = sum_adj
-                    elsif rate == 'per100k'
-                        cause[age] = sum_adj * 100000 / sum_pop_last
-                        append = " * 100000 / #{sum_pop_last} (<- #{sum_pop})"
-                    elsif rate == 'amr'
-                        cause[age] = (sum_adj * 100000 * days_y) /
-                                     (sum_pop_last * days_m)
-                        append = " * #{days_y} / #{days_m}"
-                    end
-                    cause[age] = cause[age].round(2) if rate != ''
-                    Log.debug "  #{age}: #{cause[age]} (#{rate})" + append
-                end
-            end
-        end
-        return causes2
+        raise NotImplementedError, 'use an explicit crude/asr generator'
     end
 
     #

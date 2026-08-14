@@ -108,7 +108,7 @@ Years = {
 # 症例
 #
 Death_codes = {
-    'all'   => {sel: '', ja: '全死因', en: 'All cause'},
+    'allcause' => {sel: '', ja: '全死因', en: 'All cause'},
     '01000' => {sel: '', ja: '感染症及び寄生虫症', en: 'Infectious and parasitic diseases'},
     '01100' => {sel: '', ja: '腸管感染症', en: 'Intestinal infections'},
     '01200' => {sel: '', ja: '結核', en: 'Tuberculosis'},
@@ -302,7 +302,7 @@ Adjustments = {
     'none' => {sel: '', ja: '年齢調整なし', en: 'No age adjustment'},
     'latest' => {sel: '', ja: '年齢調整（選択最終年月人口）',
                  en: 'Age adjustment (latest selected population)'},
-    'standard2015' => {sel: '', ja: '年齢調整（2015年モデル人口）',
+    'jp2015std' => {sel: '', ja: '年齢調整（2015年モデル人口）',
                        en: 'Age adjustment (2015 model population)'},
 }
 
@@ -376,6 +376,8 @@ $legacy_regression = $cgi['graph_type'][/^yearly_reg_(2019|2020)$/, 1]
                     key
                 end
             end
+        elsif v[:keys] == 'death_codes'
+            keys = keys.map{|key| %w[all 00000].include?(key.downcase) ? 'allcause' : key.downcase}
         end
         keys.each do |key|
             if v[:hash][key]
@@ -402,6 +404,7 @@ $regression = 'none' if ! Regressions[$regression]
 Regressions[$regression][:sel] = 'selected'
 
 $adjustment = $cgi['adjustment']
+$adjustment = 'jp2015std' if $adjustment == 'standard2015'
 $adjustment = 'latest' if $adjustment == '' && $cgi['adjusted'] == 'true'
 $adjustment = 'none' if ! Adjustments[$adjustment]
 Adjustments[$adjustment][:sel] = 'checked'
@@ -417,8 +420,8 @@ end
 # 年ごとの検索系では、既存の死因選択順を検索結果に混ぜない。
 # 「全死因」だけは、選択されていたかどうかを維持する。
 if $topflag && Graph_types.find{|key, value| value[:sel] == 'selected'}&.first == 'yearly'
-    all_selected = Death_codes['all'][:sel] == 'checked'
-    Death_codes.each{|key, value| value[:sel] = (key == 'all' && all_selected) ? 'checked' : ''}
+    all_selected = Death_codes['allcause'][:sel] == 'checked'
+    Death_codes.each{|key, value| value[:sel] = (key == 'allcause' && all_selected) ? 'checked' : ''}
 end
 
 #
@@ -504,7 +507,7 @@ elsif Ages['elementary'][:sel] == 'checked' || Ages['junior'][:sel] == 'checked'
     end
 end
 
-if $adjustment == 'standard2015' &&
+if $adjustment == 'jp2015std' &&
    (Ages['95_99'][:sel] == 'checked' || Ages['100over'][:sel] == 'checked')
     Ages['95_99'][:sel] = 'checked'
     Ages['100over'][:sel] = 'checked'
@@ -965,7 +968,7 @@ if ! $iframeflag
     var adjustment = document.querySelector('select[name="adjustment"]').value;
     var age95 = document.querySelector('input[name="age"][value="95_99"]');
     var age100 = document.querySelector('input[name="age"][value="100over"]');
-    if (adjustment == 'standard2015' && age95.checked != age100.checked) {
+    if (adjustment == 'jp2015std' && age95.checked != age100.checked) {
       age95.checked = true;
       age100.checked = true;
       syncAllAges();
@@ -1145,7 +1148,7 @@ print <<EOF
     <details id="death-code-details"><summary id="death-code-summary" class="disclosure-summary">#{{ja: '死因チェックボックスを', en: ''}[$l]}<span class="disclosure-action">#{{ja:'開く', en:'Open'}[$l]}</span>#{{ja:'', en:' cause checkboxes'}[$l]}</summary>
       <button type="button" onclick="clearDeathCodes()">#{{ja:'死因選択をクリア', en:'Clear causes'}[$l]}</button>
       <details>
-        <summary><span><input type="checkbox" name="death_code" value="all" #{Death_codes['all'][:sel]}> #{{ja: '全死因', en: 'All cause'}[$l]}</span></summary>
+        <summary><span><input type="checkbox" name="death_code" value="allcause" #{Death_codes['allcause'][:sel]}> #{{ja: '全死因', en: 'All cause'}[$l]}</span></summary>
         <ul style="list-style-type: none;">
 EOF
     Death_codes.each do |k, v|
@@ -1578,7 +1581,7 @@ death_code_terms = if $topflag
                    else
                        Death_codes.select{|k, v| v[:sel] == 'checked'}.keys
                    end
-death_code_terms = death_code_terms.map{|code| code == 'all' ? '00000' : code}
+death_code_terms = death_code_terms.map{|code| %w[all 00000].include?(code) ? 'allcause' : code.downcase}
 per_capita_selected = Per_capita['true'][:sel] == 'checked'
 population_selected = $cgi['category'] =~ /population/
 needs_population = $adjustment != 'none' || per_capita_selected || population_selected
@@ -1590,12 +1593,18 @@ should = [
             'must' => [
                 {'term' => {'category' => 'death'}},
                 {'terms' => {'death_code' => death_code_terms}},
+                {
+                    'bool' => {
+                        'should' => [
+                            {'term' => {'rate' => ''}},
+                            {'bool' => {'must_not' => [{'exists' => {'field' => 'rate'}}]}},
+                        ],
+                        'minimum_should_match' => 1,
+                    }
+                },
             ],
-            # 日本語: 死亡数画面へadj・amr・asrなどの率recordを混入させない。
-            # English: Keep adj, amr, asr, and other rate records out of the death-count screen.
-            'must_not' => [
-                {'exists' => {'field' => 'rate'}},
-            ],
+            # 日本語: 死亡数画面へ率recordを混入させない。
+            # English: Keep rate records out of the death-count screen.
         }
     }
 ]
@@ -1604,7 +1613,7 @@ if needs_population
         'bool' => {
             'must' => [
                 {'term' => {'category' => 'pop'}},
-                {'term' => {'type' => 'conf'}},
+                {'term' => {'type' => 'cfm'}},
             ]
         }
     })
@@ -1675,7 +1684,7 @@ data0.each do |datum0|
         elsif k == 'year'
             datum[k] = v.to_s
         elsif k =~ /^death_code/
-            internal_code = (v == '00000' ? 'all' : v)
+            internal_code = (%w[00000 all].include?(v.to_s.downcase) ? 'allcause' : v.to_s.downcase)
             datum[k] = internal_code
             if Death_codes[internal_code]
                 datum['death_cause'] = "#{v}: #{Death_codes[internal_code][$l]}"
@@ -1742,7 +1751,7 @@ if $adjustment != 'none'
                 denominator > 0 ? deaths * target / denominator : 0
             }.round(2)
         else
-            datum['sum_standard2015'] = standard_groups.sum{|ages, standard_population|
+            datum['sum_jp2015std'] = standard_groups.sum{|ages, standard_population|
                 deaths = ages == OldestAgeKeys && datum['age_85over'].to_f > 0 ?
                     datum['age_85over'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
                 denominator = ages == OldestAgeKeys ? population['age_85over'].to_f :
@@ -1882,7 +1891,7 @@ if $topflag
     #                  map{|k, v| v['death_code']}.slice(0, 20)
 
     $death_codes = Array.new
-    if Death_codes['all'][:sel] == 'checked'
+    if Death_codes['allcause'][:sel] == 'checked'
         $death_codes.push('all')
     end
     if Death_codes['02100'][:sel] == 'checked'
@@ -1928,7 +1937,7 @@ if $topflag
         v2 = $death_codes.find{|code| code == v['death_code']}
         next if ! v2
         index = $death_codes.index(v['death_code']) + 1
-        index -= 1 if Death_codes['all'][:sel] == 'checked'
+        index -= 1 if Death_codes['allcause'][:sel] == 'checked'
         index -= 1 if Death_codes['02100'][:sel] == 'checked'
         index = 0 if index < 0
         prefix = sprintf('%02d: ', index)

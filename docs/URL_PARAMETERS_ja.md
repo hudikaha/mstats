@@ -17,7 +17,7 @@
 一つの`death_codes` parameterを使い、複数codeを`~`で連結します。
 
 ```text
-death_codes=INFANT~PERINATAL
+death_codes=infant~perm
 death_codes=04000~05000~06000
 ```
 
@@ -56,4 +56,3 @@ years=2019~2021-2025
 ```
 
 これらはURL上の表現であり、Elasticsearch document IDの要素とは別です。
-

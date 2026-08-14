@@ -53,7 +53,7 @@ request bodyの指定は不要です。
 
 ```sh
 curl -sS \
-  'https://medicalfacts.info/elastic/mstats/_doc/jpn_2009w02_death__00000__both' \
+  'https://medicalfacts.info/elastic/mstats/_doc/jpn_2009w02_death__allcause__stmfrecon_both' \
   | ruby -ryaml -rjson -e 'puts YAML.dump(JSON.parse(STDIN.read))' \
   | less
 ```
@@ -62,9 +62,9 @@ curl -sS \
 
 ```yaml
 ---
-_index: mstats20260813
+_index: mstats20260814
 _type: _doc
-_id: jpn_2009w02_death__00000__both
+_id: jpn_2009w02_death__allcause__stmfrecon_both
 _version: 1
 _seq_no: 85638
 _primary_term: 1
@@ -111,7 +111,7 @@ curl -sS -H 'Content-Type: application/json' \
         "filter": [
           { "match": { "loc_code": "jpn" } },
           { "match": { "category": "death" } },
-          { "match": { "death_code": "00000" } },
+          { "match": { "death_code": "allcause" } },
           { "match": { "sex": "both" } }
         ]
       }
@@ -193,8 +193,8 @@ curl -sS -H 'Content-Type: application/json' \
 }
 ```
 
-全死因の`death_code`は`00000`です。人口recordは`category=pop`で、`type`は
-`conf`、`est`、`jpns`のいずれかです。
+全死因の`death_code`は`allcause`です。人口recordは`category=pop`で、`type`は
+`cfm`、`est`、`cfmjpns`、`estjpns`などの系列を区別します。
 
 ## kcorの検索例
 
@@ -265,7 +265,7 @@ curl -sS -H 'Content-Type: application/json' \
 最後のrecordの`sort`が次の場合、
 
 ```json
-"sort": ["2024-01-07", "jpn_2024w01_death__00000__both"]
+"sort": ["2024-01-07", "jpn_2024w01_death__allcause__stmfrecon_both"]
 ```
 
 次のrequestへそのまま渡します。
@@ -274,7 +274,7 @@ curl -sS -H 'Content-Type: application/json' \
 {
   "size": 1000,
   "query": { "term": { "loc_code": "jpn" } },
-  "search_after": ["2024-01-07", "jpn_2024w01_death__00000__both"],
+  "search_after": ["2024-01-07", "jpn_2024w01_death__allcause__stmfrecon_both"],
   "sort": [
     { "date": "asc" },
     { "id": "asc" }

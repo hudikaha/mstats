@@ -57,7 +57,7 @@ method, header, or request body option is required.
 
 ```sh
 curl -sS \
-  'https://medicalfacts.info/elastic/mstats/_doc/jpn_2009w02_death__00000__both' \
+  'https://medicalfacts.info/elastic/mstats/_doc/jpn_2009w02_death__allcause__stmfrecon_both' \
   | ruby -ryaml -rjson -e 'puts YAML.dump(JSON.parse(STDIN.read))' \
   | less
 ```
@@ -66,9 +66,9 @@ The output begins as follows:
 
 ```yaml
 ---
-_index: mstats20260813
+_index: mstats20260814
 _type: _doc
-_id: jpn_2009w02_death__00000__both
+_id: jpn_2009w02_death__allcause__stmfrecon_both
 _version: 1
 _seq_no: 85638
 _primary_term: 1
@@ -116,7 +116,7 @@ curl -sS -H 'Content-Type: application/json' \
         "filter": [
           { "match": { "loc_code": "jpn" } },
           { "match": { "category": "death" } },
-          { "match": { "death_code": "00000" } },
+          { "match": { "death_code": "allcause" } },
           { "match": { "sex": "both" } }
         ]
       }
@@ -199,8 +199,8 @@ Japanese municipalities use codes such as `jp132101`.
 }
 ```
 
-The all-cause `death_code` is `00000`. Population records use `category=pop`;
-their `type` is `conf`, `est`, or `jpns`.
+The all-cause `death_code` is `allcause`. Population records use `category=pop`;
+their `type` distinguishes series such as `cfm`, `est`, `cfmjpns`, and `estjpns`.
 
 ## kcor example
 
@@ -272,7 +272,7 @@ first request must define a unique sort order.
 If the final record contains:
 
 ```json
-"sort": ["2024-01-07", "jpn_2024w01_death__00000__both"]
+"sort": ["2024-01-07", "jpn_2024w01_death__allcause__stmfrecon_both"]
 ```
 
 pass that value unchanged to the next request:
@@ -281,7 +281,7 @@ pass that value unchanged to the next request:
 {
   "size": 1000,
   "query": { "term": { "loc_code": "jpn" } },
-  "search_after": ["2024-01-07", "jpn_2024w01_death__00000__both"],
+  "search_after": ["2024-01-07", "jpn_2024w01_death__allcause__stmfrecon_both"],
   "sort": [
     { "date": "asc" },
     { "id": "asc" }
