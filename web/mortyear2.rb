@@ -2777,6 +2777,7 @@ else
         {filter: "datum.model == model"},
         {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
       ];
+      const predictionTransforms = [...annualTransforms, {filter: "datum.year >= training_start"}];
       const panelSpecs = panels.map(([key, label]) => ({
         title: {text: label, anchor: "start"},
         width: "container", height: 260,
@@ -2792,8 +2793,8 @@ else
           end)}}
         },
         layer: [
-          {transform: annualTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
-          {transform: annualTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
+          {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
+          {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
             {field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}},
             {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
@@ -2806,8 +2807,8 @@ else
             ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
           {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '日付' : 'Date')}},{field:"detail_period",type:"nominal",title:#{JSON.generate($l == :ja ? '単位' : 'Period')}},{field:"observed",type:"quantitative",format:".2f",title:#{JSON.generate($l == :ja ? '年率換算死亡率' : 'Annualized mortality rate')}}]}},
-          {transform:[...annualTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
-          {data:{values:[{series:key,plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"datum.plot_date >= display_start_date"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}},
+          {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
+          {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
       }));
@@ -2817,6 +2818,7 @@ else
         params: [
           {name:"display_start", value:displayStartDefault},
           {name:"display_start_date", value:displayStartDate(displayStartDefault)},
+          {name:"training_start", value:#{$mortyear_training_start}},
           {name:"train_to", value:trainDefault},
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
