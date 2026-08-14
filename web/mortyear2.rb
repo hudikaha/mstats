@@ -2886,9 +2886,16 @@ else
           else url.searchParams.set("interval", "analytic");
           history.replaceState(null, "", url);
         });
-        if (weeklyView) weeklyView.addEventListener("change", () => {
-          result.view.signal("view_mode", weeklyView.checked ? "weekly" : "annual").runAsync();
-        });
+        if (weeklyView) {
+          const syncDetailView = () => {
+            result.view.signal("view_mode", weeklyView.checked ? "weekly" : "annual").runAsync();
+          };
+          weeklyView.addEventListener("change", syncDetailView);
+          window.addEventListener("pageshow", syncDetailView);
+          // reload時にブラウザが復元したcheckboxの状態を初期描画にも反映する。
+          // Apply the checkbox state restored by the browser to the initial chart as well.
+          syncDetailView();
+        }
         result.view.addSignalListener("train_to", (_name, value) => {
           const url = new URL(window.location.href);
           url.searchParams.set("train_to", value);
