@@ -2648,7 +2648,7 @@ else
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations。HMDが提供する週次死亡データです。この画面では年齢階級別の週次死亡数と死亡率を使用します。<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>国連人口部のWorld Population Prospects（世界人口推計）。各国の年次人口などを補う場合に使用します。<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
                        <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate（年齢調整死亡率）。年齢階級別死亡率をWHO世界標準人口で加重する直接法で計算します。インフルエンザ年のASRは、STMF共通の00–14、15–64、65–74、75–84、85歳以上という粗い階級による近似です。<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
-                       <dt><strong>インフルエンザ年の集計</strong></dt><dd>週次死亡数を日数按分し、週次死亡数と死亡率から得た人口を人口日として積算します。第27週または第36週から翌年の同じ開始週直前まで、全日がそろう期間だけを表示します。日本の週次値は実測週次値ではなく、e-Stat月次値から按分・平滑化した推計値です。</dd>
+                       <dt><strong>インフルエンザ年の集計</strong></dt><dd>年境界をまたぐ週の死亡数は、各期間に含まれる日数に応じて配分します。週次死亡数と死亡率から得た人口を人口日として積算し、第27週または第36週から翌年の同じ開始週直前まで、全日がそろう期間だけを表示します。日本の週次値は実測週次値ではなく、e-Stat月次値から按分・平滑化した推計値です。</dd>
                      </dl>
                    HTML
                  else
@@ -2659,7 +2659,7 @@ else
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations, the weekly mortality dataset provided by HMD. This page uses its age-specific weekly deaths and mortality rates.<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>United Nations World Population Prospects, published by the UN Population Division. It supplies annual population data where needed.<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
                        <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate, calculated by direct standardization with the WHO world standard population. Influenza-year ASR is approximate because it uses the broad common STMF groups 00–14, 15–64, 65–74, 75–84, and 85+.<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
-                       <dt><strong>Influenza-year aggregation</strong></dt><dd>Weekly deaths are prorated by day, and population inferred from weekly deaths and rates is accumulated as population-days. Only complete periods from W27 or W36 to the day before the same starting week in the following year are shown. Japanese weekly values are estimates prorated and smoothed from monthly e-Stat data, not directly observed weekly counts.</dd>
+                       <dt><strong>Influenza-year aggregation</strong></dt><dd>Deaths in a week crossing a year boundary are allocated in proportion to the number of days in each period. Population inferred from weekly deaths and rates is accumulated as population-days. Only complete periods from W27 or W36 to the day before the same starting week in the following year are shown. Japanese weekly values are estimates prorated and smoothed from monthly e-Stat data, not directly observed weekly counts.</dd>
                      </dl>
                    HTML
                  end
@@ -2781,7 +2781,6 @@ else
         {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測値' : 'Expected')}},
         {field:"pi_lower", type:"quantitative", format:".2f", title:"PI lower"},
         {field:"pi_upper", type:"quantitative", format:".2f", title:"PI upper"},
-        {field:"deaths", type:"quantitative", format:",.2f", title:#{JSON.generate($l == :ja ? '年境界按分後死亡数' : 'Prorated deaths')}},
         {field:"population", type:"quantitative", format:",d", title:#{JSON.generate(denominator_title)}},
         {field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}},
         {field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
