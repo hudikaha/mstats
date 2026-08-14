@@ -1151,7 +1151,7 @@ def compute_analytic_scenarios(rows, series_key, label)
         prediction = poisson_prediction(row, fit, variance_scale)
         {
           series: series_key, label: label, model: model, train_to: cutoff,
-          year: row[:year], observed: row[:observed],
+          year: row[:year], season: row[:season], observed: row[:observed],
           expected: prediction[:expected], pi_lower: prediction[:lower],
           pi_upper: prediction[:upper], outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
           period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
@@ -1182,7 +1182,7 @@ def compute_simulation_scenarios(rows, series_key, label)
       prediction = predictions.fetch([row[:year], row[:death_code]])
       {
         series: series_key, label: label, model: 'poisson', train_to: cutoff,
-        year: row[:year], observed: row[:observed], expected: prediction[:expected],
+        year: row[:year], season: row[:season], observed: row[:observed], expected: prediction[:expected],
         pi_lower: prediction[:lower], pi_upper: prediction[:upper],
         outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
         period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
@@ -1253,7 +1253,7 @@ def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
         prediction = predictions.fetch(row[:year]).fetch(model.to_sym)
         {
           series: series_key, label: label, model: model, train_to: cutoff,
-          year: row[:year], observed: row[:observed], expected: prediction[:expected],
+          year: row[:year], season: row[:season], observed: row[:observed], expected: prediction[:expected],
           pi_lower: prediction[:lower], pi_upper: prediction[:upper],
           outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
           period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
@@ -1307,7 +1307,7 @@ def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
       upper = simulations[(POISSON_SIMULATIONS * 0.975).floor - 1]
       {
         series: series_key, label: label, model: 'poisson', train_to: cutoff,
-        year: row[:year], observed: row[:observed], expected: expected,
+        year: row[:year], season: row[:season], observed: row[:observed], expected: expected,
         pi_lower: lower, pi_upper: upper, outside_pi: row[:observed] < lower || row[:observed] > upper,
         period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
         dispersion: nil, deaths: row[:deaths].round(2), population: row[:population].round,
@@ -1904,7 +1904,10 @@ end
 
 start_week = selected_period == 'flu27' ? 27 : 36
 chart_data.each do |row|
-  date = selected_period == 'calendar' ? Date.new(row[:year], 1, 1) : Date.commercial(row[:year], start_week, 1)
+  # 日本語: インフルエンザ年は冬が属する終了年の位置へ置く。
+  # English: Plot an influenza season at its ending year, where its winter belongs.
+  row[:season] ||= "#{row[:year]}/#{format('%02d', (row[:year] + 1) % 100)}" if selected_period != 'calendar'
+  date = selected_period == 'calendar' ? Date.new(row[:year], 1, 1) : Date.new(row[:year] + 1, 1, 1)
   row[:plot_date] = date.iso8601
 end
 weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
@@ -2769,7 +2772,7 @@ else
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const startWeek = #{start_week};
-      const displayStartDate = year => #{selected_period == 'calendar' ? '`${year}-01-01`' : 'new Date(Date.UTC(year, 0, 4 + (startWeek - 1) * 7 - ((new Date(Date.UTC(year, 0, 4)).getUTCDay() + 6) % 7))).toISOString().slice(0, 10)'};
+      const displayStartDate = year => #{selected_period == 'calendar' ? '`${year}-01-01`' : '`${year + 1}-01-01`'};
       const annualTransforms = [
         {filter: "toDate(datum.plot_date) >= toDate(display_start_date) && toDate(datum.plot_date) <= now()"},
         {filter: "datum.train_to == train_to"},
@@ -2788,14 +2791,16 @@ else
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
-            $l == :ja ? "インフルエンザ年（表示年の第#{start_week}週開始）" : "Influenza year (starts in W#{start_week} of the displayed year)"
+            $l == :ja ? "インフルエンザ年（第#{start_week}週開始）" : "Influenza year (starts in W#{start_week})"
           end)}}
         },
         layer: [
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
-            {field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}},
+            #{selected_period == 'calendar' ?
+              %({field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}}) :
+              %({field:"season", type:"nominal", title:#{JSON.generate($l == :ja ? '期間' : 'Season')}})},
             {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
             {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測値' : 'Expected')}},
             {field:"pi_lower", type:"quantitative", format:".2f", title:"PI lower"},
