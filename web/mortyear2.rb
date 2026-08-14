@@ -928,10 +928,9 @@ def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, s
     loc = row[:loc_code].to_s.upcase
     cause = row[:death_code].to_s
     first_week = weekly_first[[loc, cause]]
-    next unless first_week
 
     date = Date.iso8601(row[:date].to_s)
-    next unless Date.new(date.year, date.month, -1) < first_week
+    next if first_week && Date.new(date.year, date.month, -1) >= first_week
 
     # 月初ではなく月の中央へ置き、月全体の平均的な率であることをtemporal軸へ反映する。
     # Place the monthly average at mid-month instead of the first day of the month.
@@ -1749,21 +1748,27 @@ annual_records_all = if selected_period != 'calendar'
                        )
                      end
 source_fields = %w[id loc_code yearweek category rate death_code algo date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
+# 日本語: 暦年の英国年次系列はGBR、STMFはENGなので、詳細表示の検索時だけ対応付ける。
+# English: Annual UK records use GBR while STMF uses ENG, so map them only for detailed-view queries.
+weekly_locations_for_query = locations_for_query.flat_map { |code| code == 'gbr' ? %w[gbr eng] : [code] }.uniq
 common_filters = [
   { 'term' => { 'category' => 'death' } },
-  { 'terms' => { 'loc_code' => locations_for_query } },
+  { 'terms' => { 'loc_code' => weekly_locations_for_query } },
   { 'term' => { 'sex' => selected_sex } },
   { 'terms' => { 'death_code' => selected_causes.reject { |code| SPECIAL_CAUSES.key?(code) }.yield_self { |codes| codes.empty? ? ['__none__'] : codes } } },
   { 'exists' => { 'field' => 'yearweek' } }
 ]
 
-if selected_period == 'calendar' && selected_metric != 'std_deaths'
+detailed_calendar_crude = selected_period == 'calendar' && selected_metric == 'crude_rate' &&
+                          selected_ages == ['age_all'] && selected_sex == 'both' &&
+                          selected_causes == ['allcause']
+if selected_period == 'calendar' && !detailed_calendar_crude
   count_rows = []
   rate_rows = []
 elsif opts[:fixture]
   fixture = fixture_data.dup
   fixture.select! do |row|
-    locations_for_query.include?(row[:loc_code].to_s.downcase) &&
+    weekly_locations_for_query.include?(row[:loc_code].to_s.downcase) &&
       row[:category] == 'death' && selected_causes.include?(row[:death_code]) &&
       row[:sex] == selected_sex && row[:yearweek]
   end
@@ -1791,7 +1796,12 @@ else
   )
 end
 
-monthly_supplement_enabled = selected_period != 'calendar' && selected_metric == 'crude_rate' &&
+if selected_period == 'calendar'
+  count_rows.each { |row| row[:loc_code] = 'gbr' if row[:loc_code].to_s.casecmp('eng').zero? }
+  rate_rows.each { |row| row[:loc_code] = 'gbr' if row[:loc_code].to_s.casecmp('eng').zero? }
+end
+
+monthly_supplement_enabled = selected_metric == 'crude_rate' &&
                              selected_ages == ['age_all'] && selected_sex == 'both' &&
                              selected_causes == ['allcause']
 sex_labels = {
@@ -1898,7 +1908,8 @@ chart_data.each do |row|
   date = selected_period == 'calendar' ? Date.new(row[:year], 1, 1) : Date.commercial(row[:year], start_week, 1)
   row[:plot_date] = date.iso8601
 end
-weekly_context = if selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)
+weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
+                    detailed_calendar_crude
                    weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages).map do |row|
                      series_key = mode == 'country' ? row[:loc_code] :
                        "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:death_code]}"
@@ -1939,6 +1950,7 @@ else
   end
 end
 weekly_context = insert_detail_gaps(weekly_context)
+detail_series = weekly_context.filter_map { |row| row[:series] if row[:observed] }.uniq
 
 # 日本語: start_year省略時は分析開始境界以後にある選択系列の最初の値から表示する。
 # English: Without start_year, begin at the first selected value on or after the analysis boundary.
@@ -2718,7 +2730,7 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
-      #{selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric) ? %(
+      #{detail_series.any? ? %(
       &nbsp;
       <label><input id="weekly-view-checkbox" type="checkbox">
         #{ if monthly_supplement_enabled
@@ -2747,6 +2759,7 @@ else
     <script>
       const values = #{JSON.generate(chart_data)};
       const weeklyValues = #{JSON.generate(weekly_context)};
+      const detailSeries = #{JSON.generate(detail_series)};
       const displayStartDefault = #{default_start_year};
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
@@ -2781,7 +2794,7 @@ else
         layer: [
           {transform: annualTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
           {transform: annualTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
-          {transform: [...annualTransforms, {filter:"view_mode == 'annual'"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
+          {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}, tooltip: [
             {field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}},
             {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
             {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測値' : 'Expected')}},
@@ -2793,7 +2806,7 @@ else
             ,{field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
           ]}},
           {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '日付' : 'Date')}},{field:"detail_period",type:"nominal",title:#{JSON.generate($l == :ja ? '単位' : 'Period')}},{field:"observed",type:"quantitative",format:".2f",title:#{JSON.generate($l == :ja ? '年率換算死亡率' : 'Annualized mortality rate')}}]}},
-          {transform:[...annualTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual'"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
+          {transform:[...annualTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {data:{values:[{series:key,plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"datum.plot_date >= display_start_date"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
@@ -2808,7 +2821,8 @@ else
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
           {name:"zero_base", value:false},
-          {name:"view_mode", value:"annual"}
+          {name:"view_mode", value:"annual"},
+          {name:"detail_series", value:detailSeries}
         ],
         vconcat: panelSpecs,
         autosize: {type:"fit-x", contains:"padding", resize:true},
