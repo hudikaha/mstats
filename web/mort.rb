@@ -24,7 +24,7 @@ mstats = [
 ].find { |path| File.file?(path) }
 abort 'mstats.rb not found' unless mstats
 require mstats
-require_relative 'mort-vars'
+require_relative 'mort-vars2'
 
 #
 # Debug opttion
@@ -79,6 +79,7 @@ Consts.each do |k, v|
 
     # 選択されたものだけチェック
     keys = $cgi[k].split(/,|~|、/)
+    keys.map! { |key| key.sub(/over\z/, 'plus') } if k == 'ages'
     keys = keys.map(&:upcase) if k == 'c'
     keys = keys.map{|key| %w[all 00000].include?(key.downcase) ? 'allcause' : key.downcase} if k == 'death_codes'
     keys = keys.map{|key| key.sub(/^death_amr/, 'death_crude')} if k == 'types'

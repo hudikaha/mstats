@@ -18,7 +18,7 @@ class Mstats < Hash
                      :age_40_44, :age_45_49, :age_50_54, :age_55_59, :age_60_64, ],
         age_65_74:  [:age_65_69, :age_70_74],
         age_75_84:  [:age_75_79, :age_80_84],
-        age_85over: [:age_85_89, :age_90_94, :age_95_99, :age_100over],
+        age_85plus: [:age_85_89, :age_90_94, :age_95_99, :age_100plus],
         # added
         age_05_14:  [:age_05_09, :age_10_14],
         age_15_29:  [:age_15_19, :age_20_24, :age_25_29],
@@ -55,14 +55,14 @@ class Mstats < Hash
                 @@ages85[age_sym] = nil
             end
         end
-        @@ages100[:age_all].push(:age_100over)
-        @@ages100[:age_100over] = [:age_100over]
+        @@ages100[:age_all].push(:age_100plus)
+        @@ages100[:age_100plus] = [:age_100plus]
         @@ages100.merge!(@@Ages)
 
-        @@ages85[:age_all].push(:age_85over)
-        @@ages85[:age_100over] = nil
+        @@ages85[:age_all].push(:age_85plus)
+        @@ages85[:age_100plus] = nil
         @@ages85.merge!(@@Ages)
-        @@ages85[:age_85over] = [:age_85over]
+        @@ages85[:age_85plus] = [:age_85plus]
 
         Log.debug PP.pp(@@ages100, '')
         Log.debug PP.pp(@@ages85, '')
@@ -448,7 +448,7 @@ class Mstats < Hash
 
     # 85歳以上の年齢階級を既存の高齢階級から合算する。
     # Build the age-85-and-over band from the available older age groups.
-    def add_age85over
+    def add_age85plus
         self.each do |doc_id, cause|
             @@Ages.each do |age, ages2|
                 begin

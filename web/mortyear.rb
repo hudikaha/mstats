@@ -79,15 +79,15 @@ AGES = {
   'age_85_89' => { ja: '85-89', en: '85-89' },
   'age_90_94' => { ja: '90-94', en: '90-94' },
   'age_95_99' => { ja: '95-99', en: '95-99' },
-  'age_100over' => { ja: '100+', en: '100+' }
+  'age_100plus' => { ja: '100+', en: '100+' }
 }.freeze
-STANDARD_AGES = AGES.keys.grep(/age_(?:\d{2}_\d{2}|100over)/).freeze
-STMF_AGES = %w[age_00_14 age_15_64 age_65_74 age_75_84 age_85over age_all].freeze
+STANDARD_AGES = AGES.keys.grep(/age_(?:\d{2}_\d{2}|100plus)/).freeze
+STMF_AGES = %w[age_00_14 age_15_64 age_65_74 age_75_84 age_85plus age_all].freeze
 STMF_AGE_LABELS = {
   'age_00_14' => '00-14', 'age_15_64' => '15-64', 'age_65_74' => '65-74',
-  'age_75_84' => '75-84', 'age_85over' => '85+', 'age_all' => 'all'
+  'age_75_84' => '75-84', 'age_85plus' => '85+', 'age_all' => 'all'
 }.freeze
-STMF_ASR_AGES = %w[age_00_14 age_15_64 age_65_74 age_75_84 age_85over].freeze
+STMF_ASR_AGES = %w[age_00_14 age_15_64 age_65_74 age_75_84 age_85plus].freeze
 WHO_WORLD_STANDARD = {
   'age_00_04' => 8.86, 'age_05_09' => 8.69, 'age_10_14' => 8.60,
   'age_15_19' => 8.47, 'age_20_24' => 8.22, 'age_25_29' => 7.93,
@@ -95,7 +95,7 @@ WHO_WORLD_STANDARD = {
   'age_45_49' => 6.04, 'age_50_54' => 5.37, 'age_55_59' => 4.55,
   'age_60_64' => 3.72, 'age_65_69' => 2.96, 'age_70_74' => 2.21,
   'age_75_79' => 1.52, 'age_80_84' => 0.91, 'age_85_89' => 0.44,
-  'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100over' => 0.005
+  'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100plus' => 0.005
 }.freeze
 
 METRICS = {
@@ -124,6 +124,7 @@ HMD_URL = 'https://www.mortality.org/Data/STMF'
 WPP_URL = 'https://population.un.org/wpp/downloads'
 WHO_STANDARD_URL = 'https://cdn.who.int/media/docs/default-source/gho-documents/global-health-estimates/gpe_discussion_paper_series_paper31_2001_age_standardization_rates.pdf'
 ESTAT_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0'
+ESTAT_ANNUAL_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?layout=datalist&toukei=00450011&tstat=000001028897&cycle=7'
 ESTAT_POP_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0'
 DAYS_PER_YEAR = 365.2425
 Z95 = 1.959963984540054
@@ -172,6 +173,7 @@ selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period
 # English: Expand cod.rb-compatible age ranges and legacy repeated age parameters into field names.
 age_values = cgi.params.fetch('ages', []) + cgi.params.fetch('age', [])
 selected_ages = age_values.flat_map { |value| value.split(/[~,]/) }.flat_map do |token|
+  token = token.sub(/over\z/, 'plus')
   next 'age_all' if %w[all age_all].include?(token)
   next 'age_0' if %w[0 age_0].include?(token)
   next token if AGES.key?(token) || STMF_AGES.include?(token)
@@ -183,22 +185,23 @@ selected_ages = age_values.flat_map { |value| value.split(/[~,]/) }.flat_map do 
   normalized = token.start_with?('age_') ? token : "age_#{token}"
   next normalized if STANDARD_AGES.include?(normalized)
 
-  match = token.match(/\A(\d+)-(\d+|100over)\z/)
+  match = token.match(/\A(\d+)-(\d+|100plus)\z/)
   next [] unless match
 
   lower = match[1].to_i
-  upper = match[2] == '100over' ? '100over' : match[2].to_i
+  upper = match[2] == '100plus' ? '100plus' : match[2].to_i
   first = STANDARD_AGES.index do |age|
-    age == 'age_100over' ? lower == 100 : age[/\Aage_(\d{2})_/, 1].to_i == lower
+    age == 'age_100plus' ? lower == 100 : age[/\Aage_(\d{2})_/, 1].to_i == lower
   end
   last = STANDARD_AGES.index do |age|
-    age == 'age_100over' ? upper == '100over' : age[/_(\d{2})\z/, 1].to_i == upper
+    age == 'age_100plus' ? upper == '100plus' : age[/_(\d{2})\z/, 1].to_i == upper
   end
   first && last && first <= last ? STANDARD_AGES[first..last] : []
 end.flatten.select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
+selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
 $mortyear_period = selected_period
@@ -860,7 +863,7 @@ def annualize_influenza_asr(count_rows, rate_rows, start_week)
     'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
     'age_65_74' => %w[age_65_69 age_70_74],
     'age_75_84' => %w[age_75_79 age_80_84],
-    'age_85over' => %w[age_85_89 age_90_94 age_95_99 age_100over]
+    'age_85plus' => %w[age_85_89 age_90_94 age_95_99 age_100plus]
   }
   weights = age_members.transform_values { |ages| ages.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
   weight_total = weights.values.sum
@@ -895,7 +898,7 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages)
     'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
     'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
     'age_65_74' => %w[age_65_69 age_70_74], 'age_75_84' => %w[age_75_79 age_80_84],
-    'age_85over' => %w[age_85_89 age_90_94 age_95_99 age_100over]
+    'age_85plus' => %w[age_85_89 age_90_94 age_95_99 age_100plus]
   }
   weights = age_members.transform_values { |members| members.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
   weight_total = weights.values.sum
@@ -1001,7 +1004,17 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
     locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
       !projected_record?(row)
   end
-  rank = ->(row) { wpp_record?(row) ? 1 : 0 }
+  # 日本語: 同一年の確定値・速報値・国際推計が共存するときは、この順で選ぶ。
+  # English: Prefer confirmed, then provisional national, then international estimates.
+  rank = lambda do |row|
+    if row[:type].to_s == 'cfm'
+      0
+    elsif wpp_record?(row)
+      2
+    else
+      1
+    end
+  end
   rate_name = metric == 'asr' ? 'asr' : ''
   value_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) &&
@@ -1071,7 +1084,13 @@ def stratified_asr_rows(records, locations, sex, causes)
   source_rank = lambda do |row, population: false|
     wpp = wpp_record?(row)
     exposure = exposure_record?(row)
-    wpp ? (population && exposure ? 1 : 2) : 0
+    if row[:type].to_s == 'cfm'
+      0
+    elsif wpp
+      population && exposure ? 2 : 3
+    else
+      1
+    end
   end
   death_groups = relevant.select do |row|
     row[:category] == 'death' && row[:rate].to_s.empty? && causes.include?(row[:death_code].to_s)
@@ -1789,9 +1808,12 @@ common_filters = [
   { 'exists' => { 'field' => 'yearweek' } }
 ]
 
-detailed_calendar_rate = selected_period == 'calendar' && selected_causes == ['allcause'] &&
-                         (selected_metric == 'asr' ||
-                          (selected_metric == 'crude_rate' && selected_ages == ['age_all']))
+# 日本語: 暦年の詳細表示は、ASRでは全死因、粗死亡率では全年齢の通常死因系列を対象にする。
+# English: In calendar mode, detail all-cause ASR and all-age crude rates for ordinary causes.
+detailed_calendar_rate = selected_period == 'calendar' &&
+                         ((selected_metric == 'asr' && selected_causes == ['allcause']) ||
+                          (selected_metric == 'crude_rate' && selected_ages == ['age_all'] &&
+                           selected_causes.none? { |cause| SPECIAL_CAUSES.key?(cause) }))
 if selected_period == 'calendar' && !detailed_calendar_rate
   count_rows = []
   rate_rows = []
@@ -1815,12 +1837,12 @@ else
     }
   }
   count_rows = elastic_search(
-    index: opts[:index], size: 100_000,
+    index: opts[:index], size: 1_000_000,
     filter: common_filters + [count_rate_filter],
     source: source_fields, debug: opts[:debug] ? 'SHOWONLY_QUERY' : nil
   )
   rate_rows = opts[:debug] ? [] : elastic_search(
-    index: opts[:index], size: 100_000,
+    index: opts[:index], size: 1_000_000,
     filter: common_filters + [{ 'term' => { 'rate' => 'crude' } }],
     source: source_fields
   )
@@ -2142,6 +2164,11 @@ WORLD_REGIONS.each do |region, region_names|
 end
 puts <<~HTML
     </fieldset><br>
+    <fieldset id="sex-fieldset" style="#{selected_metric == 'birth_rate' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '性別' : 'Sex' }</legend>
+      <label><input class="sex-option" type="radio" name="sex" value="both" #{checked(selected_sex == 'both')}>#{ $l == :ja ? '男女計' : 'Both' }</label>
+      <label><input class="sex-option" type="radio" name="sex" value="male" #{checked(selected_sex == 'male')}>#{ $l == :ja ? '男性' : 'Male' }</label>
+      <label><input class="sex-option" type="radio" name="sex" value="female" #{checked(selected_sex == 'female')}>#{ $l == :ja ? '女性' : 'Female' }</label>
+    </fieldset>
     <fieldset id="season-age-fieldset" style="#{selected_period == 'calendar' || selected_metric == 'asr' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
 HTML
 STMF_AGES.each do |age|
@@ -2243,7 +2270,7 @@ puts <<~HTML
             compact.push(first);
           } else {
             const lower = first.slice(0, 2);
-            const upper = last === '100over' ? '100over' : last.slice(3, 5);
+            const upper = last === '100plus' ? '100plus' : last.slice(3, 5);
             compact.push(`${lower}-${upper}`);
           }
           i = j;
@@ -2270,6 +2297,9 @@ puts <<~HTML
         const locations = params.getAll('c').map(value => value.toLowerCase());
         params.delete('c');
         if (locations.length) params.set('c', locations.join('~'));
+        // 日本語: 男女計は既定値なのでcanonical URLでは省略する。
+        // English: Omit the default both-sex selection from canonical URLs.
+        if (params.get('sex') === 'both') params.delete('sex');
         showLoading();
         window.location.assign(`${window.location.pathname}?${params.toString().replace(/%7E/gi, '~')}`);
       });
@@ -2478,6 +2508,12 @@ puts <<~HTML
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
         const fixedAllAges = metric === 'asr' || metric === 'birth_rate';
+        const sexFieldset = document.getElementById('sex-fieldset');
+        sexFieldset.style.display = metric === 'birth_rate' ? 'none' : '';
+        document.querySelectorAll('.sex-option').forEach(input => {
+          input.disabled = metric === 'birth_rate';
+          if (metric === 'birth_rate') input.checked = input.value === 'both';
+        });
         document.getElementById('age-fieldset').style.display = isCalendarPeriod && metric !== 'birth_rate' ? '' : 'none';
         document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod && metric !== 'asr' ? '' : 'none';
         document.querySelectorAll('.age-season-option').forEach(input => {
@@ -2616,7 +2652,13 @@ else
              else
                'Source data are monthly deaths and population from e-Stat.'
              end
-    source_entries << { loc: 'JPN', method: method, urls: sources_by_location['JPN'] }
+    # 日本語: recordには年別fileの追跡URLを残すが、画面では安定した資料一覧へ集約する。
+    # English: Retain per-year provenance in records, but show stable source listings on the page.
+    other_urls = sources_by_location['JPN'].reject { |url| url.include?('e-stat.go.jp') }
+    death_urls = selected_period == 'calendar' ? [ESTAT_ANNUAL_DEATH_URL, ESTAT_DEATH_URL] : [ESTAT_DEATH_URL]
+    stable_urls = death_urls
+    stable_urls << ESTAT_POP_URL unless selected_metric == 'birth_rate'
+    source_entries << { loc: 'JPN', method: method, urls: (stable_urls + other_urls).uniq }
   end
   sources_by_location.each do |loc, urls|
     next if loc == 'JPN' && urls.any? { |url| url.include?('e-stat.go.jp') }

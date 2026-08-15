@@ -179,7 +179,6 @@ PUBLIC_ELASTIC_INDEXES = {
     'mstats' => 'mstats',
     # 日本語: alias切替前の並行CGI検査に限り、新しい物理indexを内部proxyへ通す。
     # English: Route the pre-alias parallel CGI tests through the internal proxy.
-    'mstats20260815' => 'mstats20260815',
     'kcor' => 'kcor',
     'kcor2025' => 'kcor',
     'vdeath' => 'vdeath',

@@ -37,9 +37,9 @@ Cmpys = {
 }
 
 Cmpto = {
-    'every2019' => { sel: nil, ja: '毎年ごとに過去の(累積は2020から)',   en: 'Every past (cumulcative from 2020)'}, 
-    'every2020' => { sel: nil, ja: '毎年ごとに過去の(累積は2021から)',   en: 'Every past (cumulcative from 2021'}, 
-    '2019'    => { sel: nil, ja: '2019年までの', en: 'To-2019'}, 
+    'every2019' => { sel: nil, ja: '毎年ごとに過去の(累積は2020から)',   en: 'Every past (cumulcative from 2020)'},
+    'every2020' => { sel: nil, ja: '毎年ごとに過去の(累積は2021から)',   en: 'Every past (cumulcative from 2021'},
+    '2019'    => { sel: nil, ja: '2019年までの', en: 'To-2019'},
     '2020'    => { sel: nil, ja: '2020年までの', en: 'To-2020'},
     'reg2018' => { sel: nil, ja: '2018年までの回帰線', en: 'SRL to 2018'},
     'reg2019' => { sel: nil, ja: '2019年までの回帰線', en: 'SRL to 2019'},
@@ -87,7 +87,7 @@ Types = {
 #
 Ages = {
     'age_all'    => { sel: nil, ja: '全年齢', en: 'All ages'},
-    'age_85over' => { sel: nil, ja: '85歳以上', en: '85over'},
+    'age_85plus' => { sel: nil, ja: '85歳以上', en: '85plus'},
     'age_75_84'  => { sel: nil, ja: '75-84歳', en: '75-84yo'},
     'age_65_74'  => { sel: nil, ja: '65-74歳', en: '65-74yo'},
     'age_15_64'  => { sel: nil, ja: '15-64歳', en: '16-64yo'},
@@ -5034,7 +5034,7 @@ Pops = {
     'JPN_2010' => 128051000,
     'JPN_2009' => 127515000,
     'JPN_2008' => 127686000,
-			    
+
 	#'JPN_2023' => 123294513,
 	#'JPN_2022' => 123951692,
 	#'JPN_2021' => 124612530,
@@ -5315,7 +5315,7 @@ Pops = {
 	'KIR_1981' => 61875,
 	'KIR_1980' => 60813,
 
-	# Kosovo 
+	# Kosovo
 	'OWID_KOS_2024' => 1667483,
 	'OWID_KOS_2023' => 1663594,
 	'OWID_KOS_2022' => 1659714,

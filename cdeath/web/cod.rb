@@ -40,18 +40,18 @@ Ages = {
     '85_89' => { sel: '', ja: '85-89歳', en: '85-89yo', avg: 87.5 },
     '90_94' => { sel: '', ja: '90-94歳', en: '90-94yo', avg: 92.5 },
     '95_99' => { sel: '', ja: '95-99歳', en: '95-99yo', avg: 97.5 },
-    '100over' => { sel: '', ja: '100歳以上', en: '100over', avg: 102.5 },
+    '100plus' => { sel: '', ja: '100歳以上', en: '100plus', avg: 102.5 },
     'unknown' => { sel: '', ja: '不明',  en: 'unknown' },
     'elementary' => { sel: '', ja: '小学生年齢', en: 'Elementary school age' },
     'junior' => { sel: '', ja: '中学生年齢', en: 'Junior high school age' },
 }
 StandardAgeKeys = Ages.keys - ['all', 'unknown', 'elementary', 'junior']
-OldestAgeKeys = %w[85_89 90_94 95_99 100over]
+OldestAgeKeys = %w[85_89 90_94 95_99 100plus]
 
 # 年齢階級keyをURL範囲の下限・上限へ変換する。
 # Convert an age-band key to lower and upper URL bounds.
 def age_key_bounds(key)
-    return [100, '100over'] if key == '100over'
+    return [100, '100plus'] if key == '100plus'
     match = key.match(/\A(\d{2})_(\d{2})\z/)
     match ? [match[1].to_i, match[2].to_i] : nil
 end
@@ -78,7 +78,7 @@ StandardPopulation2015 = {
     '80_84' => 4_720_000,
     '85_89' => 3_134_000,
     '90_94' => 1_548_000,
-    '95over' => 423_000,
+    '95plus' => 423_000,
 }
 
 #
@@ -337,7 +337,7 @@ Scale_modes = {
 $cgi = CGI.new
 
 DefaultParams = {
-    'ages' => 'all~00_04~05_09~10_14~15_19~20_24~25_29~30_34~35_39~40_44~45_49~50_54~55_59~60_64~65_69~70_74~75_79~80_84~85_89~90_94~95_99~100over',
+    'ages' => 'all~00_04~05_09~10_14~15_19~20_24~25_29~30_34~35_39~40_44~45_49~50_54~55_59~60_64~65_69~70_74~75_79~80_84~85_89~90_94~95_99~100plus',
     'years' => '2021~2022~2023~2024~2025',
     'death_codes' => '04000~05000~06000~10000~11000~13000~14000~18000~20000~22000',
     'columns' => '3',
@@ -361,14 +361,15 @@ $legacy_regression = $cgi['graph_type'][/^yearly_reg_(2019|2020)$/, 1]
     value = $cgi.has_key?(v[:keys]) ? $cgi[v[:keys]] : DefaultParams[v[:keys]]
     if value
         keys = value.split(/,|~|、/)
+        keys.map! { |key| key.sub(/over\z/, 'plus') } if v[:keys] == 'ages'
         if v[:keys] == 'years'
             keys = keys.flat_map{|key| key =~ /^(\d{4})-(\d{4})$/ ? ($1.to_i..$2.to_i).map(&:to_s) : key}
         elsif v[:keys] == 'ages'
             age_order = StandardAgeKeys
             keys = keys.flat_map do |key|
-                if key =~ /^(\d+)-(\d+|100over)$/
+                if key =~ /^(\d+)-(\d+|100plus)$/
                     lower = $1.to_i
-                    upper = $2 == '100over' ? '100over' : $2.to_i
+                    upper = $2 == '100plus' ? '100plus' : $2.to_i
                     first = age_order.index{|age| age_key_bounds(age)&.first == lower}
                     last = age_order.index{|age| age_key_bounds(age)&.last == upper}
                     first && last ? age_order[first..last] : key
@@ -508,9 +509,9 @@ elsif Ages['elementary'][:sel] == 'checked' || Ages['junior'][:sel] == 'checked'
 end
 
 if $adjustment == 'jp2015std' &&
-   (Ages['95_99'][:sel] == 'checked' || Ages['100over'][:sel] == 'checked')
+   (Ages['95_99'][:sel] == 'checked' || Ages['100plus'][:sel] == 'checked')
     Ages['95_99'][:sel] = 'checked'
-    Ages['100over'][:sel] = 'checked'
+    Ages['100plus'][:sel] = 'checked'
 end
 
 $all_ages_selected = Ages['all'][:sel] == 'checked'
@@ -528,7 +529,7 @@ ages_for_description.each do |age, v|
         agestr += {ja: '全年齢、', en: 'All age, '}[$l]
         break
     end
-    next if age == '100over'
+    next if age == '100plus'
     if (agestr.slice(-3..-2).to_i + 1) == age.slice(0..1).to_i
         agestr = agestr.slice(0..-5) + '-' + age.slice(-2..-1) + ','
     elsif age == 'elementary' || age == 'junior'
@@ -538,11 +539,11 @@ ages_for_description.each do |age, v|
     end
 end
 if agestr !~ /齢、$/
-    if Ages['100over'][:sel] == 'checked'
+    if Ages['100plus'][:sel] == 'checked'
         if agestr =~ /99/
             agestr = agestr.slice(0..-5) + {ja: '歳以上、', en: 'over, '}[$l]
         else
-            agestr += Ages['100over'][$l] + {ja: '、', en: ', '}[$l]
+            agestr += Ages['100plus'][$l] + {ja: '、', en: ', '}[$l]
         end
     else
         agestr.gsub!(/,$/, {ja: '歳、', en: 'yo, '}[$l])
@@ -678,7 +679,7 @@ def compact_ages(values)
             first = age_key_bounds(StandardAgeKeys[indexes[i]])
             last = age_key_bounds(StandardAgeKeys[indexes[j]])
             lower = format('%02d', first.first)
-            upper = last.last == '100over' ? last.last : format('%02d', last.last)
+            upper = last.last == '100plus' ? last.last : format('%02d', last.last)
             out << "#{lower}-#{upper}"
         end
         i = j + 1
@@ -787,8 +788,8 @@ if ! $iframeflag
 
   function compactAgeValue(index) {
     var value = standardAgeValues[index];
-    return {number: value == '100over' ? 100 : Number(value.slice(0, 2)),
-            over: value == '100over'};
+    return {number: value == '100plus' ? 100 : Number(value.slice(0, 2)),
+            over: value == '100plus'};
   }
 
   function selectorCheckboxes(kind) {
@@ -889,7 +890,7 @@ if ! $iframeflag
       tick.className = 'range-tick';
       tick.style.left = `${index * 100 / (values.length - 1)}%`;
       tick.textContent = kind == 'age' ?
-        (value == '100over' ? 100 : Number(value.slice(0, 2))) : value;
+        (value == '100plus' ? 100 : Number(value.slice(0, 2))) : value;
       ticks.appendChild(tick);
     });
     syncRangeFromCheckboxes(kind);
@@ -967,7 +968,7 @@ if ! $iframeflag
   function ensureStandard2015OldestAges() {
     var adjustment = document.querySelector('select[name="adjustment"]').value;
     var age95 = document.querySelector('input[name="age"][value="95_99"]');
-    var age100 = document.querySelector('input[name="age"][value="100over"]');
+    var age100 = document.querySelector('input[name="age"][value="100plus"]');
     if (adjustment == 'jp2015std' && age95.checked != age100.checked) {
       age95.checked = true;
       age100.checked = true;
@@ -1005,7 +1006,7 @@ if ! $iframeflag
 
     function compactRange(values, ageMode) {
       if (ageMode && values.includes('all')) return 'all';
-      const order = ageMode ? ['00_04','05_09','10_14','15_19','20_24','25_29','30_34','35_39','40_44','45_49','50_54','55_59','60_64','65_69','70_74','75_79','80_84','85_89','90_94','95_99','100over'] : null;
+      const order = ageMode ? ['00_04','05_09','10_14','15_19','20_24','25_29','30_34','35_39','40_44','45_49','50_54','55_59','60_64','65_69','70_74','75_79','80_84','85_89','90_94','95_99','100plus'] : null;
       const nums = ageMode ? values.map(v => order.indexOf(v)).filter(v => v >= 0).sort((a,b) => a-b) : values.map(Number).sort((a,b) => a-b);
       const out = [];
       for (let i=0; i<nums.length; i++) {
@@ -1017,7 +1018,7 @@ if ! $iframeflag
             out.push(first);
           } else {
             const lower = first.slice(0, 2);
-            const upper = last == '100over' ? '100over' : last.slice(3, 5);
+            const upper = last == '100plus' ? '100plus' : last.slice(3, 5);
             out.push(lower + '-' + upper);
           }
         } else {
@@ -1622,7 +1623,7 @@ end
 # 集計方法に必要な年齢fieldだけを取得し、巨大な不要応答を避ける。
 # Fetch only the age fields required by the selected aggregation mode.
 age_sources = if $adjustment != 'none' || per_capita_selected
-                  ($ages.map{|k, _v| "age_#{k}"} + ['age_85over'] +
+                  ($ages.map{|k, _v| "age_#{k}"} + ['age_85plus'] +
                    ($all_ages_selected ? ['age_all'] : [])).uniq
               elsif $all_ages_selected
                   ['age_all']
@@ -1650,6 +1651,15 @@ data0 = elastic_search(
                age_sources,
     #:debug => 'SHOWONLY',
 )
+
+# 日本語: 同じ年月・死因の確定値と速報値が共存するときは確定値を使う。
+# English: Prefer confirmed records when confirmed and provisional monthly values coexist.
+data0 = data0.group_by do |datum|
+    [datum[:category], datum[:year], datum[:month], datum[:sex], datum[:death_code],
+     datum[:rate].to_s, datum[:algo].to_s]
+end.values.map do |records|
+    records.min_by { |datum| datum[:type].to_s == 'cfm' ? 0 : 1 }
+end
 
 #pp data0
 #exit
@@ -1698,9 +1708,9 @@ data0.each do |datum0|
     sum = if $all_ages_selected
               datum['age_all'].to_i
           elsif datum['category'] == 'population' && $includes_all_oldest &&
-                datum['age_85over'].to_f > 0
+                datum['age_85plus'].to_f > 0
               ($ages.keys - OldestAgeKeys).sum{|age| datum["age_#{age}"].to_i} +
-                  datum['age_85over'].to_i
+                  datum['age_85plus'].to_i
           else
               $ages.sum{|age, v| datum["age_#{age}"].to_i}
           end
@@ -1724,8 +1734,8 @@ if $adjustment != 'none'
     adjustment_groups = $ages.keys.
                             select{|age| StandardPopulation2015[age]}.
                             map{|age| [[age], StandardPopulation2015[age]]}
-    if $ages['95_99'] || $ages['100over']
-        adjustment_groups.push([['95_99', '100over'], StandardPopulation2015['95over']])
+    if $ages['95_99'] || $ages['100plus']
+        adjustment_groups.push([['95_99', '100plus'], StandardPopulation2015['95plus']])
     end
 
     $data.each_value do |datum|
@@ -1734,27 +1744,27 @@ if $adjustment != 'none'
 
         latest_groups = $ages.keys.map{|age| [age]}
         standard_groups = adjustment_groups
-        if $includes_all_oldest && population['age_85over'].to_f > 0
+        if $includes_all_oldest && population['age_85plus'].to_f > 0
             latest_groups = ($ages.keys - OldestAgeKeys).map{|age| [age]} + [OldestAgeKeys]
             standard_groups = adjustment_groups.reject{|ages, _weight| (ages & OldestAgeKeys).any?} +
                 [[OldestAgeKeys, StandardPopulation2015['85_89'] +
                                   StandardPopulation2015['90_94'] +
-                                  StandardPopulation2015['95over']]]
+                                  StandardPopulation2015['95plus']]]
         end
         if $adjustment == 'latest'
             datum['sum_latest'] = latest_groups.sum{|ages|
-                deaths = ages == OldestAgeKeys && datum['age_85over'].to_f > 0 ?
-                    datum['age_85over'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
-                denominator = ages == OldestAgeKeys ? population['age_85over'].to_f :
+                deaths = ages == OldestAgeKeys && datum['age_85plus'].to_f > 0 ?
+                    datum['age_85plus'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
+                denominator = ages == OldestAgeKeys ? population['age_85plus'].to_f :
                                                       population["age_#{ages.first}"].to_f
                 target = ages.sum{|age| last_pop["age_#{age}"].to_f}
                 denominator > 0 ? deaths * target / denominator : 0
             }.round(2)
         else
             datum['sum_jp2015std'] = standard_groups.sum{|ages, standard_population|
-                deaths = ages == OldestAgeKeys && datum['age_85over'].to_f > 0 ?
-                    datum['age_85over'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
-                denominator = ages == OldestAgeKeys ? population['age_85over'].to_f :
+                deaths = ages == OldestAgeKeys && datum['age_85plus'].to_f > 0 ?
+                    datum['age_85plus'].to_f : ages.sum{|age| datum["age_#{age}"].to_f}
+                denominator = ages == OldestAgeKeys ? population['age_85plus'].to_f :
                                                       ages.sum{|age| population["age_#{age}"].to_f}
                 denominator > 0 ? deaths * standard_population / denominator : 0
             }.round(2)

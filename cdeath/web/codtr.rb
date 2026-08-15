@@ -38,7 +38,7 @@ AgeFields = {
     '2' => 'age_2',
     '3' => 'age_3',
     '4' => 'age_4',
-    '100_' => 'age_100over',
+    '100_' => 'age_100plus',
     'shogaku' => 'age_elementary',
     'chugaku' => 'age_junior',
 }.freeze
@@ -739,8 +739,13 @@ data0 = elastic_search(
         { 'term' => {'type' => 'unmonth'} },
     ],
     :should => death_codes.map{|code| {'term' => {'death_code' => code}}},
-    :source => ['date', 'sex', 'death_code'] + source_age_fields,
+    :source => ['date', 'sex', 'death_code', 'type'] + source_age_fields,
 )
+
+# 日本語: 同じ月・死因の確定値と速報値が共存するときは確定値を使う。
+# English: Prefer confirmed records when confirmed and provisional monthly values coexist.
+data0 = data0.group_by { |datum| [datum[:date], datum[:sex], datum[:death_code]] }.
+        values.map { |records| records.min_by { |datum| datum[:type].to_s == 'cfm' ? 0 : 1 } }
 
 date_covid19 = Date.parse('2020-01-01')
 max_date = date_covid19
