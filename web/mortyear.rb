@@ -124,7 +124,7 @@ HMD_URL = 'https://www.mortality.org/Data/STMF'
 WPP_URL = 'https://population.un.org/wpp/downloads'
 WHO_STANDARD_URL = 'https://cdn.who.int/media/docs/default-source/gho-documents/global-health-estimates/gpe_discussion_paper_series_paper31_2001_age_standardization_rates.pdf'
 ESTAT_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0'
-ESTAT_ANNUAL_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?layout=datalist&toukei=00450011&tstat=000001028897&cycle=7'
+ESTAT_ANNUAL_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053074&tclass4=000001053089&tclass5val=0'
 ESTAT_POP_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0'
 DAYS_PER_YEAR = 365.2425
 Z95 = 1.959963984540054
