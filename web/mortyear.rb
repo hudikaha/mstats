@@ -2152,7 +2152,7 @@ japan_causes = if menu_catalog
                  catalog_available_causes(menu_catalog, ['JPN'], selected_metric, selected_sex, selected_ages)
                else
                  annual_catalog.dig('JPN', :death_codes).to_a
-               end.select { |cause| cause.match?(/\A\d{5}\z/) }
+               end.select { |cause| cause == 'allcause' || cause.match?(/\A\d{5}\z/) }
 japan_causes.each do |cause|
   next unless cause == 'allcause'
   names = Death_codes.fetch(cause, { ja: cause, en: cause })
