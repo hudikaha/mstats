@@ -8,10 +8,12 @@
 |---:|---|---|---|---|---|
 | 1999～2008年 | [確定数](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053065&tclass4val=0) | 死亡数，性・年齢（5歳階級）・死因（死因簡単分類）別 | あり | あり | 年次：死亡数、年齢階級別率、全年齢粗死亡率、ASR |
 | 1999～2008年 | [確定数](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053065&tclass4val=0) | 死亡数，性・死亡月・死因（死因簡単分類）別 | なし | あり | 月次・週次：全年齢の死因別死亡数・粗死亡率 |
-| 2009年以降 | [確定数・保管統計表](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053074&tclass4=000001053089&tclass5val=0) | 死亡数，死亡月・性・年齢（5歳階級）・死因（死因簡単分類）別 | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
-| 2009年以降 | [月報（概数）](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0) | 死亡数，死因（死因簡単分類）・性・年齢（5歳階級・小学生―中学生再掲）別 | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
+| 2009～2024年 | [確定数・保管統計表](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053074&tclass4=000001053089&tclass5val=0) | 死亡数，死亡月・性・年齢（5歳階級）・死因（死因簡単分類）別 | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
+| 2009年～2026年2月 | [月報（概数）](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0) | 死亡数，死因（死因簡単分類）・性・年齢（5歳階級・小学生―中学生再掲）別 | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
 
 週次値は、月次死亡数を各暦日の所属週へ日数按分して再構成した推計値です。個々の死亡日を復元した値ではありません。
+
+確定数と概数が重なる期間は確定数を優先し、概数は確定数の最終月より後を補います。表の収録期間はデータ更新時に更新します。
 
 年次確定数は、[e-Statの確定数・死亡](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053065&tclass4val=0)にある「死亡数，性・年齢（5歳階級）・死因（死因簡単分類）別」を使用します。1999～2008年の年次値は月次合計ではなく、この年次確定表を直接使用します。
 
