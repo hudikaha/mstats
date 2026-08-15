@@ -1955,9 +1955,6 @@ panel_label = lambda do |loc, cause|
           end
   parts << sex_labels.fetch(selected_sex).fetch($l) unless selected_sex == 'both'
   parts << cause_name
-  if jpn_2015_asr
-    parts << ($l == :ja ? '（2015年モデル人口）' : '(Japan 2015 model population)')
-  end
   unit = if selected_metric == 'birth_rate'
            if cause == 'infant'
              $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
@@ -1966,6 +1963,8 @@ panel_label = lambda do |loc, cause|
            else
              $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
            end
+         elsif selected_metric == 'asr' && jpn_2015_asr
+           $l == :ja ? '（人口10万人あたり、2015年人口モデル）' : '(per 100,000 pop, Japan 2015 population model)'
          elsif %w[crude_rate asr].include?(selected_metric)
            $l == :ja ? '（人口10万人当たり）' : '(per 100,000 pop)'
          elsif %w[deaths std_deaths].include?(selected_metric)
