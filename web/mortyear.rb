@@ -97,6 +97,45 @@ WHO_WORLD_STANDARD = {
   'age_75_79' => 1.52, 'age_80_84' => 0.91, 'age_85_89' => 0.44,
   'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100plus' => 0.005
 }.freeze
+JPN_2015_STANDARD_GROUPS = [
+  [%w[age_00_04], 5_026_000], [%w[age_05_09], 5_369_000],
+  [%w[age_10_14], 5_711_000], [%w[age_15_19], 6_053_000],
+  [%w[age_20_24], 6_396_000], [%w[age_25_29], 6_738_000],
+  [%w[age_30_34], 7_081_000], [%w[age_35_39], 7_423_000],
+  [%w[age_40_44], 7_766_000], [%w[age_45_49], 8_108_000],
+  [%w[age_50_54], 8_451_000], [%w[age_55_59], 8_793_000],
+  [%w[age_60_64], 9_135_000], [%w[age_65_69], 9_246_000],
+  [%w[age_70_74], 7_892_000], [%w[age_75_79], 6_306_000],
+  [%w[age_80_84], 4_720_000], [%w[age_85_89], 3_134_000],
+  [%w[age_90_94], 1_548_000], [%w[age_95_99 age_100plus], 423_000]
+].freeze
+
+# 日本語: 選択年齢だけの標準人口weightを取り出し、後段で選択範囲内へ再正規化する。
+# English: Select standard-population weights for the requested ages; downstream code renormalizes them.
+def selected_standard_groups(groups, ages)
+  return groups if ages.include?('age_all')
+
+  groups.filter_map do |members, weight|
+    selected = members & ages
+    [selected, weight] unless selected.empty?
+  end
+end
+
+# 日本語: 5歳階級の標準人口weightをSTMF共通年齢階級へ合算する。
+# English: Aggregate five-year standard-population weights into the common STMF age bands.
+def stmf_standard_weights(groups)
+  members = {
+    'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
+    'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
+    'age_65_74' => %w[age_65_69 age_70_74],
+    'age_75_84' => %w[age_75_79 age_80_84],
+    'age_85plus' => %w[age_85_89 age_90_94 age_95_99 age_100plus]
+  }
+  members.to_h do |target, source_ages|
+    weight = groups.sum { |ages, value| (ages & source_ages).empty? ? 0 : value }
+    [target, weight]
+  end
+end
 
 METRICS = {
   'deaths' => { ja: '実死亡数', en: 'Observed deaths' },
@@ -217,7 +256,7 @@ requested_locations = requested_locations.flat_map do |code|
     code
   end
 end.uniq
-selected_ages = ['age_all'] if selected_metric == 'asr' || selected_metric == 'birth_rate'
+selected_ages = ['age_all'] if selected_metric == 'birth_rate'
 selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_rate asr].include?(selected_metric)
 selected_ages &= STMF_AGES if selected_period != 'calendar'
 selected_ages = ['age_all'] if selected_ages.empty?
@@ -855,30 +894,23 @@ def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = '
   end.sort_by { |row| [row[:loc_code], row[:year]] }
 end
 
-# 日本語: STMFの年齢階級へまとめたWHO標準人口でインフルエンザ年のASRを計算する。
-# English: Calculate influenza-year ASR with WHO standard weights grouped to STMF ages.
-def annualize_influenza_asr(count_rows, rate_rows, start_week)
-  age_members = {
-    'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
-    'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
-    'age_65_74' => %w[age_65_69 age_70_74],
-    'age_75_84' => %w[age_75_79 age_80_84],
-    'age_85plus' => %w[age_85_89 age_90_94 age_95_99 age_100plus]
-  }
-  weights = age_members.transform_values { |ages| ages.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
-  weight_total = weights.values.sum
-  grouped = STMF_ASR_AGES.flat_map do |age|
+# 日本語: 選択したSTMF年齢階級を標準人口で加重し、インフルエンザ年ASRを計算する。
+# English: Calculate influenza-year ASR over the selected STMF ages using the chosen standard population.
+def annualize_influenza_asr(count_rows, rate_rows, start_week, ages, weights)
+  selected = ages.include?('age_all') ? STMF_ASR_AGES : ages
+  weight_total = selected.sum { |age| weights.fetch(age) }
+  grouped = selected.flat_map do |age|
     annualize_influenza_year(count_rows, rate_rows, [age], start_week, 'crude_rate').map do |row|
       [row, age]
     end
   end.group_by { |row, _age| [row[:loc_code], row[:sex], row[:death_code], row[:year]] }
 
   grouped.filter_map do |(_loc, _sex, _cause, _year), items|
-    next unless items.map(&:last).sort == STMF_ASR_AGES.sort
+    next unless items.map(&:last).sort == selected.sort
 
     strata = items.map do |row, age|
       { age: age, deaths: row[:deaths], population: row[:population],
-        weight: weights.fetch(age) / weight_total, src_url: row[:src_url] }
+        weight: weights.fetch(age).to_f / weight_total, src_url: row[:src_url] }
     end
     first = items.first.first
     first.merge(
@@ -892,7 +924,7 @@ end
 
 # 日本語: 選択系列の週次死亡率を年率換算のまま補助表示用に作る。
 # English: Build annualized weekly mortality rates for the contextual view.
-def weekly_rate_rows(count_rows, rate_rows, metric, ages)
+def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
   rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
   age_members = {
     'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
@@ -900,15 +932,18 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages)
     'age_65_74' => %w[age_65_69 age_70_74], 'age_75_84' => %w[age_75_79 age_80_84],
     'age_85plus' => %w[age_85_89 age_90_94 age_95_99 age_100plus]
   }
-  weights = age_members.transform_values { |members| members.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
-  weight_total = weights.values.sum
+  weights = asr_weights || age_members.transform_values { |members| members.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
+  selected_asr_ages = ages.include?('age_all') ? STMF_ASR_AGES : ages
+  weight_total = selected_asr_ages.sum { |age| weights.fetch(age) }
   count_rows.filter_map do |count|
     rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
     next unless rate
 
     observed = if metric == 'asr'
-                 next unless STMF_ASR_AGES.all? { |age| rate[age.to_sym]&.to_f&.positive? }
-                 STMF_ASR_AGES.sum { |age| rate[age.to_sym].to_f * weights.fetch(age) / weight_total }
+                 next unless selected_asr_ages.all? { |age| rate[age.to_sym]&.to_f&.positive? }
+                 selected_asr_ages.sum do |age|
+                   rate[age.to_sym].to_f * weights.fetch(age).to_f / weight_total
+                 end
                else
                  values = ages.map { |age| count[age.to_sym] }
                  rate_values = ages.map { |age| rate[age.to_sym] }
@@ -1076,7 +1111,7 @@ end
 # 同じ階級に各国公式値があればWPPより優先し、人口はWPPではpopulation exposureを使う。
 # English: Build ASR regression inputs from age-specific deaths and populations.
 # Prefer national values for each stratum and use WPP population exposure as the fallback denominator.
-def stratified_asr_rows(records, locations, sex, causes)
+def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil)
   relevant = records.select do |row|
     locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
       !projected_record?(row)
@@ -1097,22 +1132,24 @@ def stratified_asr_rows(records, locations, sex, causes)
   end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
   population_groups = relevant.select { |row| row[:category] == 'pop' }.
                       group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i] }
-  weight_total = WHO_WORLD_STANDARD.values.sum
+  standard_groups ||= WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] }
+  weight_total = standard_groups.sum { |_ages, weight| weight }
 
   death_groups.filter_map do |(loc, year, cause), death_candidates|
     population_candidates = population_groups.fetch([loc, year], [])
-    strata = WHO_WORLD_STANDARD.filter_map do |age, weight|
-      death_row = death_candidates.select { |row| !row[age.to_sym].nil? }.min_by { |row| source_rank.call(row) }
-      population_row = population_candidates.select { |row| !row[age.to_sym].nil? }.
+    strata = standard_groups.filter_map do |ages, weight|
+      death_row = death_candidates.select { |row| ages.all? { |age| !row[age.to_sym].nil? } }.
+                  min_by { |row| source_rank.call(row) }
+      population_row = population_candidates.select { |row| ages.all? { |age| !row[age.to_sym].nil? } }.
                        min_by { |row| source_rank.call(row, population: true) }
       next unless death_row && population_row
-      deaths = death_row[age.to_sym].to_f
-      population = population_row[age.to_sym].to_f
+      deaths = ages.sum { |age| death_row[age.to_sym].to_f }
+      population = ages.sum { |age| population_row[age.to_sym].to_f }
       next unless population.positive?
-      { age: age, deaths: deaths, population: population, weight: weight / weight_total,
+      { age: ages.join('+'), deaths: deaths, population: population, weight: weight.to_f / weight_total,
         src_url: (Array(death_row[:src_url]) + Array(population_row[:src_url])).compact.uniq }
     end
-    next unless strata.length == WHO_WORLD_STANDARD.length
+    next unless strata.length == standard_groups.length
 
     {
       loc_code: loc, sex: sex, death_code: cause, year: year, strata: strata,
@@ -1734,14 +1771,28 @@ if selected_metric == 'birth_rate' && requested_birth_causes.any?
   end
 end
 selected_locations = [selected_locations.first] if mode == 'series'
+# 日本語: 日本2015年モデル人口は95歳以上が一括なので、片方だけの選択を一組へそろえる。
+# English: The Japan 2015 model has one 95-plus weight, so keep 95-99 and 100+ together.
+if selected_metric == 'asr' && selected_locations == ['JPN'] &&
+   (selected_ages & %w[age_95_99 age_100plus]).length == 1
+  selected_ages |= %w[age_95_99 age_100plus]
+  selected_ages.sort_by! { |age| STANDARD_AGES.index(age) || -1 }
+end
+catalog_metric = selected_metric == 'asr' && selected_ages != ['age_all'] ? 'crude_rate' : selected_metric
+catalog_ages = if selected_metric == 'asr' && selected_locations == ['JPN'] &&
+                  (selected_ages & %w[age_95_99 age_100plus]).any?
+                 selected_ages - ['age_100plus']
+               else
+                 selected_ages
+               end
 available_causes = if selected_period != 'calendar'
                      ['allcause']
                    elsif selected_metric == 'std_deaths'
                      available_death_codes(index: opts[:index], fixture: fixture_data,
                                            locations: selected_locations, metric: selected_metric)
                    elsif menu_catalog
-                     catalog_available_causes(menu_catalog, selected_locations, selected_metric,
-                                              selected_sex, selected_ages)
+                     catalog_available_causes(menu_catalog, selected_locations, catalog_metric,
+                                              selected_sex, catalog_ages)
                    else
                      available_annual_death_codes(index: opts[:index], fixture: fixture_data,
                                                   locations: selected_locations, metric: selected_metric)
@@ -1761,9 +1812,12 @@ end
 available_menu_ages = AGES.keys
 if menu_catalog && selected_period == 'calendar' && selected_metric != 'birth_rate' && selected_metric != 'std_deaths'
   available_menu_ages = AGES.keys.select do |age|
+    age_metric = selected_metric == 'asr' && age != 'age_all' ? 'crude_rate' : selected_metric
+    catalog_age = selected_metric == 'asr' && selected_locations == ['JPN'] &&
+                  age == 'age_100plus' ? 'age_95_99' : age
     selected_locations.all? do |loc|
       selected_causes.all? do |cause|
-        catalog_combination_available?(menu_catalog.fetch(loc), selected_metric, cause, selected_sex, [age])
+        catalog_combination_available?(menu_catalog.fetch(loc), age_metric, cause, selected_sex, [catalog_age])
       end
     end
   end
@@ -1811,7 +1865,8 @@ common_filters = [
 # 日本語: 暦年の詳細表示は、ASRでは全死因、粗死亡率では全年齢の通常死因系列を対象にする。
 # English: In calendar mode, detail all-cause ASR and all-age crude rates for ordinary causes.
 detailed_calendar_rate = selected_period == 'calendar' &&
-                         ((selected_metric == 'asr' && selected_causes == ['allcause']) ||
+                         ((selected_metric == 'asr' && selected_ages == ['age_all'] &&
+                           selected_causes == ['allcause']) ||
                           (selected_metric == 'crude_rate' && selected_ages == ['age_all'] &&
                            selected_causes.none? { |cause| SPECIAL_CAUSES.key?(cause) }))
 if selected_period == 'calendar' && !detailed_calendar_rate
@@ -1874,12 +1929,23 @@ age_selection_label = if selected_period != 'calendar'
                         indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
                         if indexes.any? && indexes.each_cons(2).all? { |left, right| right == left + 1 }
                           lower = format('%02d', indexes.first * 5)
-                          upper = indexes.last == STANDARD_AGES.length - 1 ? '100+' : format('%02d', indexes.last * 5 + 4)
-                          "#{lower}-#{upper}"
+                          if indexes.last == STANDARD_AGES.length - 1
+                            "#{lower}+"
+                          else
+                            "#{lower}-#{format('%02d', indexes.last * 5 + 4)}"
+                          end
                         else
                           selected_ages.map { |age| AGES.fetch(age).fetch($l) }.join(', ')
                         end
                       end
+jpn_2015_asr = selected_metric == 'asr' && selected_locations == ['JPN']
+asr_standard_groups = if jpn_2015_asr
+                        JPN_2015_STANDARD_GROUPS
+                      else
+                        WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] }
+                      end
+selected_asr_groups = selected_standard_groups(asr_standard_groups, selected_ages)
+asr_stmf_weights = stmf_standard_weights(asr_standard_groups)
 panel_label = lambda do |loc, cause|
   cause_name = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
   parts = if selected_metric == 'birth_rate'
@@ -1897,6 +1963,8 @@ panel_label = lambda do |loc, cause|
            else
              $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
            end
+         elsif selected_metric == 'asr' && jpn_2015_asr
+           $l == :ja ? '（人口10万人あたり、2015年人口モデル）' : '(per 100,000 pop, Japan 2015 population model)'
          elsif %w[crude_rate asr].include?(selected_metric)
            $l == :ja ? '（人口10万人当たり）' : '(per 100,000 pop)'
          elsif %w[deaths std_deaths].include?(selected_metric)
@@ -1920,13 +1988,15 @@ series_specs = if mode == 'country'
 annual_by_age = { selected_ages => begin
   annual = if selected_period != 'calendar' && selected_metric == 'asr'
              annualize_influenza_asr(count_rows, rate_rows,
-                                     selected_period == 'flu27' ? 27 : 36)
+                                     selected_period == 'flu27' ? 27 : 36,
+                                     selected_ages, asr_stmf_weights)
            elsif selected_period != 'calendar'
              annualize_influenza_year(count_rows, rate_rows, selected_ages,
                                       selected_period == 'flu27' ? 27 : 36,
                                       selected_metric)
            elsif selected_metric == 'asr'
-             stratified_asr_rows(annual_records_all, selected_locations, selected_sex, selected_causes)
+             stratified_asr_rows(annual_records_all, selected_locations, selected_sex,
+                                 selected_causes, standard_groups: selected_asr_groups)
            elsif selected_metric != 'std_deaths'
              annual_record_rows(annual_records_all, selected_locations, selected_sex,
                                 selected_causes, selected_metric, selected_ages)
@@ -1965,7 +2035,8 @@ chart_data.each do |row|
 end
 weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
                     detailed_calendar_rate
-                   weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages).map do |row|
+                   weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages,
+                                    asr_weights: asr_stmf_weights).map do |row|
                      series_key = mode == 'country' ? row[:loc_code] :
                        "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:death_code]}"
                      row.merge(series: series_key)
@@ -2169,7 +2240,7 @@ puts <<~HTML
       <label><input class="sex-option" type="radio" name="sex" value="male" #{checked(selected_sex == 'male')}>#{ $l == :ja ? '男性' : 'Male' }</label>
       <label><input class="sex-option" type="radio" name="sex" value="female" #{checked(selected_sex == 'female')}>#{ $l == :ja ? '女性' : 'Female' }</label>
     </fieldset>
-    <fieldset id="season-age-fieldset" style="#{selected_period == 'calendar' || selected_metric == 'asr' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
+    <fieldset id="season-age-fieldset" style="#{selected_period == 'calendar' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
 HTML
 STMF_AGES.each do |age|
   puts %(<label><input class="age-season-option" type="checkbox" name="age" value="#{age}" #{checked(selected_ages.include?(age))}>#{STMF_AGE_LABELS.fetch(age)}</label>)
@@ -2507,7 +2578,7 @@ puts <<~HTML
       }
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
-        const fixedAllAges = metric === 'asr' || metric === 'birth_rate';
+        const fixedAllAges = metric === 'birth_rate';
         const sexFieldset = document.getElementById('sex-fieldset');
         sexFieldset.style.display = metric === 'birth_rate' ? 'none' : '';
         document.querySelectorAll('.sex-option').forEach(input => {
@@ -2515,13 +2586,12 @@ puts <<~HTML
           if (metric === 'birth_rate') input.checked = input.value === 'both';
         });
         document.getElementById('age-fieldset').style.display = isCalendarPeriod && metric !== 'birth_rate' ? '' : 'none';
-        document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod && metric !== 'asr' ? '' : 'none';
+        document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod ? '' : 'none';
         document.querySelectorAll('.age-season-option').forEach(input => {
-          input.disabled = metric === 'asr';
-          if (metric === 'asr') input.checked = input.value === 'age_all';
+          input.disabled = false;
         });
         document.querySelectorAll('.age-option').forEach(input => {
-          input.disabled = metric === 'birth_rate' || (metric === 'asr' && input.value !== 'age_all');
+          input.disabled = metric === 'birth_rate';
           if (fixedAllAges) input.checked = input.value === 'age_all';
         });
         if (!fixedAllAges && document.querySelector('.age-special-option[value="age_all"]').checked) {
@@ -2621,7 +2691,11 @@ else
   end
   source_entries = []
   if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
-    method = if selected_period != 'calendar' && $l == :ja
+    method = if jpn_2015_asr && selected_period != 'calendar' && $l == :ja
+               'e-Statの月次死亡数・月次人口から作った週次推計値をインフルエンザ年へ再集計し、日本の2015年モデル人口で年齢調整しています。'
+             elsif jpn_2015_asr && selected_period != 'calendar'
+               'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years and standardizes them to the Japan 2015 model population.'
+             elsif selected_period != 'calendar' && $l == :ja
                'e-Statの月次死亡数・月次人口から作った週次推計値を、インフルエンザ年へ再集計しています。UN WPPは使用していません。'
              elsif selected_period != 'calendar'
                'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years. UN WPP is not used.'
@@ -2639,6 +2713,10 @@ else
                'e-Statの確定出生数と乳児死亡数を使用しています。'
              elsif selected_metric == 'birth_rate'
                'Uses final annual birth and infant death counts from e-Stat.'
+             elsif jpn_2015_asr && $l == :ja
+               'e-Statの年齢階級別死亡数・人口から、日本の2015年モデル人口を用いる直接法で年齢調整しています。'
+             elsif jpn_2015_asr
+               'Uses direct standardization of age-specific e-Stat deaths and populations to the Japan 2015 model population.'
              elsif selected_metric == 'asr' && $l == :ja
                'e-Statの年齢階級別死亡数・人口を優先し、不足階級はUN WPP 2024で補完。WHO世界標準人口で直接法により年齢調整している。'
              elsif selected_metric == 'asr'
@@ -2720,7 +2798,7 @@ else
                        <dt><strong>HMD</strong></dt><dd>Human Mortality Database（国際死亡データベース）。各国の死亡・人口データを共通形式で提供しています。<br><a href="#{HMD_HOME_URL}" target="_blank">#{HMD_HOME_URL}</a></dd>
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations。HMDが提供する週次死亡データです。この画面では年齢階級別の週次死亡数と死亡率を使用します。<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>国連人口部のWorld Population Prospects（世界人口推計）。各国の年次人口などを補う場合に使用します。<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
-                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate（年齢調整死亡率）。年齢階級別死亡率をWHO世界標準人口で加重する直接法で計算します。インフルエンザ年のASRは、STMF共通の00–14、15–64、65–74、75–84、85歳以上という粗い階級による近似です。<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate（年齢調整死亡率）。日本単独表示では日本の2015年モデル人口、複数国比較とその他の国・地域ではWHO世界標準人口を使います。選択年齢範囲内で標準人口weightを再正規化します。インフルエンザ年のASRはSTMF共通の粗い年齢階級による近似です。<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
                        <dt><strong>インフルエンザ年の集計</strong></dt><dd>年境界をまたぐ週の死亡数は、各期間に含まれる日数に応じて配分します。週次死亡数と死亡率から得た人口を人口日として積算し、第27週または第36週から翌年の同じ開始週直前まで、全日がそろう期間だけを表示します。日本の週次値は実測週次値ではなく、e-Stat月次値から按分・平滑化した推計値です。</dd>
                      </dl>
                    HTML
@@ -2731,7 +2809,7 @@ else
                        <dt><strong>HMD</strong></dt><dd>Human Mortality Database, which provides harmonized mortality and population data for participating countries.<br><a href="#{HMD_HOME_URL}" target="_blank">#{HMD_HOME_URL}</a></dd>
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations, the weekly mortality dataset provided by HMD. This page uses its age-specific weekly deaths and mortality rates.<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>United Nations World Population Prospects, published by the UN Population Division. It supplies annual population data where needed.<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
-                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate, calculated by direct standardization with the WHO world standard population. Influenza-year ASR is approximate because it uses the broad common STMF groups 00–14, 15–64, 65–74, 75–84, and 85+.<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate. Japan-only views use the Japan 2015 model population; multi-country comparisons and other locations use the WHO world standard population. Weights are renormalized within the selected age range. Influenza-year ASR is approximate because it uses broad common STMF age groups.<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
                        <dt><strong>Influenza-year aggregation</strong></dt><dd>Deaths in a week crossing a year boundary are allocated in proportion to the number of days in each period. Population inferred from weekly deaths and rates is accumulated as population-days. Only complete periods from W27 or W36 to the day before the same starting week in the following year are shown. Japanese weekly values are estimates prorated and smoothed from monthly e-Stat data, not directly observed weekly counts.</dd>
                      </dl>
                    HTML
