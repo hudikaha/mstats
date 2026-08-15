@@ -97,6 +97,15 @@ WHO_WORLD_STANDARD = {
   'age_75_79' => 1.52, 'age_80_84' => 0.91, 'age_85_89' => 0.44,
   'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100plus' => 0.005
 }.freeze
+JPN_2015_STANDARD = {
+  'age_00_04' => 5_026_000, 'age_05_09' => 5_369_000, 'age_10_14' => 5_711_000,
+  'age_15_19' => 6_053_000, 'age_20_24' => 6_396_000, 'age_25_29' => 6_738_000,
+  'age_30_34' => 7_081_000, 'age_35_39' => 7_423_000, 'age_40_44' => 7_766_000,
+  'age_45_49' => 8_108_000, 'age_50_54' => 8_451_000, 'age_55_59' => 8_793_000,
+  'age_60_64' => 9_135_000, 'age_65_69' => 9_246_000, 'age_70_74' => 7_892_000,
+  'age_75_79' => 6_306_000, 'age_80_84' => 4_720_000, 'age_85_89' => 3_134_000,
+  'age_90_94' => 1_548_000, 'age_95_99' => 423_000, 'age_100plus' => 0
+}.freeze
 
 METRICS = {
   'deaths' => { ja: '実死亡数', en: 'Observed deaths' },
@@ -857,7 +866,7 @@ end
 
 # 日本語: STMFの年齢階級へまとめたWHO標準人口でインフルエンザ年のASRを計算する。
 # English: Calculate influenza-year ASR with WHO standard weights grouped to STMF ages.
-def annualize_influenza_asr(count_rows, rate_rows, start_week)
+def annualize_influenza_asr(count_rows, rate_rows, start_week, standard = WHO_WORLD_STANDARD)
   age_members = {
     'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
     'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
@@ -865,7 +874,7 @@ def annualize_influenza_asr(count_rows, rate_rows, start_week)
     'age_75_84' => %w[age_75_79 age_80_84],
     'age_85plus' => %w[age_85_89 age_90_94 age_95_99 age_100plus]
   }
-  weights = age_members.transform_values { |ages| ages.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
+  weights = age_members.transform_values { |ages| ages.sum { |age| standard.fetch(age) } }
   weight_total = weights.values.sum
   grouped = STMF_ASR_AGES.flat_map do |age|
     annualize_influenza_year(count_rows, rate_rows, [age], start_week, 'crude_rate').map do |row|
@@ -892,7 +901,7 @@ end
 
 # 日本語: 選択系列の週次死亡率を年率換算のまま補助表示用に作る。
 # English: Build annualized weekly mortality rates for the contextual view.
-def weekly_rate_rows(count_rows, rate_rows, metric, ages)
+def weekly_rate_rows(count_rows, rate_rows, metric, ages, standard = WHO_WORLD_STANDARD)
   rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
   age_members = {
     'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
@@ -900,7 +909,7 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages)
     'age_65_74' => %w[age_65_69 age_70_74], 'age_75_84' => %w[age_75_79 age_80_84],
     'age_85plus' => %w[age_85_89 age_90_94 age_95_99 age_100plus]
   }
-  weights = age_members.transform_values { |members| members.sum { |age| WHO_WORLD_STANDARD.fetch(age) } }
+  weights = age_members.transform_values { |members| members.sum { |age| standard.fetch(age) } }
   weight_total = weights.values.sum
   count_rows.filter_map do |count|
     rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
@@ -999,7 +1008,7 @@ end
 
 # 日本語: 年次recordを直接使い、同じ指標では各国公式系列をWPPより優先する。
 # English: Read annual records directly and prefer national series over WPP for the same measure.
-def annual_record_rows(records, locations, sex, causes, metric, ages)
+def annual_record_rows(records, locations, sex, causes, metric, ages, algo: nil)
   relevant = records.select do |row|
     locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
       !projected_record?(row)
@@ -1018,7 +1027,7 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
   rate_name = metric == 'asr' ? 'asr' : ''
   value_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) &&
-      row[:rate].to_s == rate_name
+      row[:rate].to_s == rate_name && (!algo || row[:algo].to_s == algo)
   end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
   raw_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) && row[:rate].to_s.empty?
@@ -1880,6 +1889,8 @@ age_selection_label = if selected_period != 'calendar'
                           selected_ages.map { |age| AGES.fetch(age).fetch($l) }.join(', ')
                         end
                       end
+jpn_2015_asr = selected_metric == 'asr' && selected_locations == ['JPN']
+asr_standard = jpn_2015_asr ? JPN_2015_STANDARD : WHO_WORLD_STANDARD
 panel_label = lambda do |loc, cause|
   cause_name = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
   parts = if selected_metric == 'birth_rate'
@@ -1889,6 +1900,9 @@ panel_label = lambda do |loc, cause|
           end
   parts << sex_labels.fetch(selected_sex).fetch($l) unless selected_sex == 'both'
   parts << cause_name
+  if jpn_2015_asr
+    parts << ($l == :ja ? '（2015年モデル人口）' : '(Japan 2015 model population)')
+  end
   unit = if selected_metric == 'birth_rate'
            if cause == 'infant'
              $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
@@ -1920,13 +1934,18 @@ series_specs = if mode == 'country'
 annual_by_age = { selected_ages => begin
   annual = if selected_period != 'calendar' && selected_metric == 'asr'
              annualize_influenza_asr(count_rows, rate_rows,
-                                     selected_period == 'flu27' ? 27 : 36)
+                                     selected_period == 'flu27' ? 27 : 36, asr_standard)
            elsif selected_period != 'calendar'
              annualize_influenza_year(count_rows, rate_rows, selected_ages,
                                       selected_period == 'flu27' ? 27 : 36,
                                       selected_metric)
            elsif selected_metric == 'asr'
-             stratified_asr_rows(annual_records_all, selected_locations, selected_sex, selected_causes)
+             if jpn_2015_asr
+               annual_record_rows(annual_records_all, selected_locations, selected_sex,
+                                  selected_causes, 'asr', selected_ages, algo: 'jp2015std')
+             else
+               stratified_asr_rows(annual_records_all, selected_locations, selected_sex, selected_causes)
+             end
            elsif selected_metric != 'std_deaths'
              annual_record_rows(annual_records_all, selected_locations, selected_sex,
                                 selected_causes, selected_metric, selected_ages)
@@ -1965,7 +1984,8 @@ chart_data.each do |row|
 end
 weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
                     detailed_calendar_rate
-                   weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages).map do |row|
+                   weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages,
+                                    asr_standard).map do |row|
                      series_key = mode == 'country' ? row[:loc_code] :
                        "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:death_code]}"
                      row.merge(series: series_key)
@@ -2621,7 +2641,11 @@ else
   end
   source_entries = []
   if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
-    method = if selected_period != 'calendar' && $l == :ja
+    method = if jpn_2015_asr && selected_period != 'calendar' && $l == :ja
+               'e-Statの月次死亡数・月次人口から作った週次推計値をインフルエンザ年へ再集計し、日本の2015年モデル人口で年齢調整しています。'
+             elsif jpn_2015_asr && selected_period != 'calendar'
+               'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years and standardizes them to the Japan 2015 model population.'
+             elsif selected_period != 'calendar' && $l == :ja
                'e-Statの月次死亡数・月次人口から作った週次推計値を、インフルエンザ年へ再集計しています。UN WPPは使用していません。'
              elsif selected_period != 'calendar'
                'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years. UN WPP is not used.'
@@ -2639,6 +2663,10 @@ else
                'e-Statの確定出生数と乳児死亡数を使用しています。'
              elsif selected_metric == 'birth_rate'
                'Uses final annual birth and infant death counts from e-Stat.'
+             elsif jpn_2015_asr && $l == :ja
+               'e-Statの年齢階級別死亡数・人口から、日本の2015年モデル人口を用いる直接法で年齢調整しています。'
+             elsif jpn_2015_asr
+               'Uses direct standardization of age-specific e-Stat deaths and populations to the Japan 2015 model population.'
              elsif selected_metric == 'asr' && $l == :ja
                'e-Statの年齢階級別死亡数・人口を優先し、不足階級はUN WPP 2024で補完。WHO世界標準人口で直接法により年齢調整している。'
              elsif selected_metric == 'asr'
@@ -2720,7 +2748,7 @@ else
                        <dt><strong>HMD</strong></dt><dd>Human Mortality Database（国際死亡データベース）。各国の死亡・人口データを共通形式で提供しています。<br><a href="#{HMD_HOME_URL}" target="_blank">#{HMD_HOME_URL}</a></dd>
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations。HMDが提供する週次死亡データです。この画面では年齢階級別の週次死亡数と死亡率を使用します。<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>国連人口部のWorld Population Prospects（世界人口推計）。各国の年次人口などを補う場合に使用します。<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
-                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate（年齢調整死亡率）。年齢階級別死亡率をWHO世界標準人口で加重する直接法で計算します。インフルエンザ年のASRは、STMF共通の00–14、15–64、65–74、75–84、85歳以上という粗い階級による近似です。<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate（年齢調整死亡率）。日本単独表示では日本の2015年モデル人口、複数国比較とその他の国・地域ではWHO世界標準人口を使う直接法で計算します。インフルエンザ年のASRは、STMF共通の00–14、15–64、65–74、75–84、85歳以上という粗い階級による近似です。<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
                        <dt><strong>インフルエンザ年の集計</strong></dt><dd>年境界をまたぐ週の死亡数は、各期間に含まれる日数に応じて配分します。週次死亡数と死亡率から得た人口を人口日として積算し、第27週または第36週から翌年の同じ開始週直前まで、全日がそろう期間だけを表示します。日本の週次値は実測週次値ではなく、e-Stat月次値から按分・平滑化した推計値です。</dd>
                      </dl>
                    HTML
@@ -2731,7 +2759,7 @@ else
                        <dt><strong>HMD</strong></dt><dd>Human Mortality Database, which provides harmonized mortality and population data for participating countries.<br><a href="#{HMD_HOME_URL}" target="_blank">#{HMD_HOME_URL}</a></dd>
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations, the weekly mortality dataset provided by HMD. This page uses its age-specific weekly deaths and mortality rates.<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>United Nations World Population Prospects, published by the UN Population Division. It supplies annual population data where needed.<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
-                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate, calculated by direct standardization with the WHO world standard population. Influenza-year ASR is approximate because it uses the broad common STMF groups 00–14, 15–64, 65–74, 75–84, and 85+.<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate, calculated by direct standardization to the Japan 2015 model population when Japan is shown alone, and to the WHO world standard population for multi-country comparisons and other locations. Influenza-year ASR is approximate because it uses the broad common STMF groups 00–14, 15–64, 65–74, 75–84, and 85+.<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
                        <dt><strong>Influenza-year aggregation</strong></dt><dd>Deaths in a week crossing a year boundary are allocated in proportion to the number of days in each period. Population inferred from weekly deaths and rates is accumulated as population-days. Only complete periods from W27 or W36 to the day before the same starting week in the following year are shown. Japanese weekly values are estimates prorated and smoothed from monthly e-Stat data, not directly observed weekly counts.</dd>
                      </dl>
                    HTML
