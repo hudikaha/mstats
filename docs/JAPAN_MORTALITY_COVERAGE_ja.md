@@ -4,16 +4,16 @@
 
 `mortyear.rb`、`mort.rb`、`cod.rb`、`codtr.rb`で使用するe-Stat「人口動態統計」について、公表系列・年齢階級・死因を同時に利用できる範囲を示します。
 
-| 年代 | 元資料 | 年齢階級 | 死因簡単分類 | 年齢×死因 | 作成できる主な値 |
+| 年代 | 元資料 | 使用表 | 年齢階級 | 死因簡単分類 | 作成できる主な値 |
 |---:|---|---|---|---|---|
-| 1999～2008年 | [確定数・年次](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053074&tclass4=000001053089&tclass5val=0) | あり | あり | あり | 年次：死亡数、年齢階級別率、全年齢粗死亡率、ASR |
-| 1999～2008年 | [確定数・死亡月×死因](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061) | なし | あり | なし | 月次・週次：全年齢の死因別死亡数・粗死亡率 |
-| 2009年以降 | [確定数・死亡月×年齢×死因](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061) | あり | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
-| 2009年以降 | [月報（概数）](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0) | あり | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
+| 1999～2008年 | [確定数](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053065&tclass4val=0) | 死亡数，性・年齢（5歳階級）・死因（死因簡単分類）別 | あり | あり | 年次：死亡数、年齢階級別率、全年齢粗死亡率、ASR |
+| 1999～2008年 | [確定数](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053065&tclass4val=0) | 死亡数，性・死亡月・死因（死因簡単分類）別 | なし | あり | 月次・週次：全年齢の死因別死亡数・粗死亡率 |
+| 2009年以降 | [確定数・保管統計表](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053074&tclass4=000001053089&tclass5val=0) | 死亡数，死亡月・性・年齢（5歳階級）・死因（死因簡単分類）別 | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
+| 2009年以降 | [月報（概数）](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0) | 死亡数，死因（死因簡単分類）・性・年齢（5歳階級・小学生―中学生再掲）別 | あり | あり | 年次・月次・週次：死亡数、年齢階級別率、全年齢粗死亡率。年次：ASR |
 
 週次値は、月次死亡数を各暦日の所属週へ日数按分して再構成した推計値です。個々の死亡日を復元した値ではありません。
 
-年次確定数は、[e-Statの人口動態統計](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053074&tclass4=000001053089&tclass5val=0)にある「死亡数，性・年齢（5歳階級）・死因（死因簡単分類）別」を使用します。1999～2008年の年次値は月次合計ではなく、この年次確定表を直接使用します。
+年次確定数は、[e-Statの確定数・死亡](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=7&tclass1=000001053058&tclass2=000001053061&tclass3=000001053065&tclass4val=0)にある「死亡数，性・年齢（5歳階級）・死因（死因簡単分類）別」を使用します。1999～2008年の年次値は月次合計ではなく、この年次確定表を直接使用します。
 
 ASRは年次の年齢階級別死亡数と人口から直接法で計算します。古い人口表では最高齢層が`75歳以上`または`85歳以上`にまとめられているため、その年に公表された人口階級へ死亡数と標準人口weightも合わせて集約します。この期間のASRは、詳細な高齢階級がある年より粗い近似です。`75歳以上`はASR計算途中の補助区分であり、Elasticsearch fieldとしては保存しません。
 
