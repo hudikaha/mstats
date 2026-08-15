@@ -488,11 +488,35 @@ def inverse_2x2(matrix)
   ]
 end
 
+# 日本語: 年次傾向を識別できない疎な系列には、一定率の切片のみモデルを使う。
+# English: Use a constant-rate intercept-only model when a sparse series cannot identify a time trend.
+def poisson_intercept_fit(rows, center)
+  total_deaths = rows.sum { |row| row[:deaths] }
+  total_population = rows.sum { |row| row[:population] }
+  rate = total_deaths.fdiv(total_population)
+  pearson = rows.sum do |row|
+    mu = rate * row[:population]
+    mu.positive? ? (row[:deaths] - mu)**2 / mu : 0.0
+  end
+  dispersion = rows.length > 1 ? pearson / (rows.length - 1) : nil
+  { beta: [Math.log(rate), 0.0], covariance: [[1.0 / total_deaths, 0.0], [0.0, 0.0]],
+    center: center, dispersion: dispersion, intercept_only: true }
+end
+
 # 日本語: 人口offset付きPoisson回帰をIRLSで推定する。
 # English: Fit a population-offset Poisson regression by IRLS.
 def poisson_fit(rows)
   center = rows.sum { |row| row[:year] }.fdiv(rows.length)
-  beta = [Math.log(rows.sum { |row| row[:deaths] }.fdiv(rows.sum { |row| row[:population] })), 0.0]
+  total_deaths = rows.sum { |row| row[:deaths] }
+  # 日本語: 学習期間が全て0件なら、期待値・分散とも0の境界モデルとして扱う。
+  # English: Treat an all-zero training period as a boundary model with zero expectation and variance.
+  if total_deaths.zero?
+    return { beta: [-Float::INFINITY, 0.0], covariance: [[0.0, 0.0], [0.0, 0.0]],
+             center: center, dispersion: 0.0, zero: true }
+  end
+  return poisson_intercept_fit(rows, center) if rows.count { |row| row[:deaths].positive? } < 2
+
+  beta = [Math.log(total_deaths.fdiv(rows.sum { |row| row[:population] })), 0.0]
   covariance = nil
 
   100.times do
@@ -508,7 +532,12 @@ def poisson_fit(rows)
         2.times { |j| xtwx[i][j] += x[i] * mu * x[j] }
       end
     end
-    covariance = inverse_2x2(xtwx)
+    begin
+      covariance = inverse_2x2(xtwx)
+    rescue RuntimeError => error
+      raise unless error.message == 'singular regression matrix'
+      return poisson_intercept_fit(rows, center)
+    end
     updated = 2.times.map { |i| covariance[i][0] * xtwz[0] + covariance[i][1] * xtwz[1] }
     difference = 2.times.map { |i| (updated[i] - beta[i]).abs }.max
     beta = updated
@@ -570,6 +599,8 @@ def poisson_random(random, lambda)
 end
 
 def coefficient_draws(fit, count, random)
+  return Array.new(count) { fit[:beta].dup } if fit[:zero]
+
   covariance = fit[:covariance]
   l00 = Math.sqrt([covariance[0][0], 0.0].max)
   l10 = covariance[1][0] / l00
