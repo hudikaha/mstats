@@ -14,7 +14,7 @@ module Mstats2026
     'age_45_49' => 6.04, 'age_50_54' => 5.37, 'age_55_59' => 4.55,
     'age_60_64' => 3.72, 'age_65_69' => 2.96, 'age_70_74' => 2.21,
     'age_75_79' => 1.52, 'age_80_84' => 0.91, 'age_85_89' => 0.44,
-    'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100over' => 0.005
+    'age_90_94' => 0.15, 'age_95_99' => 0.04, 'age_100plus' => 0.005
   }.freeze
   JPN_2015_STANDARD = {
     'age_00_04' => 5_026_000, 'age_05_09' => 5_369_000, 'age_10_14' => 5_711_000,
@@ -23,7 +23,7 @@ module Mstats2026
     'age_45_49' => 8_108_000, 'age_50_54' => 8_451_000, 'age_55_59' => 8_793_000,
     'age_60_64' => 9_135_000, 'age_65_69' => 9_246_000, 'age_70_74' => 7_892_000,
     'age_75_79' => 6_306_000, 'age_80_84' => 4_720_000, 'age_85_89' => 3_134_000,
-    'age_90_94' => 1_548_000, 'age_95over' => 423_000
+    'age_90_94' => 1_548_000, 'age_95plus' => 423_000
   }.freeze
   JPN_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0'
   JPN_POP_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0'
@@ -36,7 +36,7 @@ module Mstats2026
     age_00_04 age_05_09 age_10_14 age_15_19 age_20_24 age_25_29
     age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59
     age_60_64 age_65_69 age_70_74 age_75_79 age_80_84 age_85_89
-    age_85over age_90_94 age_95_99 age_100over age_unknown
+    age_85plus age_90_94 age_95_99 age_100plus age_unknown
     age_elementary age_junior
   ].freeze
 

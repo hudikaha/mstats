@@ -11,7 +11,7 @@ BASE_AGE_GROUPS = {
     age_00_04 age_05_09 age_10_14 age_15_19 age_20_24 age_25_29
     age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59
     age_60_64 age_65_69 age_70_74 age_75_79 age_80_84 age_85_89
-    age_90_94 age_95_99 age_100over
+    age_90_94 age_95_99 age_100plus
   ],
   age_00_14: %i[age_00_04 age_05_09 age_10_14],
   age_15_64: %i[
@@ -20,7 +20,7 @@ BASE_AGE_GROUPS = {
   ],
   age_65_74: %i[age_65_69 age_70_74],
   age_75_84: %i[age_75_79 age_80_84],
-  age_85over: %i[age_85_89 age_90_94 age_95_99 age_100over],
+  age_85plus: %i[age_85_89 age_90_94 age_95_99 age_100plus],
   age_05_14: %i[age_05_09 age_10_14],
   age_15_29: %i[age_15_19 age_20_24 age_25_29],
   age_30_49: %i[age_30_34 age_35_39 age_40_44 age_45_49],
@@ -66,6 +66,7 @@ def read_records(path)
     end
     row[:year] = row[:year].to_i
     row[:month] = row[:month].to_i if row[:month]
+    %i[rate algo type].each { |field| row[field] = row[field].to_s }
     [row.fetch(:id), row]
   end
 end
@@ -84,6 +85,7 @@ def normalize_records(records)
     end
     row[:year] = row[:year].to_i
     row[:month] = row[:month].to_i if row[:month]
+    %i[rate algo type].each { |field| row[field] = row[field].to_s }
   end
   records
 end
@@ -92,8 +94,10 @@ end
 # Build display age bands from the underlying five-year age groups.
 def add_age_groups(row)
   BASE_AGE_GROUPS.each do |target, members|
+    next unless row[target].nil?
+
     values = members.map { |age| row[age] }
-    row[target] = values.compact.sum unless values.all?(&:nil?)
+    row[target] = values.sum if values.none?(&:nil?)
   end
   row
 end
@@ -101,12 +105,17 @@ end
 # 人口の年齢階級に合わせ、85歳以上一括または詳細階級を選ぶ。
 # Select the aggregate or detailed 85-plus bands according to the population record.
 def rate_age_groups(population)
+  # 日本語: 年齢内訳のない旧年人口では、全年齢同士だけで粗死亡率を計算する。
+  # English: For historical population records without age strata, calculate only the all-age crude rate.
+  detailed_ages = BASE_AGE_GROUPS[:age_all]
+  return { age_all: [:age_all] } if population[:age_all] && detailed_ages.all? { |age| population[age].nil? }
+
   groups = RATE_AGE_GROUPS.dup
   return groups if population[:age_85_89]
 
   under_85 = BASE_AGE_GROUPS[:age_all].take_while { |age| age != :age_85_89 }
-  groups[:age_all] = under_85 + [:age_85over]
-  groups[:age_85over] = [:age_85over]
+  groups[:age_all] = under_85 + [:age_85plus]
+  groups[:age_85plus] = [:age_85plus]
   groups
 end
 
@@ -152,7 +161,10 @@ def monthly_series(deaths, populations)
     crude[:src_url] = (Array(raw[:src_url]) | Array(population[:src_url])).reject { |url| url.to_s.empty? }
     OUTPUT_AGES.each { |age| crude[age] = nil }
     rate_age_groups(population).each do |target, members|
-      value = annual_rate.call(members)
+      # 日本語: 公式全年齢値があれば、年齢内訳の形式差に左右されず直接使う。
+      # English: Use official all-age totals directly, independent of age-band layout changes.
+      rate_members = target == :age_all && raw[:age_all] && population[:age_all] ? [:age_all] : members
+      value = annual_rate.call(rate_members)
       crude[target] = value.round(2) if value
     end
     rows[crude_id] = crude
@@ -161,18 +173,18 @@ def monthly_series(deaths, populations)
       'whostd' => Mstats2026::WHO_WORLD_STANDARD.transform_keys(&:to_sym).
                     transform_values { |weight| weight.to_f },
       'jp2015std' => Mstats2026::JPN_2015_STANDARD.each_with_object({}) do |(age, weight), result|
-        members = age == 'age_95over' ? %i[age_95_99 age_100over] : [age.to_sym]
+        members = age == 'age_95plus' ? %i[age_95_99 age_100plus] : [age.to_sym]
         result[members] = weight.to_f
       end
     }
     standards['whostd'] = standards['whostd'].to_h { |age, weight| [[age], weight] }
     unless population[:age_85_89]
       standards.transform_values! do |groups|
-        younger = groups.reject { |members, _weight| members.any? { |age| BASE_AGE_GROUPS[:age_85over].include?(age) } }
+        younger = groups.reject { |members, _weight| members.any? { |age| BASE_AGE_GROUPS[:age_85plus].include?(age) } }
         older_weight = groups.sum do |members, weight|
-          members.any? { |age| BASE_AGE_GROUPS[:age_85over].include?(age) } ? weight : 0.0
+          members.any? { |age| BASE_AGE_GROUPS[:age_85plus].include?(age) } ? weight : 0.0
         end
-        younger.merge([:age_85over] => older_weight)
+        younger.merge([:age_85plus] => older_weight)
       end
     end
     standards.each do |algo, groups|
@@ -324,12 +336,26 @@ def build_weekly(deaths, populations)
   end
 end
 
+# 日本語: 確定月次を優先し、その最終月より後だけ概数・速報月次で補う。
+# English: Prefer confirmed monthly records and append provisional records only after their last month.
+def merge_preferred_monthly(current, preferred_path)
+  return current unless preferred_path
+
+  preferred = read_records(preferred_path)
+  last_period = preferred.values.map { |row| row[:yearmonth] }.max
+  current_after = current.select { |_id, row| row[:yearmonth] > last_period }
+  preferred.merge(current_after)
+end
+
 if $PROGRAM_NAME == __FILE__
   options = {}
   OptionParser.new do |opts|
     opts.banner = 'Usage: jp-dcause-weekly.rb --population POP.csv DEATH.csv'
     opts.on('--population FILE', 'mstats2026 population CSV') do |file|
       options[:population] = file
+    end
+    opts.on('--preferred-monthly FILE', 'confirmed monthly death CSV used before current data') do |file|
+      options[:preferred_monthly] = file
     end
   end.parse!
 
@@ -338,5 +364,6 @@ if $PROGRAM_NAME == __FILE__
 
   deaths = read_records(ARGV.first)
   populations = read_records(options[:population])
+  deaths = merge_preferred_monthly(deaths, options[:preferred_monthly])
   Mstats2026.output_weekly(build_weekly(deaths, populations))
 end

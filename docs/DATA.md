@@ -31,7 +31,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `type` | keyword | Minimal series identifier, such as `cfm`, `est`, `stmf`, or `recon` |
 | `src_url` | keyword array, not indexed | One or more URLs identifying the source data used for the record |
 | `age_all` | scaled_float | Value for all ages |
-| `age_*` | scaled_float | Age-group value such as `age_00_04`, `age_80_84`, or `age_100over` |
+| `age_*` | scaled_float | Age-group value such as `age_00_04`, `age_80_84`, or `age_100plus` |
 
 `age_*` fields use `scaled_float` with a scaling factor of 100. Integer monthly
 counts and populations can therefore share fields with adjusted weekly values

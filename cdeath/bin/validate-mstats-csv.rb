@@ -7,6 +7,7 @@ require 'date'
 require 'json'
 require 'optparse'
 require 'set'
+require 'tempfile'
 require_relative '../import/mstats2026'
 
 options = { require_src_url: false }
@@ -22,10 +23,11 @@ LEGACY_RATES = %w[adj amr].freeze
 LEGACY_TYPES = %w[conf jpns reconst unwpp2024proj unwpp2024expproj].freeze
 NUMERIC = /\A-?(?:\d+(?:\.\d*)?|\.\d+)\z/
 
-ids = {}
+id_rows = Tempfile.new('mstats-validation-ids')
+rate_rows = Tempfile.new('mstats-validation-rates')
+total_rows = 0
 counts = Hash.new(0)
 cause_systems = Hash.new(0)
-death_rates = Hash.new { |hash, key| hash[key] = Set.new }
 birth_keys = Set.new
 delivery_keys = Set.new
 infant_rate_keys = []
@@ -53,14 +55,13 @@ ARGV.each do |file|
   file_rows = 0
   CSV.foreach(file, headers: true).with_index(2) do |row, line|
     file_rows += 1
+    total_rows += 1
     where = "#{file}:#{line}"
     id = row['id'].to_s
     if id.empty?
       errors << "#{where}: id is missing"
-    elsif ids[id]
-      errors << "#{where}: duplicate id #{id} (first: #{ids[id]})"
     else
-      ids[id] = where
+      id_rows.puts "#{id}\t#{where}"
     end
 
     begin
@@ -129,7 +130,7 @@ ARGV.each do |file|
       errors << "#{where}: unrecognized death_code #{death_code.inspect}" if system == 'unknown'
       key = [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], death_code,
              row['type'], row['sex']]
-      death_rates[key] << row['rate'].to_s
+      rate_rows.puts "#{key.join("\t")}\t#{row['rate']}"
     elsif present?(death_code)
       warnings << "#{where}: death_code is ignored for category #{category}"
     end
@@ -178,6 +179,17 @@ ARGV.each do |file|
   errors << "#{file}: no data rows" if file_rows.zero?
 end
 
+id_rows.flush
+previous_id = previous_where = nil
+IO.popen(['sort', id_rows.path], 'r') do |sorted|
+  sorted.each_line do |line|
+    id, where = line.chomp.split("\t", 2)
+    errors << "#{where}: duplicate id #{id} (first: #{previous_where})" if id == previous_id
+    previous_id = id
+    previous_where = where
+  end
+end
+
 infant_rate_keys.each do |where, key|
   errors << "#{where}: infant mortality rate has no matching birth denominator" unless birth_keys.include?(key)
 end
@@ -185,12 +197,29 @@ birth_denominator_keys.each do |where, denominators, key|
   errors << "#{where}: perinatal indicator has no matching denominator" unless denominators.include?(key)
 end
 
-death_rates.each do |key, rates|
-  next unless (rates & Set.new(%w[crude asr])).any?
-  warnings << "derived death series has no raw-count row: #{key.join('/')}" unless rates.include?('')
+rate_rows.flush
+previous_key = nil
+rates = Set.new
+check_rates = lambda do |key, values|
+  next if key.nil? || (values & Set.new(%w[crude asr])).empty?
+  warnings << "derived death series has no raw-count row: #{key.tr("\t", '/')}" unless values.include?('')
 end
+IO.popen(['sort', rate_rows.path], 'r') do |sorted|
+  sorted.each_line do |line|
+    parts = line.chomp.split("\t", -1)
+    rate = parts.pop
+    key = parts.join("\t")
+    if previous_key && key != previous_key
+      check_rates.call(previous_key, rates)
+      rates = Set.new
+    end
+    previous_key = key
+    rates << rate
+  end
+end
+check_rates.call(previous_key, rates)
 
-puts "files=#{ARGV.length} rows=#{ids.length}"
+puts "files=#{ARGV.length} rows=#{total_rows}"
 counts.sort.each { |(unit, category), count| puts "#{unit}.#{category}=#{count}" }
 puts "cause_systems=#{cause_systems.sort.to_h.to_json}"
 warnings.first(100).each { |message| warn "warning: #{message}" }

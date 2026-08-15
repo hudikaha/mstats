@@ -16,6 +16,9 @@ OptionParser.new do |opts|
   opts.on('--population FILE', 'mstats2026 population CSV') { |file| options[:population] = file }
   opts.on('--monthly-out FILE', 'monthly cause output CSV') { |file| options[:monthly] = file }
   opts.on('--weekly-out FILE', 'weekly cause output CSV') { |file| options[:weekly] = file }
+  opts.on('--preferred-monthly FILE', 'confirmed monthly death CSV used for weekly output') do |file|
+    options[:preferred_monthly] = file
+  end
 end.parse!
 
 %i[population monthly weekly].each do |option|
@@ -55,7 +58,8 @@ begin
               Process.clock_gettime(Process::CLOCK_MONOTONIC) - phase)
 
   phase = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  weekly = build_weekly(deaths, populations)
+  weekly_deaths = merge_preferred_monthly(deaths, options[:preferred_monthly])
+  weekly = build_weekly(weekly_deaths, populations)
   warn format('causejp weekly generation: %.2fs (%d records)',
               Process.clock_gettime(Process::CLOCK_MONOTONIC) - phase, weekly.size)
 

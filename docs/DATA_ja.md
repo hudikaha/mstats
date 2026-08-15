@@ -29,7 +29,7 @@
 | `type` | keyword | 必要最小限の系列識別子。`cfm`、`est`、`stmf`、`recon`など |
 | `src_url` | keyword配列、非index | そのrecordの作成に使った元dataを示す1個以上のURL |
 | `age_all` | scaled_float | 全年齢の値 |
-| `age_*` | scaled_float | `age_00_04`、`age_80_84`、`age_100over`などの年齢階級値 |
+| `age_*` | scaled_float | `age_00_04`、`age_80_84`、`age_100plus`などの年齢階級値 |
 
 `age_*`は小数第2位まで保持できる`scaled_float`（scaling factor 100）です。そのため整数の
 月次死亡数・人口と、小数を含む週次補正値を同じfieldで扱えます。空欄は0ではなく、元資料に

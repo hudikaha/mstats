@@ -24,7 +24,7 @@ WHO_STANDARD = {
     "age_45_49": 6.04, "age_50_54": 5.37, "age_55_59": 4.55,
     "age_60_64": 3.72, "age_65_69": 2.96, "age_70_74": 2.21,
     "age_75_79": 1.52, "age_80_84": 0.91, "age_85_89": 0.44,
-    "age_90_94": 0.15, "age_95_99": 0.04, "age_100over": 0.005,
+    "age_90_94": 0.15, "age_95_99": 0.04, "age_100plus": 0.005,
 }
 
 AGE_FIELDS = [
@@ -32,8 +32,8 @@ AGE_FIELDS = [
     "age_00_04", "age_05_09", "age_10_14", "age_15_19", "age_20_24",
     "age_25_29", "age_30_34", "age_35_39", "age_40_44", "age_45_49",
     "age_50_54", "age_55_59", "age_60_64", "age_65_69", "age_70_74",
-    "age_75_79", "age_80_84", "age_85_89", "age_85over", "age_90_94",
-    "age_95_99", "age_100over", "age_unknown", "age_elementary",
+    "age_75_79", "age_80_84", "age_85_89", "age_85plus", "age_90_94",
+    "age_95_99", "age_100plus", "age_unknown", "age_elementary",
     "age_junior", "age_00_14", "age_15_64", "age_65_74", "age_75_84",
     "age_05_14", "age_15_29", "age_30_49", "age_50_64",
 ]
@@ -132,7 +132,7 @@ def base(loc, location, world_region, year, sex, category, kind, rate="", code="
 
 def age_field(age):
     if age >= 100:
-        return "age_100over"
+        return "age_100plus"
     start = age // 5 * 5
     return f"age_{start:02d}_{start + 4:02d}"
 

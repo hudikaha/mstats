@@ -43,7 +43,7 @@ upper bound of the last band.
 ```text
 ages=00-09       # 00_04 and 05_09
 ages=00-99       # 00_04 through 95_99
-ages=80-100over  # 80_84 through 100over
+ages=80-100plus  # 80_84 through 100plus
 ```
 
 Use `ages=all` for all ages and `ages=0` for age zero alone. Influenza-year

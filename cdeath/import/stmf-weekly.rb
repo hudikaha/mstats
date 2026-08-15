@@ -40,7 +40,7 @@ AGE_COLUMNS = {
   age_15_64: %w[D15_64 R15_64],
   age_65_74: %w[D65_74 R65_74],
   age_75_84: %w[D75_84 R75_84],
-  age_85over: %w[D85p R85p]
+  age_85plus: %w[D85p R85p]
 }.freeze
 
 STMF_ASR_MEMBERS = {
@@ -49,7 +49,7 @@ STMF_ASR_MEMBERS = {
                 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
   age_65_74: %w[age_65_69 age_70_74],
   age_75_84: %w[age_75_79 age_80_84],
-  age_85over: %w[age_85_89 age_90_94 age_95_99 age_100over]
+  age_85plus: %w[age_85_89 age_90_94 age_95_99 age_100plus]
 }.freeze
 STMF_ASR_WEIGHTS = STMF_ASR_MEMBERS.transform_values do |members|
   members.sum { |age| Mstats2026::WHO_WORLD_STANDARD.fetch(age) }

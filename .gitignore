@@ -15,7 +15,10 @@ kkcor-old
 /cdeath/config/logstash/*.conf
 /cdeath/out
 /cdeath/src/causejp
+/cdeath/src/causejp-cfm
+/cdeath/src/causejp-cfm-yearly
 /cdeath/src/popjp
+/cdeath/src/popjp-cfm-legacy
 /cdeath/src/stmf
 /cdeath/src/wpp
 /cdeath/src/infantjp
