@@ -52,6 +52,12 @@ views use their source bands, such as `ages=00-14~15-64`.
 For compatibility, `mortyear.rb` also accepts repeated legacy fields such as
 `age=age_00_04&age=age_05_09`. Submitting the form generates `ages=00-09`.
 
+## Sex
+
+Use `sex=male` or `sex=female` for sex-specific series in `mortyear.rb`.
+Both sexes is the default, so canonical URLs omit `sex`. Birth-based mortality
+rates are not separated by sex and ignore a supplied `sex` value.
+
 ## Years
 
 Pages that allow multiple individual years use the same separator and range

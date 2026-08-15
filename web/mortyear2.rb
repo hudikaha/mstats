@@ -200,6 +200,7 @@ end.flatten.select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
+selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
 $mortyear_period = selected_period
@@ -2162,6 +2163,11 @@ WORLD_REGIONS.each do |region, region_names|
 end
 puts <<~HTML
     </fieldset><br>
+    <fieldset id="sex-fieldset" style="#{selected_metric == 'birth_rate' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '性別' : 'Sex' }</legend>
+      <label><input class="sex-option" type="radio" name="sex" value="both" #{checked(selected_sex == 'both')}>#{ $l == :ja ? '男女計' : 'Both' }</label>
+      <label><input class="sex-option" type="radio" name="sex" value="male" #{checked(selected_sex == 'male')}>#{ $l == :ja ? '男性' : 'Male' }</label>
+      <label><input class="sex-option" type="radio" name="sex" value="female" #{checked(selected_sex == 'female')}>#{ $l == :ja ? '女性' : 'Female' }</label>
+    </fieldset>
     <fieldset id="season-age-fieldset" style="#{selected_period == 'calendar' || selected_metric == 'asr' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
 HTML
 STMF_AGES.each do |age|
@@ -2290,6 +2296,9 @@ puts <<~HTML
         const locations = params.getAll('c').map(value => value.toLowerCase());
         params.delete('c');
         if (locations.length) params.set('c', locations.join('~'));
+        // 日本語: 男女計は既定値なのでcanonical URLでは省略する。
+        // English: Omit the default both-sex selection from canonical URLs.
+        if (params.get('sex') === 'both') params.delete('sex');
         showLoading();
         window.location.assign(`${window.location.pathname}?${params.toString().replace(/%7E/gi, '~')}`);
       });
@@ -2498,6 +2507,12 @@ puts <<~HTML
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
         const fixedAllAges = metric === 'asr' || metric === 'birth_rate';
+        const sexFieldset = document.getElementById('sex-fieldset');
+        sexFieldset.style.display = metric === 'birth_rate' ? 'none' : '';
+        document.querySelectorAll('.sex-option').forEach(input => {
+          input.disabled = metric === 'birth_rate';
+          if (metric === 'birth_rate') input.checked = input.value === 'both';
+        });
         document.getElementById('age-fieldset').style.display = isCalendarPeriod && metric !== 'birth_rate' ? '' : 'none';
         document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod && metric !== 'asr' ? '' : 'none';
         document.querySelectorAll('.age-season-option').forEach(input => {
