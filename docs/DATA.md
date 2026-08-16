@@ -96,11 +96,6 @@ projections, not reported vital-registration counts.
 
 ### mstats20260816 record composition and processing time
 
-These measurements are from the full rebuild on August 16, 2026. Approval,
-user-interaction, and tool-result retrieval waits are excluded. Where several
-consecutive series were timed together, the combined time appears only on the
-last applicable row.
-
 | Category | Records | CSV generation and validation | Elasticsearch import |
 |---|---:|---:|---:|
 | Japan, monthly deaths | 83,748 |  |  |
@@ -118,9 +113,6 @@ last applicable row.
 | UN monthly deaths | 81,768 | About 14s | About 53s |
 | Japan, actual weekly excess-death dashboard data | 402,750 | About 42s | About 2m 04s |
 | **Total** | **3,537,810** | **About 9m 47s** | **About 31m 58s** |
-
-Deleting and creating the physical index took one additional second. CSV header
-rows are not included in the record counts.
 
 ## kcor / CUMD-WK (public CSV: `*-CUMD-WK.csv.xz` in the [kkcor directory](https://fujikawa.org/pub/kkcor/))
 

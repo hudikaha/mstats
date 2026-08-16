@@ -78,9 +78,6 @@ UN World Population Prospects 2024の年次recordは1950～2100年を収録し�
 
 ### mstats20260816のrecord構成と処理時間
 
-2026年8月16日の全再構築時の実測です。承認待ち、ユーザー操作待ち、toolの結果回収待ちは
-含みません。一括計測した時間は、対象となる連続系列の最後の行だけに記載しています。
-
 | 区分 | record数 | CSV生成・検査時間 | Elasticsearch投入時間 |
 |---|---:|---:|---:|
 | 日本・月次死亡 | 83,748 |  |  |
@@ -98,8 +95,6 @@ UN World Population Prospects 2024の年次recordは1950～2100年を収録し�
 | UN月次死亡 | 81,768 | 約14秒 | 約53秒 |
 | 日本・超過死亡dashboard実週次 | 402,750 | 約42秒 | 約2分04秒 |
 | **合計** | **3,537,810** | **約9分47秒** | **約31分58秒** |
-
-物理indexの削除・新規作成には別途1秒かかりました。CSVのheaderはrecord数に含みません。
 
 ## kcor / CUMD-WK（公開CSV: [kkcor公開ディレクトリ](https://fujikawa.org/pub/kkcor/) の `*-CUMD-WK.csv.xz`）
 
