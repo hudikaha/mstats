@@ -94,6 +94,34 @@ counts use `death_code=allcause`; `rate=crude` is per 100,000 population.
 `algo=whostd`. These WPP values are UN estimates and
 projections, not reported vital-registration counts.
 
+### mstats20260816 record composition and processing time
+
+These measurements are from the full rebuild on August 16, 2026. Approval,
+user-interaction, and tool-result retrieval waits are excluded. Where several
+consecutive series were timed together, the combined time appears only on the
+last applicable row.
+
+| Category | Records | CSV generation and validation | Elasticsearch import |
+|---|---:|---:|---:|
+| Japan, monthly deaths | 83,748 |  |  |
+| Japan, monthly population | 1,890 |  |  |
+| Japan, reconstructed weekly deaths from monthly data | 1,860,648 | Above 3 series: 5m 06s |  |
+| Japan, annual deaths, population, and rates | 27,679 |  |  |
+| Japan, infant deaths | 100 |  |  |
+| United States, annual birth-related data | 73 |  | Above 6 series: about 21m 38s |
+| HMD STMF | 406,431 | Above 4 series: about 28s | About 2m 14s |
+| Japan, confirmed population for the earlier period | 345 |  |  |
+| Japan, confirmed monthly deaths | 125,352 |  |  |
+| Japan, confirmed annual deaths and rates | 22,210 | Above 3 series: 2m 18s | Above 3 series: about 1m 55s |
+| UN WPP | 521,454 | About 57s | About 2m 52s |
+| OECD birth-related data | 3,362 | About 2s | About 22s |
+| UN monthly deaths | 81,768 | About 14s | About 53s |
+| Japan, actual weekly excess-death dashboard data | 402,750 | About 42s | About 2m 04s |
+| **Total** | **3,537,810** | **About 9m 47s** | **About 31m 58s** |
+
+Deleting and creating the physical index took one additional second. CSV header
+rows are not included in the record counts.
+
 ## kcor / CUMD-WK (public CSV: `*-CUMD-WK.csv.xz` in the [kkcor directory](https://fujikawa.org/pub/kkcor/))
 
 One `kcor` record contains cumulative deaths through a particular week for a
