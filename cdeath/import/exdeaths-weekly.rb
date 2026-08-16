@@ -9,8 +9,8 @@ require_relative 'mstats2026'
 ALL_CAUSE_SOURCE_URL = 'https://exdeaths-japan.org/data/Observed.csv'.freeze
 CAUSE_SOURCE_URL = 'https://exdeaths-japan.org/data/Observed.csv.zip'.freeze
 
-# dashboardの都道府県番号を日英名称へ対応させる。loc_codeは別途jp01〜jp47へ変換する。
-# Map dashboard prefecture numbers to bilingual names; loc_code is converted separately to jp01-jp47.
+# dashboardの都道府県番号を日英名称へ対応させる。locは別途jp01〜jp47へ変換する。
+# Map dashboard prefecture numbers to bilingual names; loc is converted separately to jp01-jp47.
 PREFECTURES = [
   %w[Hokkaido 北海道], %w[Aomori 青森県], %w[Iwate 岩手県],
   %w[Miyagi 宮城県], %w[Akita 秋田県], %w[Yamagata 山形県],
@@ -65,7 +65,7 @@ paths = {
 paths.each_value { |path| abort "Missing source CSV: #{path}" unless File.file?(path) }
 
 # 補正済み観測値だけを読み、地域・週を共通keyにする。
-# Read only corrected observations and key them consistently by location and week.
+# Read only corrected observations and key them consistently by area and week.
 def read_weighted(path, selected_ids, through)
   CSV.foreach(path, headers: true).each_with_object({}) do |source, rows|
     id = source['prefecture_id']
@@ -101,17 +101,17 @@ CAUSES.each_key do |name|
            end
   values.sort_by { |(prefecture_id, date), _value| [prefecture_id.to_i, date] }.each do |(prefecture_id, date), value|
     area, _areaj = PREFECTURES.fetch(prefecture_id)
-    loc_code = prefecture_id == '48' ? 'jpn' : format('jp%02d', prefecture_id.to_i)
+    loc = prefecture_id == '48' ? 'jpn' : format('jp%02d', prefecture_id.to_i)
     period = format('%04dw%02d', date.cwyear, date.cweek)
     if value.negative?
-      warn "Omit negative derived COVID-19 value: #{loc_code} #{period} #{value}"
+      warn "Omit negative derived COVID-19 value: #{loc} #{period} #{value}"
       next
     end
     death_code, death_cause = CAUSES.fetch(name)
-    id = Mstats2026.record_id(loc_code: loc_code, period: period, category: 'death',
+    id = Mstats2026.record_id(loc: loc, period: period, category: 'death',
                               death_code: death_code, type: 'stmf', sex: 'both')
     rows[id] = {
-      id: id, loc_code: loc_code, location: area,
+      id: id, loc: loc, area: area,
       yearweek: period, category: 'death', rate: '', death_code: death_code,
       death_cause: death_cause, algo: '', type: 'stmf',
       src_url: name == 'allcause' ? [ALL_CAUSE_SOURCE_URL] :

@@ -720,7 +720,7 @@ data0 = elastic_search(
     :filter => [
         { 'range' => {'date' => {'gte' => "#{$oldest}-01-01", 'lt' => $data_before } } },
         { 'term' => {'category' => 'death'} },
-        { 'term' => {'loc_code' => 'jpn'} },
+        { 'term' => {'loc' => 'jpn'} },
         { 'term' => {'sex' => SexCodes.fetch($sex)} },
         { 'exists' => {'field' => 'yearmonth'} },
         {

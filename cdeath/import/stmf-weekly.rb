@@ -96,20 +96,20 @@ end
 source_rows.each do |source|
   original_code = source['CountryCode']
   canonical_code = CODE_REPLACEMENTS.fetch(original_code, original_code)
-  loc_code = canonical_code.downcase
+  loc = canonical_code.downcase
   year = source['Year'].to_i
   week = source['Week'].to_i
   sex = SEXES[source['Sex']]
   next unless sex
 
   ['', 'crude'].each_with_index do |rate, column_index|
-    id = Mstats2026.record_id(loc_code: loc_code, period: format('%04dw%02d', year, week),
+    id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
                               category: 'death', rate: rate, death_code: 'allcause',
                               type: 'stmf', sex: sex)
     row = {
       id: id,
-      loc_code: loc_code,
-      location: LOCATIONS.fetch(canonical_code, canonical_code),
+      loc: loc,
+      area: LOCATIONS.fetch(canonical_code, canonical_code),
       yearweek: format('%04dw%02d', year, week),
       category: 'death',
       rate: rate,
@@ -130,16 +130,16 @@ source_rows.each do |source|
     rows[id] = row
   end
 
-  crude_id = Mstats2026.record_id(loc_code: loc_code, period: format('%04dw%02d', year, week),
+  crude_id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
                                    category: 'death', rate: 'crude', death_code: 'allcause',
                                    type: 'stmf', sex: sex)
   crude = rows.fetch(crude_id)
   next unless STMF_ASR_WEIGHTS.keys.all? { |age| crude[age] }
 
-  asr_id = Mstats2026.record_id(loc_code: loc_code, period: format('%04dw%02d', year, week),
+  asr_id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
                                 category: 'death', rate: 'asr', death_code: 'allcause',
                                 algo: 'whostd', type: 'stmf', sex: sex)
-  asr = crude.slice(:loc_code, :location, :yearweek, :category, :death_code, :death_cause,
+  asr = crude.slice(:loc, :area, :yearweek, :category, :death_code, :death_cause,
                     :src_url, :date, :year, :week, :sex).merge(
                       id: asr_id, rate: 'asr', algo: 'whostd', type: 'stmf'
                     )

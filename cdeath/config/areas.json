@@ -1,0 +1,1162 @@
+{
+  "abw": {
+    "area": "Aruba",
+    "areaj": "アルバ"
+  },
+  "afg": {
+    "area": "Afghanistan",
+    "areaj": "アフガニスタン"
+  },
+  "ago": {
+    "area": "Angola",
+    "areaj": "アンゴラ"
+  },
+  "aia": {
+    "area": "Anguilla",
+    "areaj": "アンギラ"
+  },
+  "ala": {
+    "area": "Åland Islands",
+    "areaj": "オーランド諸島"
+  },
+  "alb": {
+    "area": "Albania",
+    "areaj": "アルバニア"
+  },
+  "and": {
+    "area": "Andorra",
+    "areaj": "アンドラ"
+  },
+  "are": {
+    "area": "United Arab Emirates",
+    "areaj": "アラブ首長国連邦"
+  },
+  "arg": {
+    "area": "Argentina",
+    "areaj": "アルゼンチン"
+  },
+  "arm": {
+    "area": "Armenia",
+    "areaj": "アルメニア"
+  },
+  "asm": {
+    "area": "American Samoa",
+    "areaj": "アメリカ領サモア"
+  },
+  "atg": {
+    "area": "Antigua and Barbuda",
+    "areaj": "アンティグア・バーブーダ"
+  },
+  "aus": {
+    "area": "Australia",
+    "areaj": "オーストラリア"
+  },
+  "aut": {
+    "area": "Austria",
+    "areaj": "オーストリア"
+  },
+  "aze": {
+    "area": "Azerbaijan",
+    "areaj": "アゼルバイジャン"
+  },
+  "bdi": {
+    "area": "Burundi",
+    "areaj": "ブルンジ"
+  },
+  "bel": {
+    "area": "Belgium",
+    "areaj": "ベルギー"
+  },
+  "ben": {
+    "area": "Benin",
+    "areaj": "ベナン"
+  },
+  "bes": {
+    "area": "Bonaire Sint Eustatius and Saba",
+    "areaj": "ボネール、シント・ユースタティウスおよびサバ"
+  },
+  "bfa": {
+    "area": "Burkina Faso",
+    "areaj": "ブルキナファソ"
+  },
+  "bgd": {
+    "area": "Bangladesh",
+    "areaj": "バングラデシュ"
+  },
+  "bgr": {
+    "area": "Bulgaria",
+    "areaj": "ブルガリア"
+  },
+  "bhr": {
+    "area": "Bahrain",
+    "areaj": "バーレーン"
+  },
+  "bhs": {
+    "area": "Bahamas",
+    "areaj": "バハマ"
+  },
+  "bih": {
+    "area": "Bosnia and Herzegovina",
+    "areaj": "ボスニア・ヘルツェゴビナ"
+  },
+  "blm": {
+    "area": "Saint Barthélemy",
+    "areaj": "サン・バルテルミー"
+  },
+  "blr": {
+    "area": "Belarus",
+    "areaj": "ベラルーシ"
+  },
+  "blz": {
+    "area": "Belize",
+    "areaj": "ベリーズ"
+  },
+  "bmu": {
+    "area": "Bermuda",
+    "areaj": "バミューダ"
+  },
+  "bol": {
+    "area": "Bolivia",
+    "areaj": "ボリビア"
+  },
+  "bra": {
+    "area": "Brazil",
+    "areaj": "ブラジル"
+  },
+  "brb": {
+    "area": "Barbados",
+    "areaj": "バルバドス"
+  },
+  "brn": {
+    "area": "Brunei",
+    "areaj": "ブルネイ"
+  },
+  "btn": {
+    "area": "Bhutan",
+    "areaj": "ブータン"
+  },
+  "bwa": {
+    "area": "Botswana",
+    "areaj": "ボツワナ"
+  },
+  "caf": {
+    "area": "Central African Republic",
+    "areaj": "中央アフリカ"
+  },
+  "can": {
+    "area": "Canada",
+    "areaj": "カナダ"
+  },
+  "che": {
+    "area": "Switzerland",
+    "areaj": "スイス"
+  },
+  "chl": {
+    "area": "Chile",
+    "areaj": "チリ"
+  },
+  "chn": {
+    "area": "China",
+    "areaj": "中国"
+  },
+  "civ": {
+    "area": "Cote d'Ivoire",
+    "areaj": "コートジボワール"
+  },
+  "cmr": {
+    "area": "Cameroon",
+    "areaj": "カメルーン"
+  },
+  "cod": {
+    "area": "Democratic Republic of Congo",
+    "areaj": "コンゴ民主共和国"
+  },
+  "cog": {
+    "area": "Congo",
+    "areaj": "コンゴ共和国"
+  },
+  "cok": {
+    "area": "Cook Islands",
+    "areaj": "クック諸島"
+  },
+  "col": {
+    "area": "Colombia",
+    "areaj": "コロンビア"
+  },
+  "com": {
+    "area": "Comoros",
+    "areaj": "コモロ"
+  },
+  "cpv": {
+    "area": "Cape Verde",
+    "areaj": "カーボベルデ"
+  },
+  "cri": {
+    "area": "Costa Rica",
+    "areaj": "コスタリカ"
+  },
+  "cub": {
+    "area": "Cuba",
+    "areaj": "キューバ"
+  },
+  "cuw": {
+    "area": "Curacao",
+    "areaj": "キュラソー"
+  },
+  "cym": {
+    "area": "Cayman Islands",
+    "areaj": "ケイマン諸島"
+  },
+  "cyp": {
+    "area": "Cyprus",
+    "areaj": "キプロス"
+  },
+  "cze": {
+    "area": "Czechia",
+    "areaj": "チェコ"
+  },
+  "deu": {
+    "area": "Germany",
+    "areaj": "ドイツ"
+  },
+  "dji": {
+    "area": "Djibouti",
+    "areaj": "ジブチ"
+  },
+  "dma": {
+    "area": "Dominica",
+    "areaj": "ドミニカ国"
+  },
+  "dnk": {
+    "area": "Denmark",
+    "areaj": "デンマーク"
+  },
+  "dom": {
+    "area": "Dominican Republic",
+    "areaj": "ドミニカ共和国"
+  },
+  "dza": {
+    "area": "Algeria",
+    "areaj": "アルジェリア"
+  },
+  "ecu": {
+    "area": "Ecuador",
+    "areaj": "エクアドル"
+  },
+  "egy": {
+    "area": "Egypt",
+    "areaj": "エジプト"
+  },
+  "eng": {
+    "area": "England and Wales",
+    "areaj": "イングランド・ウェールズ（英国）"
+  },
+  "eri": {
+    "area": "Eritrea",
+    "areaj": "エリトリア"
+  },
+  "esh": {
+    "area": "Western Sahara",
+    "areaj": "西サハラ"
+  },
+  "esp": {
+    "area": "Spain",
+    "areaj": "スペイン"
+  },
+  "est": {
+    "area": "Estonia",
+    "areaj": "エストニア"
+  },
+  "eth": {
+    "area": "Ethiopia",
+    "areaj": "エチオピア"
+  },
+  "fin": {
+    "area": "Finland",
+    "areaj": "フィンランド"
+  },
+  "fji": {
+    "area": "Fiji",
+    "areaj": "フィジー"
+  },
+  "flk": {
+    "area": "Falkland Islands",
+    "areaj": "フォークランド（マルビナス）諸島"
+  },
+  "fra": {
+    "area": "France",
+    "areaj": "フランス"
+  },
+  "fro": {
+    "area": "Faeroe Islands",
+    "areaj": "フェロー諸島"
+  },
+  "fsm": {
+    "area": "Micronesia (country)",
+    "areaj": "ミクロネシア連邦"
+  },
+  "gab": {
+    "area": "Gabon",
+    "areaj": "ガボン"
+  },
+  "gbr": {
+    "area": "United Kingdom",
+    "areaj": "英国"
+  },
+  "geo": {
+    "area": "Georgia",
+    "areaj": "ジョージア"
+  },
+  "ggy": {
+    "area": "Guernsey",
+    "areaj": "ガーンジー"
+  },
+  "gha": {
+    "area": "Ghana",
+    "areaj": "ガーナ"
+  },
+  "gib": {
+    "area": "Gibraltar",
+    "areaj": "ジブラルタル"
+  },
+  "gin": {
+    "area": "Guinea",
+    "areaj": "ギニア"
+  },
+  "glp": {
+    "area": "Guadeloupe",
+    "areaj": "グアドループ"
+  },
+  "gmb": {
+    "area": "Gambia",
+    "areaj": "ガンビア"
+  },
+  "gnb": {
+    "area": "Guinea-Bissau",
+    "areaj": "ギニアビサウ"
+  },
+  "gnq": {
+    "area": "Equatorial Guinea",
+    "areaj": "赤道ギニア"
+  },
+  "grc": {
+    "area": "Greece",
+    "areaj": "ギリシャ"
+  },
+  "grd": {
+    "area": "Grenada",
+    "areaj": "グレナダ"
+  },
+  "grl": {
+    "area": "Greenland",
+    "areaj": "グリーンランド"
+  },
+  "gtm": {
+    "area": "Guatemala",
+    "areaj": "グアテマラ"
+  },
+  "guf": {
+    "area": "French Guiana",
+    "areaj": "フランス領ギアナ"
+  },
+  "gum": {
+    "area": "Guam",
+    "areaj": "グアム"
+  },
+  "guy": {
+    "area": "Guyana",
+    "areaj": "ガイアナ"
+  },
+  "hkg": {
+    "area": "Hong Kong",
+    "areaj": "香港"
+  },
+  "hnd": {
+    "area": "Honduras",
+    "areaj": "ホンジュラス"
+  },
+  "hrv": {
+    "area": "Croatia",
+    "areaj": "クロアチア"
+  },
+  "hti": {
+    "area": "Haiti",
+    "areaj": "ハイチ"
+  },
+  "hun": {
+    "area": "Hungary",
+    "areaj": "ハンガリー"
+  },
+  "idn": {
+    "area": "Indonesia",
+    "areaj": "インドネシア"
+  },
+  "imn": {
+    "area": "Isle of Man",
+    "areaj": "マン島"
+  },
+  "ind": {
+    "area": "India",
+    "areaj": "インド"
+  },
+  "irl": {
+    "area": "Ireland",
+    "areaj": "アイルランド"
+  },
+  "irn": {
+    "area": "Iran",
+    "areaj": "イラン"
+  },
+  "irq": {
+    "area": "Iraq",
+    "areaj": "イラク"
+  },
+  "isl": {
+    "area": "Iceland",
+    "areaj": "アイスランド"
+  },
+  "isr": {
+    "area": "Israel",
+    "areaj": "イスラエル"
+  },
+  "ita": {
+    "area": "Italy",
+    "areaj": "イタリア"
+  },
+  "jam": {
+    "area": "Jamaica",
+    "areaj": "ジャマイカ"
+  },
+  "jey": {
+    "area": "Jersey",
+    "areaj": "ジャージー"
+  },
+  "jor": {
+    "area": "Jordan",
+    "areaj": "ヨルダン"
+  },
+  "jp01": {
+    "area": "Hokkaido",
+    "areaj": "北海道"
+  },
+  "jp02": {
+    "area": "Aomori",
+    "areaj": "青森県"
+  },
+  "jp03": {
+    "area": "Iwate",
+    "areaj": "岩手県"
+  },
+  "jp04": {
+    "area": "Miyagi",
+    "areaj": "宮城県"
+  },
+  "jp05": {
+    "area": "Akita",
+    "areaj": "秋田県"
+  },
+  "jp06": {
+    "area": "Yamagata",
+    "areaj": "山形県"
+  },
+  "jp07": {
+    "area": "Fukushima",
+    "areaj": "福島県"
+  },
+  "jp08": {
+    "area": "Ibaraki",
+    "areaj": "茨城県"
+  },
+  "jp09": {
+    "area": "Tochigi",
+    "areaj": "栃木県"
+  },
+  "jp10": {
+    "area": "Gunma",
+    "areaj": "群馬県"
+  },
+  "jp11": {
+    "area": "Saitama",
+    "areaj": "埼玉県"
+  },
+  "jp12": {
+    "area": "Chiba",
+    "areaj": "千葉県"
+  },
+  "jp13": {
+    "area": "Tokyo",
+    "areaj": "東京都"
+  },
+  "jp14": {
+    "area": "Kanagawa",
+    "areaj": "神奈川県"
+  },
+  "jp15": {
+    "area": "Niigata",
+    "areaj": "新潟県"
+  },
+  "jp16": {
+    "area": "Toyama",
+    "areaj": "富山県"
+  },
+  "jp17": {
+    "area": "Ishikawa",
+    "areaj": "石川県"
+  },
+  "jp18": {
+    "area": "Fukui",
+    "areaj": "福井県"
+  },
+  "jp19": {
+    "area": "Yamanashi",
+    "areaj": "山梨県"
+  },
+  "jp20": {
+    "area": "Nagano",
+    "areaj": "長野県"
+  },
+  "jp21": {
+    "area": "Gifu",
+    "areaj": "岐阜県"
+  },
+  "jp22": {
+    "area": "Shizuoka",
+    "areaj": "静岡県"
+  },
+  "jp23": {
+    "area": "Aichi",
+    "areaj": "愛知県"
+  },
+  "jp24": {
+    "area": "Mie",
+    "areaj": "三重県"
+  },
+  "jp25": {
+    "area": "Shiga",
+    "areaj": "滋賀県"
+  },
+  "jp26": {
+    "area": "Kyoto",
+    "areaj": "京都府"
+  },
+  "jp27": {
+    "area": "Osaka",
+    "areaj": "大阪府"
+  },
+  "jp28": {
+    "area": "Hyogo",
+    "areaj": "兵庫県"
+  },
+  "jp29": {
+    "area": "Nara",
+    "areaj": "奈良県"
+  },
+  "jp30": {
+    "area": "Wakayama",
+    "areaj": "和歌山県"
+  },
+  "jp31": {
+    "area": "Tottori",
+    "areaj": "鳥取県"
+  },
+  "jp32": {
+    "area": "Shimane",
+    "areaj": "島根県"
+  },
+  "jp33": {
+    "area": "Okayama",
+    "areaj": "岡山県"
+  },
+  "jp34": {
+    "area": "Hiroshima",
+    "areaj": "広島県"
+  },
+  "jp35": {
+    "area": "Yamaguchi",
+    "areaj": "山口県"
+  },
+  "jp36": {
+    "area": "Tokushima",
+    "areaj": "徳島県"
+  },
+  "jp37": {
+    "area": "Kagawa",
+    "areaj": "香川県"
+  },
+  "jp38": {
+    "area": "Ehime",
+    "areaj": "愛媛県"
+  },
+  "jp39": {
+    "area": "Kochi",
+    "areaj": "高知県"
+  },
+  "jp40": {
+    "area": "Fukuoka",
+    "areaj": "福岡県"
+  },
+  "jp41": {
+    "area": "Saga",
+    "areaj": "佐賀県"
+  },
+  "jp42": {
+    "area": "Nagasaki",
+    "areaj": "長崎県"
+  },
+  "jp43": {
+    "area": "Kumamoto",
+    "areaj": "熊本県"
+  },
+  "jp44": {
+    "area": "Oita",
+    "areaj": "大分県"
+  },
+  "jp45": {
+    "area": "Miyazaki",
+    "areaj": "宮崎県"
+  },
+  "jp46": {
+    "area": "Kagoshima",
+    "areaj": "鹿児島県"
+  },
+  "jp47": {
+    "area": "Okinawa",
+    "areaj": "沖縄県"
+  },
+  "jpn": {
+    "area": "Japan",
+    "areaj": "日本"
+  },
+  "kaz": {
+    "area": "Kazakhstan",
+    "areaj": "カザフスタン"
+  },
+  "ken": {
+    "area": "Kenya",
+    "areaj": "ケニア"
+  },
+  "kgz": {
+    "area": "Kyrgyzstan",
+    "areaj": "キルギス"
+  },
+  "khm": {
+    "area": "Cambodia",
+    "areaj": "カンボジア"
+  },
+  "kir": {
+    "area": "Kiribati",
+    "areaj": "キリバス"
+  },
+  "kna": {
+    "area": "Saint Kitts and Nevis",
+    "areaj": "セントクリストファー・ネイビス"
+  },
+  "kor": {
+    "area": "Republic of Korea",
+    "areaj": "韓国"
+  },
+  "kwt": {
+    "area": "Kuwait",
+    "areaj": "クウェート"
+  },
+  "lao": {
+    "area": "Laos",
+    "areaj": "ラオス"
+  },
+  "lbn": {
+    "area": "Lebanon",
+    "areaj": "レバノン"
+  },
+  "lbr": {
+    "area": "Liberia",
+    "areaj": "リベリア"
+  },
+  "lby": {
+    "area": "Libya",
+    "areaj": "リビア"
+  },
+  "lca": {
+    "area": "Saint Lucia",
+    "areaj": "セントルシア"
+  },
+  "lie": {
+    "area": "Liechtenstein",
+    "areaj": "リヒテンシュタイン"
+  },
+  "lka": {
+    "area": "Sri Lanka",
+    "areaj": "スリランカ"
+  },
+  "lso": {
+    "area": "Lesotho",
+    "areaj": "レソト"
+  },
+  "ltu": {
+    "area": "Lithuania",
+    "areaj": "リトアニア"
+  },
+  "lux": {
+    "area": "Luxembourg",
+    "areaj": "ルクセンブルク"
+  },
+  "lva": {
+    "area": "Latvia",
+    "areaj": "ラトビア"
+  },
+  "mac": {
+    "area": "Macao",
+    "areaj": "マカオ"
+  },
+  "maf": {
+    "area": "Saint Martin (French part)",
+    "areaj": "サン・マルタン（フランス領）"
+  },
+  "mar": {
+    "area": "Morocco",
+    "areaj": "モロッコ"
+  },
+  "mco": {
+    "area": "Monaco",
+    "areaj": "モナコ"
+  },
+  "mda": {
+    "area": "Moldova",
+    "areaj": "モルドバ"
+  },
+  "mdg": {
+    "area": "Madagascar",
+    "areaj": "マダガスカル"
+  },
+  "mdv": {
+    "area": "Maldives",
+    "areaj": "モルディブ"
+  },
+  "mex": {
+    "area": "Mexico",
+    "areaj": "メキシコ"
+  },
+  "mhl": {
+    "area": "Marshall Islands",
+    "areaj": "マーシャル諸島"
+  },
+  "mkd": {
+    "area": "North Macedonia",
+    "areaj": "北マケドニア"
+  },
+  "mli": {
+    "area": "Mali",
+    "areaj": "マリ"
+  },
+  "mlt": {
+    "area": "Malta",
+    "areaj": "マルタ"
+  },
+  "mmr": {
+    "area": "Myanmar",
+    "areaj": "ミャンマー"
+  },
+  "mne": {
+    "area": "Montenegro",
+    "areaj": "モンテネグロ"
+  },
+  "mng": {
+    "area": "Mongolia",
+    "areaj": "モンゴル"
+  },
+  "mnp": {
+    "area": "Northern Mariana Islands",
+    "areaj": "北マリアナ諸島"
+  },
+  "moz": {
+    "area": "Mozambique",
+    "areaj": "モザンビーク"
+  },
+  "mrt": {
+    "area": "Mauritania",
+    "areaj": "モーリタニア"
+  },
+  "msr": {
+    "area": "Montserrat",
+    "areaj": "モントセラト"
+  },
+  "mtq": {
+    "area": "Martinique",
+    "areaj": "マルティニーク"
+  },
+  "mus": {
+    "area": "Mauritius",
+    "areaj": "モーリシャス"
+  },
+  "mwi": {
+    "area": "Malawi",
+    "areaj": "マラウイ"
+  },
+  "mys": {
+    "area": "Malaysia",
+    "areaj": "マレーシア"
+  },
+  "myt": {
+    "area": "Mayotte",
+    "areaj": "マヨット"
+  },
+  "nam": {
+    "area": "Namibia",
+    "areaj": "ナミビア"
+  },
+  "ncl": {
+    "area": "New Caledonia",
+    "areaj": "ニューカレドニア"
+  },
+  "ner": {
+    "area": "Niger",
+    "areaj": "ニジェール"
+  },
+  "nfk": {
+    "area": "Norfolk Island",
+    "areaj": "ノーフォーク島"
+  },
+  "nga": {
+    "area": "Nigeria",
+    "areaj": "ナイジェリア"
+  },
+  "nic": {
+    "area": "Nicaragua",
+    "areaj": "ニカラグア"
+  },
+  "nir": {
+    "area": "Northern Ireland",
+    "areaj": "北アイルランド（英国）"
+  },
+  "niu": {
+    "area": "Niue",
+    "areaj": "ニウエ"
+  },
+  "nld": {
+    "area": "Netherlands",
+    "areaj": "オランダ"
+  },
+  "nor": {
+    "area": "Norway",
+    "areaj": "ノルウェー"
+  },
+  "npl": {
+    "area": "Nepal",
+    "areaj": "ネパール"
+  },
+  "nru": {
+    "area": "Nauru",
+    "areaj": "ナウル"
+  },
+  "nzl": {
+    "area": "New Zealand",
+    "areaj": "ニュージーランド"
+  },
+  "omn": {
+    "area": "Oman",
+    "areaj": "オマーン"
+  },
+  "pak": {
+    "area": "Pakistan",
+    "areaj": "パキスタン"
+  },
+  "pan": {
+    "area": "Panama",
+    "areaj": "パナマ"
+  },
+  "pcn": {
+    "area": "Pitcairn",
+    "areaj": "ピトケアン"
+  },
+  "per": {
+    "area": "Peru",
+    "areaj": "ペルー"
+  },
+  "phl": {
+    "area": "Philippines",
+    "areaj": "フィリピン"
+  },
+  "plw": {
+    "area": "Palau",
+    "areaj": "パラオ"
+  },
+  "png": {
+    "area": "Papua New Guinea",
+    "areaj": "パプアニューギニア"
+  },
+  "pol": {
+    "area": "Poland",
+    "areaj": "ポーランド"
+  },
+  "pri": {
+    "area": "Puerto Rico",
+    "areaj": "プエルトリコ"
+  },
+  "prk": {
+    "area": "North Korea",
+    "areaj": "北朝鮮"
+  },
+  "prt": {
+    "area": "Portugal",
+    "areaj": "ポルトガル"
+  },
+  "pry": {
+    "area": "Paraguay",
+    "areaj": "パラグアイ"
+  },
+  "pse": {
+    "area": "Palestine",
+    "areaj": "パレスチナ"
+  },
+  "pyf": {
+    "area": "French Polynesia",
+    "areaj": "フランス領ポリネシア"
+  },
+  "qat": {
+    "area": "Qatar",
+    "areaj": "カタール"
+  },
+  "reu": {
+    "area": "Réunion",
+    "areaj": "レユニオン"
+  },
+  "rou": {
+    "area": "Romania",
+    "areaj": "ルーマニア"
+  },
+  "rus": {
+    "area": "Russia",
+    "areaj": "ロシア"
+  },
+  "rwa": {
+    "area": "Rwanda",
+    "areaj": "ルワンダ"
+  },
+  "sau": {
+    "area": "Saudi Arabia",
+    "areaj": "サウジアラビア"
+  },
+  "sco": {
+    "area": "Scotland",
+    "areaj": "スコットランド（英国）"
+  },
+  "sdn": {
+    "area": "Sudan",
+    "areaj": "スーダン"
+  },
+  "sen": {
+    "area": "Senegal",
+    "areaj": "セネガル"
+  },
+  "sgp": {
+    "area": "Singapore",
+    "areaj": "シンガポール"
+  },
+  "shn": {
+    "area": "Saint Helena",
+    "areaj": "セントヘレナ・アセンションおよびトリスタンダクーニャ"
+  },
+  "slb": {
+    "area": "Solomon Islands",
+    "areaj": "ソロモン諸島"
+  },
+  "sle": {
+    "area": "Sierra Leone",
+    "areaj": "シエラレオネ"
+  },
+  "slv": {
+    "area": "El Salvador",
+    "areaj": "エルサルバドル"
+  },
+  "smr": {
+    "area": "San Marino",
+    "areaj": "サンマリノ"
+  },
+  "som": {
+    "area": "Somalia",
+    "areaj": "ソマリア"
+  },
+  "spm": {
+    "area": "Saint Pierre and Miquelon",
+    "areaj": "サンピエール島・ミクロン島"
+  },
+  "srb": {
+    "area": "Serbia",
+    "areaj": "セルビア"
+  },
+  "ssd": {
+    "area": "South Sudan",
+    "areaj": "南スーダン"
+  },
+  "stp": {
+    "area": "Sao Tome and Principe",
+    "areaj": "サントメ・プリンシペ"
+  },
+  "sur": {
+    "area": "Suriname",
+    "areaj": "スリナム"
+  },
+  "svk": {
+    "area": "Slovakia",
+    "areaj": "スロバキア"
+  },
+  "svn": {
+    "area": "Slovenia",
+    "areaj": "スロベニア"
+  },
+  "swe": {
+    "area": "Sweden",
+    "areaj": "スウェーデン"
+  },
+  "swz": {
+    "area": "Eswatini",
+    "areaj": "エスワティニ"
+  },
+  "sxm": {
+    "area": "Sint Maarten (Dutch part)",
+    "areaj": "シント・マールテン"
+  },
+  "syc": {
+    "area": "Seychelles",
+    "areaj": "セーシェル"
+  },
+  "syr": {
+    "area": "Syria",
+    "areaj": "シリア"
+  },
+  "tca": {
+    "area": "Turks and Caicos Islands",
+    "areaj": "タークス・カイコス諸島"
+  },
+  "tcd": {
+    "area": "Chad",
+    "areaj": "チャド"
+  },
+  "tgo": {
+    "area": "Togo",
+    "areaj": "トーゴ"
+  },
+  "tha": {
+    "area": "Thailand",
+    "areaj": "タイ"
+  },
+  "tjk": {
+    "area": "Tajikistan",
+    "areaj": "タジキスタン"
+  },
+  "tkl": {
+    "area": "Tokelau",
+    "areaj": "トケラウ"
+  },
+  "tkm": {
+    "area": "Turkmenistan",
+    "areaj": "トルクメニスタン"
+  },
+  "tls": {
+    "area": "Timor",
+    "areaj": "東ティモール"
+  },
+  "ton": {
+    "area": "Tonga",
+    "areaj": "トンガ"
+  },
+  "tto": {
+    "area": "Trinidad and Tobago",
+    "areaj": "トリニダード・トバゴ"
+  },
+  "tun": {
+    "area": "Tunisia",
+    "areaj": "チュニジア"
+  },
+  "tur": {
+    "area": "Turkey",
+    "areaj": "トルコ"
+  },
+  "tuv": {
+    "area": "Tuvalu",
+    "areaj": "ツバル"
+  },
+  "twn": {
+    "area": "Taiwan",
+    "areaj": "台湾"
+  },
+  "tza": {
+    "area": "Tanzania",
+    "areaj": "タンザニア"
+  },
+  "uga": {
+    "area": "Uganda",
+    "areaj": "ウガンダ"
+  },
+  "ukr": {
+    "area": "Ukraine",
+    "areaj": "ウクライナ"
+  },
+  "ury": {
+    "area": "Uruguay",
+    "areaj": "ウルグアイ"
+  },
+  "usa": {
+    "area": "United States of America",
+    "areaj": "米国"
+  },
+  "uzb": {
+    "area": "Uzbekistan",
+    "areaj": "ウズベキスタン"
+  },
+  "vat": {
+    "area": "Vatican",
+    "areaj": "バチカン市国"
+  },
+  "vct": {
+    "area": "Saint Vincent and the Grenadines",
+    "areaj": "セントビンセント・グレナディーン"
+  },
+  "ven": {
+    "area": "Venezuela",
+    "areaj": "ベネズエラ"
+  },
+  "vgb": {
+    "area": "British Virgin Islands",
+    "areaj": "イギリス領ヴァージン諸島"
+  },
+  "vir": {
+    "area": "United States Virgin Islands",
+    "areaj": "アメリカ領ヴァージン諸島"
+  },
+  "vnm": {
+    "area": "Vietnam",
+    "areaj": "ベトナム"
+  },
+  "vut": {
+    "area": "Vanuatu",
+    "areaj": "バヌアツ"
+  },
+  "wlf": {
+    "area": "Wallis and Futuna",
+    "areaj": "ウォリス・フツナ"
+  },
+  "wsm": {
+    "area": "Samoa",
+    "areaj": "サモア"
+  },
+  "xkx": {
+    "area": "Kosovo",
+    "areaj": "コソボ"
+  },
+  "yem": {
+    "area": "Yemen",
+    "areaj": "イエメン"
+  },
+  "zaf": {
+    "area": "South Africa",
+    "areaj": "南アフリカ"
+  },
+  "zmb": {
+    "area": "Zambia",
+    "areaj": "ザンビア"
+  },
+  "zwe": {
+    "area": "Zimbabwe",
+    "areaj": "ジンバブエ"
+  }
+}

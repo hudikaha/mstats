@@ -66,6 +66,10 @@ def read_records(path)
     end
     row[:year] = row[:year].to_i
     row[:month] = row[:month].to_i if row[:month]
+    # 日本語: 物理index移行時だけ旧CSVを読めるようにし、出力は常に新fieldへ統一する。
+    # English: Accept old CSV fields only during physical-index migration and always emit the new schema.
+    row[:loc] ||= row.delete(:loc_code)
+    row[:area] ||= row.delete(:location)
     %i[rate algo type].each { |field| row[field] = row[field].to_s }
     [row.fetch(:id), row]
   end
@@ -124,7 +128,7 @@ end
 def monthly_series(deaths, populations)
   populations.each_value { |row| add_age_groups(row) }
   populations_by_key = populations.values.to_h do |row|
-    [[row[:loc_code], row[:yearmonth], row[:type], row[:sex]], row]
+    [[row[:loc], row[:yearmonth], row[:type], row[:sex]], row]
   end
   latest_population = populations.values.
                         select { |row| row[:type] == 'cfm' }.
@@ -137,8 +141,8 @@ def monthly_series(deaths, populations)
     raw[:id] = Mstats2026.record_id_for(raw)
     rows[raw[:id]] = raw
 
-    population = populations_by_key[[source[:loc_code], source[:yearmonth], 'cfm', source[:sex]]]
-    population ||= populations_by_key[[source[:loc_code], source[:yearmonth], 'est', source[:sex]]]
+    population = populations_by_key[[source[:loc], source[:yearmonth], 'cfm', source[:sex]]]
+    population ||= populations_by_key[[source[:loc], source[:yearmonth], 'est', source[:sex]]]
     next unless population
 
     days_in_year = Date.leap?(source[:year]) ? 366 : 365
@@ -151,7 +155,7 @@ def monthly_series(deaths, populations)
       count_values.sum.to_f * 100_000 * days_in_year / (pop_values.sum * days_in_month)
     end
 
-    crude_id = Mstats2026.record_id(loc_code: source[:loc_code], period: source[:yearmonth],
+    crude_id = Mstats2026.record_id(loc: source[:loc], period: source[:yearmonth],
                                     category: 'death', rate: 'crude', death_code: source[:death_code],
                                     type: 'stmfrecon', sex: source[:sex])
     crude = raw.dup
@@ -195,10 +199,10 @@ def monthly_series(deaths, populations)
       end
       next unless weighted
 
-      asr_id = Mstats2026.record_id(loc_code: source[:loc_code], period: source[:yearmonth],
+      asr_id = Mstats2026.record_id(loc: source[:loc], period: source[:yearmonth],
                                     category: 'death', rate: 'asr', death_code: source[:death_code],
                                     algo: algo, type: 'stmfrecon', sex: source[:sex])
-      asr = crude.slice(:loc_code, :location, :yearmonth, :category, :death_code, :death_cause,
+      asr = crude.slice(:loc, :area, :yearmonth, :category, :death_code, :death_cause,
                         :type, :src_url, :date, :year, :month, :sex).merge(
                           id: asr_id, rate: 'asr', algo: algo,
                           age_all: (weighted / groups.values.sum).round(2)
@@ -330,7 +334,7 @@ end
 def build_weekly(deaths, populations)
   monthly = monthly_series(deaths, populations)
   monthly.values.group_by do |row|
-    [row[:loc_code], row[:rate], row[:death_code], row[:algo], row[:type], row[:sex]]
+    [row[:loc], row[:rate], row[:death_code], row[:algo], row[:type], row[:sex]]
   end.each_with_object({}) do |(_key, series), rows|
     rows.merge!(weekly_series(series.to_h { |row| [row[:id], row] }))
   end

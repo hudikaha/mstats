@@ -7,6 +7,7 @@ import gzip
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 WPP_URL = "https://population.un.org/wpp/downloads"
 WHO_URL = (
@@ -15,7 +16,7 @@ WHO_URL = (
     "paper31_2001_age_standardization_rates.pdf"
 )
 HISTORICAL_END = 2023
-NORTHERN_AMERICA = {"BMU", "CAN", "GRL", "SPM", "USA"}
+AREA_FILE = Path(__file__).resolve().parents[1] / "config" / "areas.json"
 
 WHO_STANDARD = {
     "age_00_04": 8.86, "age_05_09": 8.69, "age_10_14": 8.60,
@@ -38,7 +39,7 @@ AGE_FIELDS = [
     "age_05_14", "age_15_29", "age_30_49", "age_50_64",
 ]
 FIELDS = [
-    "id", "loc_code", "location", "world_region", "category", "rate", "death_code",
+    "id", "loc", "area", "areaj", "category", "rate", "death_code",
     "death_cause", "algo", "type", "src_url", "date", "year", "sex",
 ] + AGE_FIELDS
 
@@ -117,11 +118,11 @@ def record_id(loc, year, category, rate, code, algo, kind, sex):
     return "_".join(map(str, [loc, year, category, rate, code, algo, kind, sex]))
 
 
-def base(loc, location, world_region, year, sex, category, kind, rate="", code="",
+def base(loc, area, areaj, year, sex, category, kind, rate="", code="",
          src_urls=None, algo=""):
     return {
         "id": record_id(loc, year, category, rate, code, algo, kind, sex),
-        "loc_code": loc, "location": location, "world_region": world_region,
+        "loc": loc, "area": area, "areaj": areaj,
         "category": category,
         "rate": rate, "death_code": code,
         "death_cause": "All causes" if code == "allcause" else "",
@@ -146,35 +147,23 @@ def main():
     writer = csv.DictWriter(sys.stdout, fieldnames=FIELDS, lineterminator="\n")
     writer.writeheader()
     indicators = {}
-    locations = {}
-
-    # WPPの親子関係から、各国が属する最上位の地理地域を求める。
-    # Resolve each country's top-level geographic region from the WPP hierarchy.
-    hierarchy = {}
-    for source in rows(options.demographic):
-        loc_id = source["LocID"]
-        hierarchy[loc_id] = {
-            "parent": source["ParentID"], "name": source["Location"],
-            "type": source["LocTypeName"],
-        }
-    def world_region(source):
-        if source["ISO3_code"] in NORTHERN_AMERICA:
-            return "Northern America"
-        node = hierarchy.get(source["ParentID"])
-        while node:
-            if node["type"] == "Geographic region":
-                return node["name"]
-            node = hierarchy.get(node["parent"])
-        return "Other"
+    areas = {}
+    with AREA_FILE.open(encoding="utf-8") as handle:
+        area_names = json.load(handle)
 
     # 年央人口を人口recordとして出力する。
     # Emit mid-year population records.
     for source in rows(options.demographic):
         if not selected(source, options):
             continue
-        loc, location, year = source["ISO3_code"].lower(), source["Location"], int(source["Time"])
+        loc, area, year = source["ISO3_code"].lower(), source["Location"], int(source["Time"])
         iso = source["ISO3_code"]
-        locations[iso] = (location, world_region(source))
+        names = area_names.get(loc)
+        if not names or not names.get("areaj"):
+            raise SystemExit(f"missing bilingual area names: {loc}")
+        area = names.get("area") or area
+        areaj = names["areaj"]
+        areas[iso] = (area, areaj)
         kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024prj"
         for sex, pop_col, death_col in (
             ("both", "TPopulation1July", "Deaths"),
@@ -184,25 +173,25 @@ def main():
             population = float(source[pop_col]) * 1000
             deaths = float(source[death_col]) * 1000
             indicators[(loc, year, sex)] = (population, deaths)
-            pop = base(loc, location, locations[iso][1], year, sex, "pop", kind)
+            pop = base(loc, area, areaj, year, sex, "pop", kind)
             pop["age_all"] = clean(population)
             writer.writerow(pop)
 
     def flush(key, totals):
         if key is None:
             return
-        loc, location, world_region, year = key
+        loc, area, areaj, year = key
         for sex in ("both", "male", "female"):
             death_age = totals[sex]["death"]
             exposure_age = totals[sex]["exposure"]
             midyear_population, total_deaths = indicators[(loc, year, sex)]
             kind = "unwpp2024est" if year <= HISTORICAL_END else "unwpp2024prj"
             exposure_kind = "unwpp2024expest" if year <= HISTORICAL_END else "unwpp2024expprj"
-            death = base(loc, location, world_region, year, sex, "death", kind, code="allcause")
+            death = base(loc, area, areaj, year, sex, "death", kind, code="allcause")
             death.update({field: clean(value * 1000) for field, value in death_age.items()})
             death["age_all"] = clean(total_deaths)
             writer.writerow(death)
-            exposure = base(loc, location, world_region, year, sex, "pop", exposure_kind)
+            exposure = base(loc, area, areaj, year, sex, "pop", exposure_kind)
             exposure.update({field: clean(value * 1000) for field, value in exposure_age.items()})
             writer.writerow(exposure)
             rates = {
@@ -211,7 +200,7 @@ def main():
             }
             rates["age_0"] = death_age["age_0"] * 100_000 / exposure_age["age_0"]
             rates["age_all"] = total_deaths * 100_000 / midyear_population
-            crude = base(loc, location, world_region, year, sex, "death", kind,
+            crude = base(loc, area, areaj, year, sex, "death", kind,
                          rate="crude", code="allcause")
             crude.update({field: clean(value) for field, value in rates.items()})
             writer.writerow(crude)
@@ -220,7 +209,7 @@ def main():
             if all(field in rates for field in WHO_STANDARD):
                 asr_value = sum(rates[field] * weight for field, weight in WHO_STANDARD.items()) \
                     / sum(WHO_STANDARD.values())
-                asr = base(loc, location, world_region, year, sex, "death", kind,
+                asr = base(loc, area, areaj, year, sex, "death", kind,
                            rate="asr", code="allcause", src_urls=[WPP_URL, WHO_URL],
                            algo="whostd")
                 asr["age_all"] = clean(asr_value)
@@ -249,10 +238,10 @@ def main():
         if death_key != exposure_key:
             raise SystemExit(f"WPP age files are not aligned: {death_key} != {exposure_key}")
         iso, year, age = death_key
-        if iso not in locations or not options.from_year <= year <= options.to_year:
+        if iso not in areas or not options.from_year <= year <= options.to_year:
             continue
-        location, world_region = locations[iso]
-        key = (iso.lower(), location, world_region, year)
+        area, areaj = areas[iso]
+        key = (iso.lower(), area, areaj, year)
         if key != current_key:
             flush(current_key, totals)
             current_key = key

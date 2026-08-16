@@ -71,7 +71,7 @@ ARGV.each do |file|
       errors << "#{where}: #{e.message}"
     end
 
-    %w[loc_code category date year sex].each do |field|
+    %w[loc area areaj category date year sex].each do |field|
       errors << "#{where}: #{field} is missing" unless present?(row[field])
     end
 
@@ -107,7 +107,7 @@ ARGV.each do |file|
     end
 
     death_code = row['death_code'].to_s
-    %w[loc_code category rate death_code algo type sex].each do |field|
+    %w[loc category rate death_code algo type sex].each do |field|
       value = row[field].to_s
       errors << "#{where}: #{field} must be lowercase: #{value.inspect}" unless value == value.downcase
     end
@@ -128,27 +128,27 @@ ARGV.each do |file|
                end
       cause_systems[system] += 1
       errors << "#{where}: unrecognized death_code #{death_code.inspect}" if system == 'unknown'
-      key = [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], death_code,
+      key = [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], death_code,
              row['type'], row['sex']]
       rate_rows.puts "#{key.join("\t")}\t#{row['rate']}"
     elsif present?(death_code)
       warnings << "#{where}: death_code is ignored for category #{category}"
     end
 
-    birth_keys << [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']] if category == 'birth'
-    delivery_keys << [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']] if category == 'delivery'
+    birth_keys << [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']] if category == 'birth'
+    delivery_keys << [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']] if category == 'delivery'
     if category == 'birth'
       errors << "#{where}: birth age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
     elsif category == 'delivery'
       errors << "#{where}: delivery age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
     elsif category == 'death' && row['rate'] == 'imr'
       errors << "#{where}: infant mortality rate requires age_0" unless row['age_0'].to_s.match?(NUMERIC)
-      infant_rate_keys << [where, [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
+      infant_rate_keys << [where, [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
     elsif category == 'death' && death_code == 'perm'
       errors << "#{where}: perm age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
       denominator = row['type'] == 'recon' ? birth_keys : delivery_keys
       birth_denominator_keys << [where, denominator,
-                                 [row['loc_code'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
+                                 [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
     end
 
     row.headers.grep(/\Aage_/).each do |field|

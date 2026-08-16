@@ -37,11 +37,11 @@ ALIASES = {
   'viet nam' => 'viet nam'
 }.freeze
 EXTRA_LOCATIONS = {
-  'aland islands' => { code: 'ala', location: 'Åland Islands' },
-  'norfolk island' => { code: 'nfk', location: 'Norfolk Island' },
-  'netherlands kingdom of the' => { code: 'nld', location: 'Netherlands' },
-  'saint helena ex dep' => { code: 'shn', location: 'Saint Helena' },
-  'united kingdom of great britain and northern ireland' => { code: 'gbr', location: 'United Kingdom' }
+  'aland islands' => { code: 'ala', area: 'Åland Islands' },
+  'norfolk island' => { code: 'nfk', area: 'Norfolk Island' },
+  'netherlands kingdom of the' => { code: 'nld', area: 'Netherlands' },
+  'saint helena ex dep' => { code: 'shn', area: 'Saint Helena' },
+  'united kingdom of great britain and northern ireland' => { code: 'gbr', area: 'United Kingdom' }
 }.freeze
 SKIP_LOCATIONS = Set.new(['saint helena ascension']).freeze
 
@@ -74,9 +74,9 @@ CSV.foreach(ARGV[1], headers: true) do |row|
   rank = population_kind_rank(row)
   next if rank.zero?
 
-  code = row['loc_code'].to_s.downcase
-  location = row['location'].to_s
-  locations[normalized_name(location)] = { code: code, location: location }
+  code = row['loc'].to_s.downcase
+  area = row['area'].to_s
+  locations[normalized_name(area)] = { code: code, area: area }
   key = [code, row['year'].to_i]
   current = populations[key]
   populations[key] = { value: row['age_all'].to_f, rank: rank } if current.nil? || rank > current[:rank]
@@ -126,7 +126,7 @@ CSV.foreach(ARGV[0], headers: true).with_index(2) do |row, line|
   next if current && (current[:rank] <=> rank) >= 0
 
   observations[key] = {
-    rank: rank, code: country[:code], location: country[:location], year: year, month: month,
+    rank: rank, code: country[:code], area: country[:area], year: year, month: month,
     deaths: row['Value'].delete(',').to_f, line: line
   }
 end
@@ -141,11 +141,11 @@ observations.each_value do |item|
   month = item[:month]
   period = format('%04dm%02d', year, month)
   common = {
-    loc_code: item[:code], location: item[:location], yearmonth: period,
+    loc: item[:code], area: item[:area], yearmonth: period,
     category: 'death', death_code: 'allcause', death_cause: 'All causes', algo: '', type: TYPE,
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: 'both'
   }
-  count_id = Mstats2026.record_id(loc_code: item[:code], period: period, category: 'death',
+  count_id = Mstats2026.record_id(loc: item[:code], period: period, category: 'death',
                                   death_code: 'allcause', type: TYPE, sex: 'both')
   rows[count_id] = common.merge(id: count_id, rate: '', src_url: [UN_URL], age_all: item[:deaths].round)
 
@@ -154,7 +154,7 @@ observations.each_value do |item|
 
   days = Date.new(year, month, -1).day
   crude = item[:deaths] * 365.2425 / days / population[:value] * 100_000
-  crude_id = Mstats2026.record_id(loc_code: item[:code], period: period, category: 'death', rate: 'crude',
+  crude_id = Mstats2026.record_id(loc: item[:code], period: period, category: 'death', rate: 'crude',
                                   death_code: 'allcause', type: TYPE, sex: 'both')
   rows[crude_id] = common.merge(id: crude_id, rate: 'crude', src_url: [UN_URL, WPP_URL], age_all: crude.round(2))
 end

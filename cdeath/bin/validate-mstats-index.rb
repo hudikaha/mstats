@@ -5,8 +5,8 @@ require 'json'
 require 'net/http'
 require 'uri'
 
-index = ARGV.fetch(0, 'mstats20260814')
-expected_total = Integer(ARGV.fetch(1, '2577857'))
+index = ARGV.fetch(0, 'mstats20260816')
+expected_total = Integer(ARGV.fetch(1, '3537810'))
 password_file = File.expand_path('~/.config/mstats/espass.txt')
 user = ENV.fetch('ES_USER', 'elastic')
 password = ENV['ES_PASSWORD']
@@ -39,28 +39,37 @@ expected_mapping = { 'type' => 'scaled_float', 'scaling_factor' => 100.0 }
 abort "wrong age_all mapping: #{age_mapping.inspect}" unless age_mapping == expected_mapping
 puts 'mapping age_all=scaled_float scaling_factor=100'
 
+properties = resolved_mapping.fetch('mappings').fetch('properties')
+%w[loc area areaj].each do |field|
+  abort "missing mapping field: #{field}" unless properties.key?(field)
+end
+%w[loc_code location world_region age_80over age_85over age_100over].each do |field|
+  abort "legacy mapping field remains: #{field}" if properties.key?(field)
+end
+puts 'mapping canonical_fields=loc,area,areaj legacy_fields=none'
+
 queries = {
   total: [{ 'match_all' => {} }, expected_total],
   pop_monthly: [
     { 'bool' => { 'must' => [{ 'term' => { 'category' => 'pop' } }, { 'exists' => { 'field' => 'yearmonth' } }] } },
-    1890
+    2235
   ],
   death_monthly: [
     { 'bool' => { 'must' => [{ 'term' => { 'category' => 'death' } }, { 'exists' => { 'field' => 'yearmonth' } }],
                   'must_not' => [{ 'term' => { 'type' => 'unmonth' } }] } },
-    83_748
+    209_100
   ],
   death_monthly_un: [
     { 'term' => { 'type' => 'unmonth' } },
-    87_340
+    81_768
   ],
   death_weekly_reconstructed_jpn: [
     { 'term' => { 'type' => 'stmfrecon' } },
-    1_446_600
+    1_860_648
   ],
   death_weekly_stmf: [
     { 'term' => { 'type' => 'stmf' } },
-    406_431
+    809_181
   ],
   yearly_wpp: [
     { 'terms' => { 'type' => %w[unwpp2024est unwpp2024expest unwpp2024prj unwpp2024expprj] } },
@@ -72,11 +81,15 @@ queries = {
   ],
   who_standard: [
     { 'term' => { 'algo' => 'whostd' } },
-    593_794
+    598_565
   ],
   japan_2015_standard: [
     { 'term' => { 'algo' => 'jp2015std' } },
-    366_307
+    371_078
+  ],
+  canonical_locations: [
+    { 'bool' => { 'must' => %w[loc area areaj].map { |field| { 'exists' => { 'field' => field } } } } },
+    expected_total
   ]
 }.freeze
 

@@ -134,9 +134,9 @@ rows = records.to_h do |(sex, period), item|
   year = period[0, 4].to_i
   month = period[-2, 2].to_i
   stat_id = STAT_IDS.fetch(item[:source_years].values.max)
-  id = Mstats2026.record_id(loc_code: 'jpn', period: period, category: 'pop', type: 'cfm', sex: sex)
+  id = Mstats2026.record_id(loc: 'jpn', period: period, category: 'pop', type: 'cfm', sex: sex)
   [id, {
-    id: id, loc_code: 'jpn', location: 'Japan', yearmonth: period, category: 'pop', type: 'cfm',
+    id: id, loc: 'jpn', area: 'Japan', yearmonth: period, category: 'pop', type: 'cfm',
     src_url: ["https://www.e-stat.go.jp/stat-search/file-download?statInfId=#{stat_id}&fileKind=0"],
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: sex,
   }.merge(item[:ages].transform_keys(&:to_sym))]

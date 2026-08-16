@@ -19,9 +19,9 @@
     ],
     "properties": {
       "id": { "type": "keyword" },
-      "loc_code": { "type": "keyword" },
-      "location": { "type": "keyword" },
-      "world_region": { "type": "keyword" },
+      "loc": { "type": "keyword" },
+      "area": { "type": "keyword" },
+      "areaj": { "type": "keyword" },
       "yearmonth": { "type": "keyword" },
       "yearweek": { "type": "keyword" },
       "category": { "type": "keyword" },

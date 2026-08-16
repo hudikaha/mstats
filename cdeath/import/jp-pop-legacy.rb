@@ -17,12 +17,12 @@ ARGV.each do |file|
     year = source['year'].to_i
     month = source['month'].to_i
     sex = source['sex']
-    id = Mstats2026.record_id(loc_code: 'jpn', period: format('%<year>dm%<month>02d', year: year, month: month),
+    id = Mstats2026.record_id(loc: 'jpn', period: format('%<year>dm%<month>02d', year: year, month: month),
                               category: 'pop', type: type, sex: sex)
     row = {
       id: id,
-      loc_code: source['loc_code'].downcase,
-      location: source['location'],
+      loc: source['loc'].downcase,
+      area: source['area'],
       yearmonth: format('%dm%02d', year, month),
       category: 'pop',
       rate: '',

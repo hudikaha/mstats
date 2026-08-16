@@ -16,9 +16,9 @@ sex, and series, with totals and available age groups. Monthly records contain
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | keyword | Unique record identifier |
-| `loc_code` | keyword | Lowercase location code; normally ISO 3166-1 alpha-3 for countries, `jp01`–`jp47` for prefectures, and codes such as `jp132101` for municipalities |
-| `location` | keyword | Location name |
-| `world_region` | keyword | Broad UN geographic region, when supplied by an international source |
+| `loc` | keyword | Lowercase location code; normally ISO 3166-1 alpha-3 for countries, `jp01`–`jp47` for prefectures, and codes such as `jp132101` for municipalities |
+| `area` | keyword | English location name |
+| `areaj` | keyword | Japanese location name |
 | `date` | date | First day of a month or the reference date for a week |
 | `yearmonth` / `yearweek` | keyword | Period code such as `2009m01` / `2009w02` |
 | `year`, `month`, `week` | integer | Calendar year, month, or week number; units that do not apply are absent |
@@ -43,6 +43,9 @@ algorithm, type, and sex—with `_`. Underscores are not allowed inside a compon
 empty components remain as empty positions. For example,
 `jpn_2009w02_death__allcause__stmfrecon_both` is the source-value
 record for Japan, ISO week 2 of 2009, all causes, and both sexes.
+
+Geographic menu grouping is maintained separately from these records; it is not
+stored as a region field in `mstats`.
 
 Japan's actual weekly `stmf` records use `Observed_weighted` from the
 [Japan Excess and Exiguous Deaths Dashboard](https://exdeaths-japan.org/).

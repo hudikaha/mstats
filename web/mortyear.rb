@@ -56,6 +56,13 @@ mort_vars = [
 abort 'web/mort-vars.rb not found' unless mort_vars
 require mort_vars
 
+region_file = [
+  File.expand_path('mort-regions.json', __dir__),
+  File.expand_path('../cdeath/config/regions.json', __dir__)
+].find { |path| File.file?(path) }
+abort 'mortyear region grouping not found' unless region_file
+MORTYEAR_REGIONS = JSON.parse(File.read(region_file)).transform_keys(&:upcase).freeze
+
 AGES = {
   'age_all' => { ja: 'all', en: 'all' },
   'age_0' => { ja: '0', en: '0' },
@@ -148,7 +155,7 @@ SPECIAL_CAUSES = {
   'infant' => { ja: '乳児死亡率', en: 'Infant mortality rate' },
   'perm' => { ja: '周産期死亡率', en: 'Perinatal mortality rate' }
 }.freeze
-WORLD_REGIONS = {
+REGION_LABELS = {
   'Africa' => { ja: 'アフリカ', en: 'Africa' },
   'Asia' => { ja: 'アジア', en: 'Asia' },
   'Europe' => { ja: 'ヨーロッパ', en: 'Europe' },
@@ -273,7 +280,7 @@ default_start_year = requested_start_year.between?(1950, 2015) ? requested_start
 
 def location_names(code)
   known = COUNTRY_NAME_OVERRIDES[code] || COUNTRY_NAMES[code]
-  source_name = $annual_catalog&.dig(code, :location).to_s
+  source_name = $annual_catalog&.dig(code, :area).to_s
   return known if known
   { ja: source_name.empty? ? code : source_name, en: source_name.empty? ? code : source_name }
 end
@@ -285,15 +292,15 @@ def location_sort_key(code, language)
   [name.match?(/\A[ァ-ヿ]/) ? 0 : 1, name]
 end
 
-def default_source_urls(loc_code)
-  loc_code.to_s.upcase == 'JPN' ? [ESTAT_DEATH_URL, ESTAT_POP_URL] : [HMD_URL]
+def default_source_urls(loc)
+  loc.to_s.upcase == 'JPN' ? [ESTAT_DEATH_URL, ESTAT_POP_URL] : [HMD_URL]
 end
 
 # 日本語: 国ごとに存在する週次系列のrate値を返す。
 # English: Return the weekly rate-field values available for each location.
 def available_location_rates(index:, fixture:)
   if fixture
-    rates = fixture.group_by { |row| row[:loc_code].to_s.upcase }.transform_values do |rows|
+    rates = fixture.group_by { |row| row[:loc].to_s.upcase }.transform_values do |rows|
       rows.map { |row| row[:rate].to_s }.uniq
     end
     return rates
@@ -315,7 +322,7 @@ def available_location_rates(index:, fixture:)
       { term: { death_code: 'allcause' } },
       { exists: { field: 'yearweek' } }
     ] } },
-    aggs: { locations: { terms: { field: 'loc_code', size: 300 },
+    aggs: { locations: { terms: { field: 'loc', size: 300 },
                          aggs: { rates: { terms: { field: 'rate', size: 20 } } } } }
   )
   response = Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(request) }
@@ -332,10 +339,10 @@ end
 def available_annual_catalog(index:, fixture:)
   if fixture
     annual = fixture.reject { |row| row[:yearmonth] || row[:yearweek] }
-    return annual.group_by { |row| row[:loc_code].to_s.upcase }.transform_values do |rows|
-      sample = rows.find { |row| row[:world_region] } || rows.first
+    return annual.group_by { |row| row[:loc].to_s.upcase }.transform_values do |rows|
+      sample = rows.first
       {
-        location: sample[:location].to_s, world_region: sample[:world_region].to_s,
+        area: sample[:area].to_s, areaj: sample[:areaj].to_s,
         rates: rows.map { |row| row[:rate].to_s }.uniq,
         categories: rows.map { |row| row[:category].to_s }.uniq,
         death_codes: rows.map { |row| row[:death_code].to_s }.reject(&:empty?).uniq,
@@ -359,10 +366,8 @@ def available_annual_catalog(index:, fixture:)
   request.body = JSON.generate(
     size: 0,
     query: { bool: { must_not: [{ exists: { field: 'yearmonth' } }, { exists: { field: 'yearweek' } }] } },
-    aggs: { locations: { terms: { field: 'loc_code', size: 300 }, aggs: {
-      sample: { top_hits: { size: 1, _source: %w[location] } },
-      region_sample: { filter: { exists: { field: 'world_region' } },
-                       aggs: { hit: { top_hits: { size: 1, _source: %w[location world_region] } } } },
+    aggs: { locations: { terms: { field: 'loc', size: 300 }, aggs: {
+      sample: { top_hits: { size: 1, _source: %w[area areaj] } },
       rates: { terms: { field: 'rate', size: 20 } },
       categories: { terms: { field: 'category', size: 20 } },
       death_codes: { terms: { field: 'death_code', size: 1000 },
@@ -379,11 +384,10 @@ def available_annual_catalog(index:, fixture:)
   raise "Elasticsearch annual catalog failed: HTTP #{response.code}: #{response.body}" unless response.is_a?(Net::HTTPSuccess)
 
   JSON.parse(response.body).dig('aggregations', 'locations', 'buckets').to_h do |bucket|
-    source = bucket.dig('region_sample', 'hit', 'hits', 'hits', 0, '_source') ||
-             bucket.dig('sample', 'hits', 'hits', 0, '_source') || {}
+    source = bucket.dig('sample', 'hits', 'hits', 0, '_source') || {}
     values = ->(name) { bucket.dig(name, 'buckets').map { |entry| entry['key'].to_s } }
     [bucket['key'].upcase, {
-      location: source['location'].to_s, world_region: source['world_region'].to_s,
+      area: source['area'].to_s, areaj: source['areaj'].to_s,
       rates: values.call('rates'), categories: values.call('categories'),
       death_codes: values.call('death_codes'),
       death_code_max_years: bucket.dig('death_codes', 'buckets').to_h do |entry|
@@ -473,7 +477,7 @@ def available_death_codes(index:, fixture:, locations:, metric:)
   wanted_rate = metric == 'asr' ? 'asr' : ''
   if fixture
     return fixture.select do |row|
-      locations.include?(row[:loc_code].to_s.upcase) && row[:yearweek] && row[:rate].to_s == wanted_rate
+      locations.include?(row[:loc].to_s.upcase) && row[:yearweek] && row[:rate].to_s == wanted_rate
     end.map { |row| row[:death_code].to_s }.uniq.sort
   end
   public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
@@ -485,7 +489,7 @@ def available_death_codes(index:, fixture:, locations:, metric:)
     bool: { should: [{ term: { rate: '' } }, { bool: { must_not: [{ exists: { field: 'rate' } }] } }], minimum_should_match: 1 }
   } : { term: { rate: wanted_rate } }
   request.body = JSON.generate(size: 0, query: { bool: { filter: [
-    { term: { category: 'death' } }, { terms: { loc_code: locations.map(&:downcase) } },
+    { term: { category: 'death' } }, { terms: { loc: locations.map(&:downcase) } },
     { exists: { field: 'yearweek' } }, rate_filter
   ] } }, aggs: { codes: { terms: { field: 'death_code', size: 1000 } } })
   response = Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(request) }
@@ -497,7 +501,7 @@ def available_annual_death_codes(index:, fixture:, locations:, metric:)
   wanted_rate = { 'crude_rate' => 'crude', 'asr' => 'asr' }.fetch(metric, '')
   if fixture
     return fixture.select do |row|
-      locations.include?(row[:loc_code].to_s.upcase) && !row[:yearmonth] && !row[:yearweek] &&
+      locations.include?(row[:loc].to_s.upcase) && !row[:yearmonth] && !row[:yearweek] &&
         row[:category] == 'death' && row[:rate].to_s == wanted_rate
     end.map { |row| row[:death_code].to_s }.reject(&:empty?).uniq.sort
   end
@@ -510,7 +514,7 @@ def available_annual_death_codes(index:, fixture:, locations:, metric:)
     bool: { should: [{ term: { rate: '' } }, { bool: { must_not: [{ exists: { field: 'rate' } }] } }], minimum_should_match: 1 }
   } : { term: { rate: wanted_rate } }
   request.body = JSON.generate(size: 0, query: { bool: {
-    filter: [{ term: { category: 'death' } }, { terms: { loc_code: locations.map(&:downcase) } }, rate_filter],
+    filter: [{ term: { category: 'death' } }, { terms: { loc: locations.map(&:downcase) } }, rate_filter],
     must_not: [{ exists: { field: 'yearmonth' } }, { exists: { field: 'yearweek' } }]
   } }, aggs: { codes: { terms: { field: 'death_code', size: 1000 } } })
   response = Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(request) }
@@ -782,34 +786,34 @@ def annualize_weekly_counts(rows, age)
     next if value.nil?
     week_end = Date.parse(row[:date].to_s)
     (week_end - 6..week_end).group_by(&:year).each do |year, dates|
-      target = annual[[row[:loc_code], row[:sex], row[:death_code], year]]
+      target = annual[[row[:loc], row[:sex], row[:death_code], year]]
       target[:value] += value.to_f * dates.length / 7.0
       dates.each { |date| target[:covered_days][date] = true }
       target[:src_url] |= Array(row[:src_url]).compact
     end
   end
-  annual.map do |(loc_code, sex, death_code, year), values|
+  annual.map do |(loc, sex, death_code, year), values|
     required_days = Date.leap?(year) ? 366 : 365
     next unless year >= 2000 && values[:covered_days].length == required_days
     {
-      loc_code: loc_code.upcase, sex: sex, death_code: death_code, year: year,
+      loc: loc.upcase, sex: sex, death_code: death_code, year: year,
       deaths: values[:value], population: 1.0, observed: values[:value], unit_scale: 1.0,
-      src_url: values[:src_url].empty? ? default_source_urls(loc_code) : values[:src_url]
+      src_url: values[:src_url].empty? ? default_source_urls(loc) : values[:src_url]
     }
-  end.compact.sort_by { |row| [row[:loc_code], row[:year]] }
+  end.compact.sort_by { |row| [row[:loc], row[:year]] }
 end
 
 # 日本語: 週の7日を暦年へ配分する。死亡数だけを日数按分し、人口は週率から逆算する。
 # English: Split a seven-day week across calendar years; prorate deaths only and infer weekly population from the annualized rate.
 def annualize_weekly(count_rows, rate_rows, age)
-  rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
+  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:death_code]], row] }
   annual = Hash.new do |hash, key|
     hash[key] = { deaths: 0.0, population_days: 0.0, covered_days: {}, src_url: [] }
   end
 
   count_rows.each do |count|
     value = count[age.to_sym]
-    rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
+    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:death_code]]]
     rate_value = rate && rate[age.to_sym]
     next if value.nil? || rate_value.nil? || rate_value.to_f <= 0
 
@@ -817,16 +821,16 @@ def annualize_weekly(count_rows, rate_rows, age)
     week_start = week_end - 6
     weekly_population = value.to_f * DAYS_PER_YEAR * 100_000 / (7 * rate_value.to_f)
     (week_start..week_end).group_by(&:year).each do |year, dates|
-      target = annual[[count[:loc_code], count[:sex], count[:death_code], year]]
+      target = annual[[count[:loc], count[:sex], count[:death_code], year]]
       target[:deaths] += value.to_f * dates.length / 7.0
       target[:population_days] += weekly_population * dates.length
       dates.each { |date| target[:covered_days][date] = true }
       urls = [count[:src_url], rate[:src_url]].flatten.compact.reject { |url| url.to_s.empty? }
-      target[:src_url] |= (urls.empty? ? default_source_urls(count[:loc_code]) : urls)
+      target[:src_url] |= (urls.empty? ? default_source_urls(count[:loc]) : urls)
     end
   end
 
-  annual.map do |(loc_code, sex, death_code, year), values|
+  annual.map do |(loc, sex, death_code, year), values|
     required_days = Date.leap?(year) ? 366 : 365
     next unless year >= 2000 && values[:covered_days].length == required_days
 
@@ -834,12 +838,12 @@ def annualize_weekly(count_rows, rate_rows, age)
     next unless population.positive?
 
     {
-      loc_code: loc_code.upcase, sex: sex, death_code: death_code, year: year,
+      loc: loc.upcase, sex: sex, death_code: death_code, year: year,
       deaths: values[:deaths], population: population,
       observed: values[:deaths] / population * 100_000, unit_scale: 100_000.0,
-      src_url: values[:src_url].empty? ? default_source_urls(loc_code) : values[:src_url]
+      src_url: values[:src_url].empty? ? default_source_urls(loc) : values[:src_url]
     }
-  end.compact.sort_by { |row| [row[:loc_code], row[:year]] }
+  end.compact.sort_by { |row| [row[:loc], row[:year]] }
 end
 
 def influenza_year_start(date, start_week)
@@ -850,13 +854,13 @@ end
 # 日本語: 週次死亡数と率を、第27週または第36週開始の完全なインフルエンザ年へ集計する。
 # English: Aggregate weekly deaths and rates into complete influenza years starting in W27 or W36.
 def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = 'crude_rate')
-  rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
+  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:death_code]], row] }
   count_metric = metric == 'deaths'
   seasons = Hash.new do |hash, key|
     hash[key] = { deaths: 0.0, population_days: 0.0, covered_days: {}, src_url: [] }
   end
   count_rows.each do |count|
-    rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
+    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:death_code]]]
     count_values = ages.map { |age| count[age.to_sym] }
     next if count_values.any?(&:nil?)
 
@@ -874,7 +878,7 @@ def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = '
     week_end = Date.parse(count[:date].to_s)
     week_start = week_end - 6
     (week_start..week_end).group_by { |date| influenza_year_start(date, start_week) }.each do |season_start, dates|
-      key = [count[:loc_code], count[:sex], count[:death_code], season_start]
+      key = [count[:loc], count[:sex], count[:death_code], season_start]
       target = seasons[key]
       target[:deaths] += deaths * dates.length / 7.0
       target[:population_days] += populations * dates.length unless count_metric
@@ -890,13 +894,13 @@ def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = '
     next unless count_metric || population.positive?
 
     crude_rate = count_metric ? nil : values[:deaths] / population * 100_000
-    { loc_code: loc.upcase, sex: sex, death_code: cause, year: season_start.cwyear,
+    { loc: loc.upcase, sex: sex, death_code: cause, year: season_start.cwyear,
       season: "#{season_start.cwyear}/#{format('%02d', (season_start.cwyear + 1) % 100)}",
       deaths: values[:deaths], population: count_metric ? 1.0 : population,
       observed: count_metric ? values[:deaths] : crude_rate,
       unit_scale: count_metric ? 1.0 : 100_000.0,
       src_url: values[:src_url].empty? ? default_source_urls(loc) : values[:src_url] }
-  end.sort_by { |row| [row[:loc_code], row[:year]] }
+  end.sort_by { |row| [row[:loc], row[:year]] }
 end
 
 # 日本語: 選択したSTMF年齢階級を標準人口で加重し、インフルエンザ年ASRを計算する。
@@ -908,7 +912,7 @@ def annualize_influenza_asr(count_rows, rate_rows, start_week, ages, weights)
     annualize_influenza_year(count_rows, rate_rows, [age], start_week, 'crude_rate').map do |row|
       [row, age]
     end
-  end.group_by { |row, _age| [row[:loc_code], row[:sex], row[:death_code], row[:year]] }
+  end.group_by { |row, _age| [row[:loc], row[:sex], row[:death_code], row[:year]] }
 
   grouped.filter_map do |(_loc, _sex, _cause, _year), items|
     next unless items.map(&:last).sort == selected.sort
@@ -924,13 +928,13 @@ def annualize_influenza_asr(count_rows, rate_rows, start_week, ages, weights)
       observed: strata.sum { |item| item[:deaths] / item[:population] * 100_000 * item[:weight] },
       unit_scale: 100_000.0, src_url: strata.flat_map { |item| item[:src_url] }.uniq
     )
-  end.sort_by { |row| [row[:loc_code], row[:year]] }
+  end.sort_by { |row| [row[:loc], row[:year]] }
 end
 
 # 日本語: 選択系列の週次死亡率を年率換算のまま補助表示用に作る。
 # English: Build annualized weekly mortality rates for the contextual view.
 def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
-  rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
+  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:death_code]], row] }
   age_members = {
     'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
     'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
@@ -941,7 +945,7 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
   selected_asr_ages = ages.include?('age_all') ? STMF_ASR_AGES : ages
   weight_total = selected_asr_ages.sum { |age| weights.fetch(age) }
   count_rows.filter_map do |count|
-    rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
+    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:death_code]]]
     next unless rate
 
     observed = if metric == 'asr'
@@ -959,9 +963,9 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
                  end
                  deaths * DAYS_PER_YEAR * 100_000 / (7 * population)
                end
-    { loc_code: count[:loc_code].to_s.upcase, death_code: count[:death_code],
+    { loc: count[:loc].to_s.upcase, death_code: count[:death_code],
       date: count[:date], observed: observed }
-  end.sort_by { |row| [row[:loc_code], row[:date].to_s] }
+  end.sort_by { |row| [row[:loc], row[:date].to_s] }
 end
 
 # 日本語: 日本の週次粗死亡率を週死亡数と各月の公式人口から人口日で再計算する。
@@ -976,7 +980,7 @@ def replace_japan_weekly_crude_rates(count_rows, rate_rows, population_rows)
   end
 
   corrected = count_rows.filter_map do |count|
-    next unless count[:loc_code].to_s.casecmp('JPN').zero?
+    next unless count[:loc].to_s.casecmp('JPN').zero?
     deaths = count[:age_all]
     next if deaths.nil?
 
@@ -990,16 +994,16 @@ def replace_japan_weekly_crude_rates(count_rows, rate_rows, population_rows)
     count.merge(rate: 'crude', age_all: (deaths.to_f * DAYS_PER_YEAR * 100_000 /
                                        population_days).round(2))
   end
-  rate_rows.reject { |row| row[:loc_code].to_s.casecmp('JPN').zero? } + corrected
+  rate_rows.reject { |row| row[:loc].to_s.casecmp('JPN').zero? } + corrected
 end
 
 # 日本語: UN月次crude rateを、同じ系列のSTMF週次値が始まる前だけ短期変動表示へ加える。
 # English: Add UN monthly crude rate to the detailed view only before the matching STMF weekly series begins.
 def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, selected_ages)
-  weekly_first = weekly_rows.group_by { |row| [row[:loc_code], row[:death_code]] }
+  weekly_first = weekly_rows.group_by { |row| [row[:loc], row[:death_code]] }
                             .transform_values { |rows| rows.map { |row| Date.iso8601(row[:date].to_s) }.min }
   monthly_rows.filter_map do |row|
-    loc = row[:loc_code].to_s.upcase
+    loc = row[:loc].to_s.upcase
     cause = row[:death_code].to_s
     first_week = weekly_first[[loc, cause]]
 
@@ -1011,7 +1015,7 @@ def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, s
     midpoint = date + (Date.new(date.year, date.month, -1).day - 1) / 2
     series_key = mode == 'country' ? loc :
       "#{selected_locations.first}-#{selected_ages.join('+')}-#{cause}"
-    { loc_code: loc, death_code: cause, date: midpoint.iso8601,
+    { loc: loc, death_code: cause, date: midpoint.iso8601,
       observed: row[:age_all].to_f, series: series_key,
       detail_period: $l == :ja ? '月' : 'Month' }
   end + weekly_rows.map { |row| row.merge(detail_period: $l == :ja ? '週' : 'Week') }
@@ -1042,7 +1046,7 @@ end
 def prefer_actual_weekly(rows, required_fields)
   rank = { 'stmf' => 0, 'stmfrecon' => 1 }
   rows.group_by do |row|
-    [row[:loc_code].to_s.downcase, row[:yearweek], row[:category], row[:rate].to_s,
+    [row[:loc].to_s.downcase, row[:yearweek], row[:category], row[:rate].to_s,
      row[:death_code], row[:algo].to_s, row[:sex]]
   end.values.map do |candidates|
     complete = candidates.select { |row| required_fields.all? { |field| !row[field.to_sym].nil? } }
@@ -1054,7 +1058,7 @@ end
 # English: Read annual records directly and prefer national series over WPP for the same measure.
 def annual_record_rows(records, locations, sex, causes, metric, ages)
   relevant = records.select do |row|
-    locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
+    locations.include?(row[:loc].to_s.upcase) && row[:sex] == sex &&
       !projected_record?(row)
   end
   # 日本語: 同一年の確定値・速報値・国際推計が共存するときは、この順で選ぶ。
@@ -1072,12 +1076,12 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
   value_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) &&
       row[:rate].to_s == rate_name
-  end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
   raw_groups = relevant.select do |row|
     row[:category] == 'death' && causes.include?(row[:death_code].to_s) && row[:rate].to_s.empty?
-  end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
   populations = relevant.select { |row| row[:category] == 'pop' }.group_by do |row|
-    [row[:loc_code].to_s.upcase, row[:year].to_i]
+    [row[:loc].to_s.upcase, row[:year].to_i]
   end
 
   value_groups.filter_map do |(loc, year, cause), candidates|
@@ -1117,12 +1121,12 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
     next unless deaths && denominator && denominator.to_f.positive?
 
     {
-      loc_code: loc, sex: sex, death_code: cause, year: year,
+      loc: loc, sex: sex, death_code: cause, year: year,
       deaths: deaths.to_f, population: denominator.to_f, observed: observed.to_f,
       unit_scale: metric == 'deaths' ? 1.0 : 100_000.0,
       src_url: (Array(row[:src_url]) + Array(raw&.dig(:src_url)) + Array(population&.dig(:src_url))).compact.uniq
     }
-  end.sort_by { |row| [row[:loc_code], row[:year]] }
+  end.sort_by { |row| [row[:loc], row[:year]] }
 end
 
 # 日本語: 年齢階級別の死亡数と人口を組み合わせ、ASR回帰用の入力を作る。
@@ -1131,7 +1135,7 @@ end
 # Prefer national values for each stratum and use WPP population exposure as the fallback denominator.
 def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil)
   relevant = records.select do |row|
-    locations.include?(row[:loc_code].to_s.upcase) && row[:sex] == sex &&
+    locations.include?(row[:loc].to_s.upcase) && row[:sex] == sex &&
       !projected_record?(row)
   end
   source_rank = lambda do |row, population: false|
@@ -1147,9 +1151,9 @@ def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil)
   end
   death_groups = relevant.select do |row|
     row[:category] == 'death' && row[:rate].to_s.empty? && causes.include?(row[:death_code].to_s)
-  end.group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
   population_groups = relevant.select { |row| row[:category] == 'pop' }.
-                      group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i] }
+                      group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i] }
   standard_groups ||= WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] }
   weight_total = standard_groups.sum { |_ages, weight| weight }
 
@@ -1170,12 +1174,12 @@ def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil)
     next unless strata.length == standard_groups.length
 
     {
-      loc_code: loc, sex: sex, death_code: cause, year: year, strata: strata,
+      loc: loc, sex: sex, death_code: cause, year: year, strata: strata,
       deaths: strata.sum { |item| item[:deaths] }, population: strata.sum { |item| item[:population] },
       observed: strata.sum { |item| item[:deaths] / item[:population] * 100_000.0 * item[:weight] },
       unit_scale: 100_000.0, src_url: strata.flat_map { |item| item[:src_url] }.uniq
     }
-  end.sort_by { |row| [row[:loc_code], row[:year]] }
+  end.sort_by { |row| [row[:loc], row[:year]] }
 end
 
 def scenario_cutoffs(years, training_start = 2000)
@@ -1200,13 +1204,13 @@ def birth_rate_rows(records)
   end
   choose_by_year = lambda do |category|
     records.select { |row| row[:category] == category }.
-      group_by { |row| [row[:loc_code].to_s.upcase, row[:year].to_i] }.
+      group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i] }.
       transform_values { |rows| rows.min_by(&source_rank) }
   end
   births = choose_by_year.call('birth')
   deliveries = choose_by_year.call('delivery')
   numerators = records.filter_map do |row|
-    loc = row[:loc_code].to_s.upcase
+    loc = row[:loc].to_s.upcase
     cause, value = if row[:category] == 'death' && row[:death_code] == 'infant'
                      ['infant', row[:age_all]]
                    elsif row[:category] == 'death' && row[:death_code] == 'allcause' &&
@@ -1224,11 +1228,11 @@ def birth_rate_rows(records)
     population = denominator[:age_all].to_f
     urls = (Array(denominator[:src_url]) + Array(row[:src_url])).compact.uniq
     numerator_rank = [row[:death_code] == 'allcause' ? 1 : 0, source_rank.call(row)]
-    { loc_code: loc, sex: 'both', death_code: cause, year: row[:year].to_i,
+    { loc: loc, sex: 'both', death_code: cause, year: row[:year].to_i,
       deaths: value.to_f, population: population, observed: value.to_f / population * 1000.0,
       unit_scale: 1000.0, src_url: urls, source_rank: numerator_rank }
   end
-  numerators.group_by { |row| [row[:loc_code], row[:year], row[:death_code]] }.
+  numerators.group_by { |row| [row[:loc], row[:year], row[:death_code]] }.
     values.map do |rows|
       selected = rows.min_by { |row| row[:source_rank] }.dup
       selected.delete(:source_rank)
@@ -1662,19 +1666,19 @@ def rebuild_mortyear_catalog(index)
   base = available_annual_catalog(index: index, fixture: nil)
   weekly_rates = available_location_rates(index: index, fixture: nil)
   {
-    'ENG' => { location: 'England and Wales', world_region: 'Europe' },
-    'SCO' => { location: 'Scotland', world_region: 'Europe' }
+    'ENG' => { area: 'England and Wales', areaj: 'イングランド・ウェールズ（英国）' },
+    'SCO' => { area: 'Scotland', areaj: 'スコットランド（英国）' }
   }.each do |code, entry|
     base[code] ||= entry if weekly_rates.key?(code)
   end
-  fields = %w[loc_code location world_region category rate death_code algo type year sex src_url] + AGES.keys
+  fields = %w[loc area areaj category rate death_code algo type year sex src_url] + AGES.keys
   locations = {}
   total = base.length
   next_report = 10
   base.keys.sort.each_with_index do |loc, position|
     records = elastic_search(
       index: index, size: 100_000,
-      filter: [{ 'term' => { 'loc_code' => loc.downcase } }],
+      filter: [{ 'term' => { 'loc' => loc.downcase } }],
       must_not: [{ 'exists' => { 'field' => 'yearmonth' } }, { 'exists' => { 'field' => 'yearweek' } }],
       source: fields
     )
@@ -1682,10 +1686,10 @@ def rebuild_mortyear_catalog(index)
     if weekly_rates.fetch(loc, []).include?('') && weekly_rates.fetch(loc, []).include?('crude')
       weekly = elastic_search(
         index: index, size: 100_000,
-        filter: [{ 'term' => { 'loc_code' => loc.downcase } },
+        filter: [{ 'term' => { 'loc' => loc.downcase } },
                  { 'term' => { 'category' => 'death' } }, { 'term' => { 'death_code' => 'allcause' } },
                  { 'exists' => { 'field' => 'yearweek' } }],
-        source: %w[loc_code yearweek category rate death_code date year week sex src_url] + STMF_AGES
+        source: %w[loc yearweek category rate death_code date year week sex src_url] + STMF_AGES
       )
       weekly.group_by { |row| row[:sex].to_s }.each do |sex, sex_rows|
         counts = sex_rows.select { |row| row[:rate].to_s.empty? }
@@ -1703,9 +1707,7 @@ def rebuild_mortyear_catalog(index)
         end
       end
     end
-    locations[loc] = {
-      location: base.dig(loc, :location), world_region: base.dig(loc, :world_region), series: series
-    }
+    locations[loc] = { area: base.dig(loc, :area), areaj: base.dig(loc, :areaj), series: series }
     percent = ((position + 1) * 100 / total)
     if percent >= next_report
       warn "mortyear catalog: #{next_report}% (#{position + 1}/#{total})"
@@ -1854,7 +1856,7 @@ end
 
 locations_for_query = selected_locations.map(&:downcase)
 ages_for_query = selected_ages
-annual_source_fields = %w[id loc_code location world_region category rate death_code algo type date year sex src_url] + AGES.keys
+annual_source_fields = %w[id loc area areaj category rate death_code algo type date year sex src_url] + AGES.keys
 annual_records_all = if selected_period != 'calendar'
                        []
                      elsif opts[:fixture]
@@ -1864,20 +1866,20 @@ annual_records_all = if selected_period != 'calendar'
                      else
                        elastic_search(
                          index: opts[:index], size: 100_000,
-                         filter: [{ 'terms' => { 'loc_code' => locations_for_query } },
+                         filter: [{ 'terms' => { 'loc' => locations_for_query } },
                                   { 'term' => { 'sex' => selected_sex } }],
                          must_not: [{ 'exists' => { 'field' => 'yearmonth' } },
                                     { 'exists' => { 'field' => 'yearweek' } }],
                          source: annual_source_fields
                        )
                      end
-source_fields = %w[id loc_code yearweek category rate death_code algo type date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
+source_fields = %w[id loc yearweek category rate death_code algo type date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
 # 日本語: 暦年の英国年次系列はGBR、STMFはENGなので、詳細表示の検索時だけ対応付ける。
 # English: Annual UK records use GBR while STMF uses ENG, so map them only for detailed-view queries.
 weekly_locations_for_query = locations_for_query.flat_map { |code| code == 'gbr' ? %w[gbr eng] : [code] }.uniq
 common_filters = [
   { 'term' => { 'category' => 'death' } },
-  { 'terms' => { 'loc_code' => weekly_locations_for_query } },
+  { 'terms' => { 'loc' => weekly_locations_for_query } },
   { 'term' => { 'sex' => selected_sex } },
   { 'terms' => { 'death_code' => selected_causes.reject { |code| SPECIAL_CAUSES.key?(code) }.yield_self { |codes| codes.empty? ? ['__none__'] : codes } } },
   { 'exists' => { 'field' => 'yearweek' } }
@@ -1896,7 +1898,7 @@ if selected_period == 'calendar' && !detailed_calendar_rate
 elsif opts[:fixture]
   fixture = fixture_data.dup
   fixture.select! do |row|
-    weekly_locations_for_query.include?(row[:loc_code].to_s.downcase) &&
+    weekly_locations_for_query.include?(row[:loc].to_s.downcase) &&
       row[:category] == 'death' && selected_causes.include?(row[:death_code]) &&
       row[:sex] == selected_sex && row[:yearweek]
   end
@@ -1938,25 +1940,25 @@ if selected_metric == 'crude_rate' && selected_ages == ['age_all'] &&
    selected_sex == 'both' && weekly_locations_for_query.include?('jpn')
   population_rows = if opts[:fixture]
                       fixture_data.select do |row|
-                        row[:loc_code].to_s.casecmp('jpn').zero? && row[:yearmonth] &&
+                        row[:loc].to_s.casecmp('jpn').zero? && row[:yearmonth] &&
                           row[:category] == 'pop' && row[:age_all]
                       end
                     else
                       elastic_search(
                         index: opts[:index], size: 100_000,
-                        filter: [{ 'term' => { 'loc_code' => 'jpn' } },
+                        filter: [{ 'term' => { 'loc' => 'jpn' } },
                                  { 'term' => { 'category' => 'pop' } },
                                  { 'exists' => { 'field' => 'yearmonth' } },
                                  { 'exists' => { 'field' => 'age_all' } }],
-                        source: %w[loc_code yearmonth category type age_all]
+                        source: %w[loc yearmonth category type age_all]
                       )
                     end
   rate_rows = replace_japan_weekly_crude_rates(count_rows, rate_rows, population_rows)
 end
 
 if selected_period == 'calendar'
-  count_rows.each { |row| row[:loc_code] = 'gbr' if row[:loc_code].to_s.casecmp('eng').zero? }
-  rate_rows.each { |row| row[:loc_code] = 'gbr' if row[:loc_code].to_s.casecmp('eng').zero? }
+  count_rows.each { |row| row[:loc] = 'gbr' if row[:loc].to_s.casecmp('eng').zero? }
+  rate_rows.each { |row| row[:loc] = 'gbr' if row[:loc].to_s.casecmp('eng').zero? }
 end
 
 monthly_supplement_enabled = selected_metric == 'crude_rate' &&
@@ -2061,16 +2063,16 @@ end }
 
 # 日本語: 年次の出生分母と乳児・周産期死亡分子を同じmstats indexから取得する。
 # English: Read annual birth denominators and infant/perinatal numerators from the shared mstats index.
-annual_source_fields = %w[id loc_code category rate death_code algo date year sex src_url age_all age_0]
+annual_source_fields = %w[id loc category rate death_code algo date year sex src_url age_all age_0]
 annual_records = selected_metric == 'birth_rate' ? annual_records_all : []
 special_rows = birth_rate_rows(annual_records)
 
 chart_data = series_specs.flat_map do |series_key, age, cause, label|
   loc = mode == 'country' ? series_key : selected_locations.first
   rows = if SPECIAL_CAUSES.key?(cause)
-           special_rows.select { |row| row[:loc_code] == loc && row[:death_code] == cause }
+           special_rows.select { |row| row[:loc] == loc && row[:death_code] == cause }
          else
-           annual_by_age.fetch(age).select { |row| row[:loc_code] == loc && row[:death_code] == cause }
+           annual_by_age.fetch(age).select { |row| row[:loc] == loc && row[:death_code] == cause }
          end
   build_scenarios(rows, series_key, label,
                   use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1')
@@ -2088,7 +2090,7 @@ weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include
                     detailed_calendar_rate
                    weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages,
                                     asr_weights: asr_stmf_weights).map do |row|
-                     series_key = mode == 'country' ? row[:loc_code] :
+                     series_key = mode == 'country' ? row[:loc] :
                        "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:death_code]}"
                      row.merge(series: series_key)
                    end
@@ -2099,17 +2101,17 @@ weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include
 # 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次crude rateで補完する。
 # English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly crude rate.
 if monthly_supplement_enabled
-  monthly_source = %w[loc_code yearmonth category rate death_code type date year month sex age_all]
+  monthly_source = %w[loc yearmonth category rate death_code type date year month sex age_all]
   monthly_rows = if opts[:fixture]
                    fixture_data.select do |row|
-                     locations_for_query.include?(row[:loc_code].to_s.downcase) &&
+                     locations_for_query.include?(row[:loc].to_s.downcase) &&
                        row[:yearmonth] && row[:category] == 'death' && row[:rate] == 'crude' &&
                        row[:type] == 'unmonth' && row[:death_code] == 'allcause' && row[:sex] == 'both'
                    end
                  else
                    elastic_search(
                      index: opts[:index], size: 100_000,
-                     filter: [{ 'terms' => { 'loc_code' => locations_for_query } },
+                     filter: [{ 'terms' => { 'loc' => locations_for_query } },
                               { 'term' => { 'category' => 'death' } },
                               { 'term' => { 'rate' => 'crude' } },
                               { 'term' => { 'type' => 'unmonth' } },
@@ -2250,9 +2252,9 @@ puts <<~HTML
     <fieldset id="location-fieldset"><legend>#{ $l == :ja ? '国・地域' : 'Country or area' }</legend>
 HTML
 location_groups = available_locations.group_by do |code|
-  annual_catalog.dig(code, :world_region).to_s.then { |region| WORLD_REGIONS.key?(region) ? region : 'Other' }
+  MORTYEAR_REGIONS.fetch(code, 'Other').then { |region| REGION_LABELS.key?(region) ? region : 'Other' }
 end
-WORLD_REGIONS.each do |region, region_names|
+REGION_LABELS.each do |region, region_names|
   codes = location_groups.fetch(region, []).sort_by { |code| location_sort_key(code, $l) }
   next if codes.empty?
   open = codes.any? { |code| selected_locations.include?(code) }

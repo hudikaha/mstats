@@ -88,7 +88,7 @@ end
 death_groups = Hash.new { |hash, key| hash[key] = [] }
 CSV.foreach(ARGV[0], headers: true) do |row|
   next unless row['category'] == 'death' && row['rate'].to_s.empty?
-  key = [row['loc_code'], row['location'], row['year'].to_i, row['death_code'],
+  key = [row['loc'], row['area'], row['year'].to_i, row['death_code'],
          row['death_cause'], row['algo'], row['type'], row['sex']]
   death_groups[key] << row
 end
@@ -96,13 +96,13 @@ end
 pop_groups = Hash.new { |hash, key| hash[key] = [] }
 CSV.foreach(ARGV[1], headers: true) do |row|
   next unless row['category'] == 'pop'
-  key = [row['loc_code'], row['location'], row['year'].to_i, row['type'], row['sex']]
+  key = [row['loc'], row['area'], row['year'].to_i, row['type'], row['sex']]
   pop_groups[key] << row
 end
 
 rows = {}
 annual_pop = {}
-pop_groups.each do |(loc, location, year, type, sex), months|
+pop_groups.each do |(loc, area, year, type, sex), months|
   # 日本語: 旧確定人口と現行人口が重なる月は、後から読んだ現行recordを採用する。
   # English: Where legacy and current population overlap, keep the later-read current record.
   months = months.to_h { |row| [row['yearmonth'], row] }.values
@@ -120,9 +120,9 @@ pop_groups.each do |(loc, location, year, type, sex), months|
     end.compact
     [field, weighted.length == 12 ? clean_number(weighted.sum / days) : nil]
   end
-  id = Mstats2026.record_id(loc_code: loc, period: year, category: 'pop', type: type, sex: sex)
+  id = Mstats2026.record_id(loc: loc, period: year, category: 'pop', type: type, sex: sex)
   src_url = months.flat_map { |row| urls(row['src_url'], Mstats2026::JPN_POP_URL) }.uniq
-  rows[id] = { id: id, loc_code: loc, location: location, category: 'pop', type: type,
+  rows[id] = { id: id, loc: loc, area: area, category: 'pop', type: type,
                src_url: src_url, date: "#{year}-01-01", year: year, sex: sex }.merge(ages.transform_keys(&:to_sym))
   annual_pop[[loc, year, type, sex]] = ages
 end
@@ -145,7 +145,7 @@ if oldest_pop_path
   end
 end
 
-death_groups.each do |(loc, location, year, code, cause, algo, type, sex), months|
+death_groups.each do |(loc, area, year, code, cause, algo, type, sex), months|
   next unless months.map { |row| row['month'].to_i }.uniq.length == 12
 
   ages = Mstats2026::AGE_FIELDS.to_h do |field|
@@ -153,9 +153,9 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
     [field, values.all? ? clean_number(values.sum) : nil]
   end
   src_url = months.flat_map { |row| urls(row['src_url'], Mstats2026::JPN_DEATH_URL) }.uniq
-  id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death',
+  id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
                             death_code: code, algo: algo, type: type, sex: sex)
-  base = { id: id, loc_code: loc, location: location, category: 'death', death_code: code,
+  base = { id: id, loc: loc, area: area, category: 'death', death_code: code,
            death_cause: cause, algo: algo, type: type, src_url: src_url,
            date: "#{year}-01-01", year: year, sex: sex }
   rows[id] = base.merge(ages.transform_keys(&:to_sym))
@@ -167,23 +167,23 @@ death_groups.each do |(loc, location, year, code, cause, algo, type, sex), month
     denominator = population[field]
     [field, count && denominator&.positive? ? clean_number(count * 100_000.0 / denominator) : nil]
   end
-  rate_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'crude',
+  rate_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'crude',
                                  death_code: code, algo: algo, type: type, sex: sex)
-  pop_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'pop', type: pop_type, sex: sex)
+  pop_id = Mstats2026.record_id(loc: loc, period: year, category: 'pop', type: pop_type, sex: sex)
   rows[rate_id] = base.merge(id: rate_id, rate: 'crude',
                              src_url: (src_url + rows.fetch(pop_id)[:src_url]).uniq)
                           .merge(rates.transform_keys(&:to_sym))
 
   asr_value = standardized_rate(ages, population, Mstats2026::WHO_WORLD_STANDARD)
   next unless asr_value
-  asr_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'asr',
+  asr_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'asr',
                                 death_code: code, algo: 'whostd', type: type, sex: sex)
   rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: 'whostd',
                             src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(asr_value))
 
   jp2015_value = standardized_rate(ages, population, Mstats2026::JPN_2015_STANDARD)
   next unless jp2015_value
-  jp2015_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'asr',
+  jp2015_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'asr',
                                    death_code: code, algo: 'jp2015std', type: type, sex: sex)
   rows[jp2015_id] = base.merge(id: jp2015_id, rate: 'asr', algo: 'jp2015std',
                                src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(jp2015_value))
@@ -197,8 +197,8 @@ if annual_death_path
   rows.delete_if { |_id, row| row[:category] == 'death' && annual_years.include?(row[:year]) }
 
   annual_rows.each do |source|
-    loc = source['loc_code']
-    location = source['location']
+    loc = source['loc']
+    area = source['area']
     year = source['year'].to_i
     code = source['death_code']
     cause = source['death_cause']
@@ -207,9 +207,9 @@ if annual_death_path
     sex = source['sex']
     ages = Mstats2026::AGE_FIELDS.to_h { |field| [field, number(source[field])] }
     src_url = urls(source['src_url'], Mstats2026::JPN_DEATH_URL)
-    id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death',
+    id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
                               death_code: code, algo: algo, type: type, sex: sex)
-    base = { id: id, loc_code: loc, location: location, category: 'death', death_code: code,
+    base = { id: id, loc: loc, area: area, category: 'death', death_code: code,
              death_cause: cause, algo: algo, type: type, src_url: src_url,
              date: "#{year}-01-01", year: year, sex: sex }
     rows[id] = base.merge(ages.transform_keys(&:to_sym))
@@ -217,13 +217,13 @@ if annual_death_path
     pop_type = %w[cfm est cfmjpns estjpns].find { |candidate| annual_pop.key?([loc, year, candidate, sex]) }
     next unless pop_type
     population = annual_pop.fetch([loc, year, pop_type, sex])
-    pop_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'pop', type: pop_type, sex: sex)
+    pop_id = Mstats2026.record_id(loc: loc, period: year, category: 'pop', type: pop_type, sex: sex)
     rate_urls = (src_url + rows.fetch(pop_id)[:src_url]).uniq
     rates = ages.to_h do |field, count|
       denominator = population[field]
       [field, count && denominator&.positive? ? clean_number(count * 100_000.0 / denominator) : nil]
     end
-    rate_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'crude',
+    rate_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'crude',
                                    death_code: code, algo: algo, type: type, sex: sex)
     rows[rate_id] = base.merge(id: rate_id, rate: 'crude', src_url: rate_urls)
                          .merge(rates.transform_keys(&:to_sym))
@@ -232,7 +232,7 @@ if annual_death_path
       'jp2015std' => Mstats2026::JPN_2015_STANDARD }.each do |standard_name, standard|
       value = standardized_rate(ages, population, standard)
       next unless value
-      asr_id = Mstats2026.record_id(loc_code: loc, period: year, category: 'death', rate: 'asr',
+      asr_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'asr',
                                     death_code: code, algo: standard_name, type: type, sex: sex)
       rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: standard_name,
                                 src_url: rate_urls, age_all: clean_number(value))

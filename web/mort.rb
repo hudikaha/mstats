@@ -24,7 +24,7 @@ mstats = [
 ].find { |path| File.file?(path) }
 abort 'mstats.rb not found' unless mstats
 require mstats
-require_relative 'mort-vars2'
+require_relative 'mort-vars'
 
 #
 # Debug opttion
@@ -396,7 +396,7 @@ end
 $must = [
     {'term' => {'category' => 'death'}},
     {'exists' => {'field' => 'yearweek'}},
-    {'terms' => {'loc_code' => $locs.map(&:downcase)}},
+    {'terms' => {'loc' => $locs.map(&:downcase)}},
     {'terms' => {'sex' => $sexes}},
     {'terms' => {'death_code' => $death_codes}},
     {'bool' => {'should' => $rate_should, 'minimum_should_match' => 1}}
@@ -407,7 +407,7 @@ data0 = elastic_search(
     :must_not => [],
     :filter => $must,
     :should => [],
-    :source => [ 'id', 'loc_code', 'yearweek', 'category', 'rate', 'death_code',
+    :source => [ 'id', 'loc', 'yearweek', 'category', 'rate', 'death_code',
                  'algo', 'type', 'date', 'year', 'week', 'sex', 'age_all' ] + $ages,
     #:debug => 'SHOWONLY_QUERY',
 )
@@ -416,7 +416,7 @@ data0 = elastic_search(
 # Normalize to uppercase location codes and doc_id expected by the existing display and calculations.
 data0 = data0.to_h do |datum|
     id = datum.delete(:_id)
-    datum[:loc_code] = datum[:loc_code].upcase
+    datum[:loc_code] = datum.delete(:loc).upcase
     datum[:doc_id] = (datum[:id] || id).sub(/^[^_]+/, datum[:loc_code])
     datum[:rate] ||= ''
     datum[:algo] ||= ''

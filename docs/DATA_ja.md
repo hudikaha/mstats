@@ -14,9 +14,9 @@
 | field | 型 | 意味 |
 |---|---|---|
 | `id` | keyword | recordを一意に識別するID |
-| `loc_code` | keyword | 小文字の地域code。国は原則ISO 3166-1 alpha-3、都道府県は`jp01`～`jp47`、市区町村は`jp132101`など |
-| `location` | keyword | 地域名 |
-| `world_region` | keyword | 国際dataに含まれる場合のUN大地域区分 |
+| `loc` | keyword | 小文字の地域code。国は原則ISO 3166-1 alpha-3、都道府県は`jp01`～`jp47`、市区町村は`jp132101`など |
+| `area` | keyword | 英語の地域名 |
+| `areaj` | keyword | 日本語の地域名 |
 | `date` | date | 月次は月初、週次は対象週の基準日 |
 | `yearmonth` / `yearweek` | keyword | `2009m01` / `2009w02`形式の期間code |
 | `year`, `month`, `week` | integer | 暦年、月、週番号。該当しない単位は存在しない |
@@ -38,6 +38,8 @@
 IDは地域、期間、category、rate、死因、algo、type、性別の正確に8要素を`_`で連結します。
 要素内のunderscoreは禁止し、空要素も空の位置として残します。
 例えば`jpn_2009w02_death__allcause__stmfrecon_both`は、日本、2009年第2週、全死因、男女計の元系列です。
+
+地域別menuの分類はrecordとは別に管理し、`mstats`には地域区分fieldを格納しません。
 
 日本の実週次`stmf`は、[日本の超過死亡ダッシュボード](https://exdeaths-japan.org/)の
 `Observed_weighted`を使用します。全国は`jpn`、都道府県は`jp01`～`jp47`で、全死因、

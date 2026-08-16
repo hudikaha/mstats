@@ -62,7 +62,7 @@ curl -sS \
 
 ```yaml
 ---
-_index: mstats20260814
+_index: mstats20260816
 _type: _doc
 _id: jpn_2009w02_death__allcause__stmfrecon_both
 _version: 1
@@ -88,7 +88,7 @@ _source:
 
 | index | 内容 | 主なfield |
 |---|---|---|
-| `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc_code`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
+| `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
 | `kcor` | cutoff別KCOR集計 | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
 | `vdeath` | 年齢区分・接種回数ごとの年齢補正済み接種後死亡分析 | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | 週単位匿名化個票（IND-WKA） | `id`, `vbirthday`, `date_doseN`, `date_death` |
@@ -109,7 +109,7 @@ curl -sS -H 'Content-Type: application/json' \
     "query": {
       "bool": {
         "filter": [
-          { "match": { "loc_code": "jpn" } },
+          { "match": { "loc": "jpn" } },
           { "match": { "category": "death" } },
           { "match": { "death_code": "allcause" } },
           { "match": { "sex": "both" } }
@@ -127,7 +127,7 @@ curl -sS -H 'Content-Type: application/json' \
 curl -sS -H 'Content-Type: application/json' \
   -X POST 'https://medicalfacts.info/elastic/mstats/_count' \
   -d '{
-    "query": { "match": { "loc_code": "jpn" } }
+    "query": { "match": { "loc": "jpn" } }
   }'
 ```
 
@@ -143,13 +143,13 @@ curl -sS -H 'Content-Type: application/json' \
   -d '{
     "size": 100,
     "_source": [
-      "id", "loc_code", "location", "date", "year",
+      "id", "loc", "area", "areaj", "date", "year",
       "yearmonth", "yearweek", "category", "death_code", "sex", "age_all"
     ],
     "query": {
       "bool": {
         "filter": [
-          { "match": { "loc_code": "jpn" } },
+          { "match": { "loc": "jpn" } },
           { "match": { "category": "death" } },
           { "term":  { "rate": "" } },
           { "term":  { "algo": "" } },
@@ -164,7 +164,7 @@ curl -sS -H 'Content-Type: application/json' \
   }'
 ```
 
-`loc_code`は小文字の3文字国コードを基本とします。日本は`jpn`です。日本の自治体は
+`loc`は小文字の3文字国コードを基本とします。日本は`jpn`です。日本の自治体は
 `jp132101`のようなコードを使用します。
 
 ### 日付、死因、性別を指定
@@ -178,7 +178,7 @@ curl -sS -H 'Content-Type: application/json' \
   "query": {
     "bool": {
       "filter": [
-        { "match": { "loc_code": "jpn" } },
+        { "match": { "loc": "jpn" } },
         { "match": { "category": "death" } },
         { "match": { "death_code": "02100" } },
         { "match": { "sex": "both" } },
@@ -254,7 +254,7 @@ curl -sS -H 'Content-Type: application/json' \
 ```json
 {
   "size": 1000,
-  "query": { "term": { "loc_code": "jpn" } },
+  "query": { "term": { "loc": "jpn" } },
   "sort": [
     { "date": "asc" },
     { "id": "asc" }
@@ -273,7 +273,7 @@ curl -sS -H 'Content-Type: application/json' \
 ```json
 {
   "size": 1000,
-  "query": { "term": { "loc_code": "jpn" } },
+  "query": { "term": { "loc": "jpn" } },
   "search_after": ["2024-01-07", "jpn_2024w01_death__allcause__stmfrecon_both"],
   "sort": [
     { "date": "asc" },
@@ -294,7 +294,7 @@ const response = await fetch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       size: 100,
-      query: { term: { loc_code: "jpn" } }
+      query: { term: { loc: "jpn" } }
     })
   }
 );

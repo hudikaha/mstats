@@ -66,7 +66,7 @@ The output begins as follows:
 
 ```yaml
 ---
-_index: mstats20260814
+_index: mstats20260816
 _type: _doc
 _id: jpn_2009w02_death__allcause__stmfrecon_both
 _version: 1
@@ -92,7 +92,7 @@ nonexistent ID returns HTTP 404 with `found` set to `false`.
 
 | Index | Contents | Main fields |
 |---|---|---|
-| `mstats` | Mortality, causes of death, and population | `id`, `loc_code`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
+| `mstats` | Mortality, causes of death, and population | `id`, `loc`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
 | `kcor` | KCOR results by cutoff | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
 | `vdeath` | Age-adjusted post-vaccination death analyses by age group and dose | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | Weekly-anonymized individual records (IND-WKA) | `id`, `vbirthday`, `date_doseN`, `date_death` |
@@ -114,7 +114,7 @@ curl -sS -H 'Content-Type: application/json' \
     "query": {
       "bool": {
         "filter": [
-          { "match": { "loc_code": "jpn" } },
+          { "match": { "loc": "jpn" } },
           { "match": { "category": "death" } },
           { "match": { "death_code": "allcause" } },
           { "match": { "sex": "both" } }
@@ -132,7 +132,7 @@ POST a query to `_count` for a filtered count.
 curl -sS -H 'Content-Type: application/json' \
   -X POST 'https://medicalfacts.info/elastic/mstats/_count' \
   -d '{
-    "query": { "match": { "loc_code": "jpn" } }
+    "query": { "match": { "loc": "jpn" } }
   }'
 ```
 
@@ -149,13 +149,13 @@ curl -sS -H 'Content-Type: application/json' \
   -d '{
     "size": 100,
     "_source": [
-      "id", "loc_code", "location", "date", "year",
+      "id", "loc", "area", "areaj", "date", "year",
       "yearmonth", "yearweek", "category", "death_code", "sex", "age_all"
     ],
     "query": {
       "bool": {
         "filter": [
-          { "match": { "loc_code": "jpn" } },
+          { "match": { "loc": "jpn" } },
           { "match": { "category": "death" } },
           { "term":  { "rate": "" } },
           { "term":  { "algo": "" } },
@@ -170,7 +170,7 @@ curl -sS -H 'Content-Type: application/json' \
   }'
 ```
 
-`loc_code` normally uses lowercase ISO alpha-3 country codes; Japan is `jpn`.
+`loc` normally uses lowercase ISO alpha-3 country codes; Japan is `jpn`.
 Japanese municipalities use codes such as `jp132101`.
 
 ### Date, cause of death, and sex
@@ -184,7 +184,7 @@ Japanese municipalities use codes such as `jp132101`.
   "query": {
     "bool": {
       "filter": [
-        { "match": { "loc_code": "jpn" } },
+        { "match": { "loc": "jpn" } },
         { "match": { "category": "death" } },
         { "match": { "death_code": "02100" } },
         { "match": { "sex": "both" } },
@@ -261,7 +261,7 @@ first request must define a unique sort order.
 ```json
 {
   "size": 1000,
-  "query": { "term": { "loc_code": "jpn" } },
+  "query": { "term": { "loc": "jpn" } },
   "sort": [
     { "date": "asc" },
     { "id": "asc" }
@@ -280,7 +280,7 @@ pass that value unchanged to the next request:
 ```json
 {
   "size": 1000,
-  "query": { "term": { "loc_code": "jpn" } },
+  "query": { "term": { "loc": "jpn" } },
   "search_after": ["2024-01-07", "jpn_2024w01_death__allcause__stmfrecon_both"],
   "sort": [
     { "date": "asc" },
@@ -301,7 +301,7 @@ const response = await fetch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       size: 100,
-      query: { term: { loc_code: "jpn" } }
+      query: { term: { loc: "jpn" } }
     })
   }
 );

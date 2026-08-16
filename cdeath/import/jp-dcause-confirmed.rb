@@ -71,10 +71,10 @@ end
 
 def record(year, month, code, cause, sex, ages)
   period = format('%04dm%02d', year, month)
-  id = Mstats2026.record_id(loc_code: 'jpn', period: period, category: 'death',
+  id = Mstats2026.record_id(loc: 'jpn', period: period, category: 'death',
                             death_code: code, type: 'cfm', sex: sex)
   [id, {
-    id: id, loc_code: 'jpn', location: 'Japan', yearmonth: period, category: 'death',
+    id: id, loc: 'jpn', area: 'Japan', yearmonth: period, category: 'death',
     death_code: code, death_cause: cause, type: 'cfm', src_url: [source_url(year)],
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: sex
   }.merge(ages.transform_keys(&:to_sym))]

@@ -36,24 +36,24 @@ common_years.each do |year|
   perinatal_deaths = Integer(perinatal_row.fetch(1))
   late_fetal_deaths = Integer(perinatal_row.fetch(5))
   deliveries = births + late_fetal_deaths
-  common = { loc_code: 'jpn', location: 'Japan', date: "#{year}-01-01", year: year,
+  common = { loc: 'jpn', area: 'Japan', date: "#{year}-01-01", year: year,
              sex: 'both', type: 'cfm' }
 
-  birth_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'birth', type: 'cfm', sex: 'both')
+  birth_id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'birth', type: 'cfm', sex: 'both')
   rows[birth_id] = common.merge(id: birth_id, category: 'birth',
                                 src_url: [INFANT_URL], age_all: births)
 
-  delivery_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'delivery', type: 'cfm', sex: 'both')
+  delivery_id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'delivery', type: 'cfm', sex: 'both')
   rows[delivery_id] = common.merge(id: delivery_id, category: 'delivery',
                                    src_url: [INFANT_URL, PERINATAL_URL], age_all: deliveries)
 
-  infant_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'death',
+  infant_id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'death',
                                    death_code: 'infant', type: 'cfm', sex: 'both')
   rows[infant_id] = common.merge(id: infant_id, category: 'death', death_code: 'infant',
                                  death_cause: 'Infant mortality',
                                  src_url: [INFANT_URL], age_all: infant_deaths)
 
-  perinatal_id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'death',
+  perinatal_id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'death',
                                       death_code: 'perm', type: 'cfm', sex: 'both')
   rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'perm',
                                     death_cause: 'Perinatal mortality',

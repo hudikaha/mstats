@@ -59,11 +59,11 @@ DCAUSE_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&
 SERVER ?= fujikawa.org
 SERVER_MSTATS_DIR ?= mstats
 SERVER_WEB_DIR ?= fujikawa/covid19
-YEARLY_INDEX ?= mstats20260815
+YEARLY_INDEX ?= mstats20260816
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly check csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv \
+.PHONY: help all location-config fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly check csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv \
   yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed \
   upload-exdeaths-sample upload-exdeaths upload-mstats-all check-latest-id-collisions reset-mstats-index check-mstats-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths cod codtr
@@ -91,13 +91,13 @@ define VALIDATE_CSV
 validate_csv() { \
   local category=$$1 file=$$2 header duplicates rows periods first last; \
   header=$$(head -1 "$$file"); \
-  [[ $$header == id,loc_code,location,yearmonth,category,*age_junior ]] || { echo "wrong mstats2026 header: $$file"; return 1; }; \
+  [[ $$header == id,loc,area,areaj,yearmonth,category,*age_junior ]] || { echo "wrong mstats2026 header: $$file"; return 1; }; \
   rows=$$(( $$(wc -l < "$$file") - 1 )); (( rows > 0 )) || { echo "no data rows: $$file"; return 1; }; \
   duplicates=$$(tail -n +2 "$$file" | cut -d, -f1 | LC_ALL=C sort | uniq -d); \
   [[ -z $$duplicates ]] || { echo "duplicate ids: $$file"; return 1; }; \
-  awk -F, -v category="$$category" 'NR > 1 && $$5 != category { exit 1 }' "$$file" || { echo "wrong category: $$file"; return 1; }; \
+  awk -F, -v category="$$category" 'NR > 1 && $$6 != category { exit 1 }' "$$file" || { echo "wrong category: $$file"; return 1; }; \
   ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file" || return 1; \
-  periods=$$(tail -n +2 "$$file" | cut -d, -f4 | LC_ALL=C sort -u); \
+  periods=$$(tail -n +2 "$$file" | cut -d, -f5 | LC_ALL=C sort -u); \
   first=$$(print -r -- "$$periods" | head -1); last=$$(print -r -- "$$periods" | tail -1); \
   echo "$$category: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
 }
@@ -107,11 +107,11 @@ define VALIDATE_WEEKLY_CSV
 validate_weekly_csv() { \
   local file=$$1 header summary; \
   header=$$(head -1 "$$file"); \
-  [[ $$header == id,loc_code,location,yearweek,category,*age_50_64 ]] || { echo "wrong weekly mstats2026 header: $$file"; return 1; }; \
+  [[ $$header == id,loc,area,areaj,yearweek,category,*age_50_64 ]] || { echo "wrong weekly mstats2026 header: $$file"; return 1; }; \
   summary=$$(awk -F, 'NR == 1 { next } \
     seen[$$1]++ { duplicate = $$1; exit } \
-    $$5 != "death" { wrong_category = $$5; exit } \
-    { rows += 1; if (!period[$$4]++) { periods += 1; if (first == "" || $$4 < first) first = $$4; if ($$4 > last) last = $$4 } } \
+    $$6 != "death" { wrong_category = $$6; exit } \
+    { rows += 1; if (!period[$$5]++) { periods += 1; if (first == "" || $$5 < first) first = $$5; if ($$5 > last) last = $$5 } } \
     END { \
       if (duplicate != "") { print "duplicate weekly id: " duplicate > "/dev/stderr"; exit 1 } \
       if (wrong_category != "") { print "wrong weekly category: " wrong_category > "/dev/stderr"; exit 1 } \
@@ -123,6 +123,7 @@ validate_weekly_csv() { \
 endef
 
 help:
+	@echo 'make location-config locに対応する日英地域名とmortyear用地域分類を再生成'
 	@echo 'make check    原CSVの月抜けと変換結果を検証'
 	@echo 'make fetch    Codexで人口・死因の次月公開確認と取得（既存CSVは検証しない）'
 	@echo 'make fetch-pop   Codexで人口の新規原CSVを取得'
@@ -154,21 +155,21 @@ help:
 	@echo 'make upload-oecd 最新のOECD乳児・周産期年次CSVをserverへ送る（投入しない）'
 	@echo 'make upload-un-monthly 最新のUN月次死亡CSVをserverへ送る（投入しない）'
 	@echo 'make upload-confirmed 日本確定数の人口・月次・週次・年次CSVをserverへ送る（投入しない）'
-	@echo 'make logstash-official YEARLY_INDEX=mstats20260814 各国公式dataを指定indexへ投入'
-	@echo 'make logstash-hmd YEARLY_INDEX=mstats20260814 HMDを指定indexへ投入'
-	@echo 'make logstash-wpp YEARLY_INDEX=mstats20260814 WPPを指定indexへ投入'
-	@echo 'make logstash-oecd YEARLY_INDEX=mstats20260814 OECD乳児・周産期dataを指定indexへ投入'
-	@echo 'make logstash-un-monthly YEARLY_INDEX=mstats20260814 UN月次死亡dataを指定indexへ投入'
-	@echo 'make logstash-confirmed YEARLY_INDEX=mstats20260815 日本確定数dataを指定indexへ投入'
+	@echo 'make logstash-official YEARLY_INDEX=mstats20260816 各国公式dataを指定indexへ投入'
+	@echo 'make logstash-hmd YEARLY_INDEX=mstats20260816 HMDを指定indexへ投入'
+	@echo 'make logstash-wpp YEARLY_INDEX=mstats20260816 WPPを指定indexへ投入'
+	@echo 'make logstash-oecd YEARLY_INDEX=mstats20260816 OECD乳児・周産期dataを指定indexへ投入'
+	@echo 'make logstash-un-monthly YEARLY_INDEX=mstats20260816 UN月次死亡dataを指定indexへ投入'
+	@echo 'make logstash-confirmed YEARLY_INDEX=mstats20260816 日本確定数dataを指定indexへ投入'
 	@echo 'make upload-exdeaths-sample 全国7系列の短縮CSVをserverへ送る（投入しない）'
 	@echo 'make logstash-exdeaths-sample YEARLY_INDEX=mstats20260816 全国7系列を指定indexへ投入'
 	@echo 'make upload-exdeaths 全国・47都道府県の7系列CSVをserverへ送る（投入しない）'
-	@echo 'make logstash-exdeaths YEARLY_INDEX=mstats20260815 全国・47都道府県の7系列を指定indexへ投入'
+	@echo 'make logstash-exdeaths YEARLY_INDEX=mstats20260816 全国・47都道府県の7系列を指定indexへ投入'
 	@echo 'make upload-mstats-all 全系列の最新CSVをserverへ送りsymlinkを更新'
 	@echo 'make check-latest-id-collisions 各系列の最新版1本ずつについて横断ID重複を検査'
-	@echo 'make reset-mstats-index YEARLY_INDEX=mstats20260815 指定物理indexだけを削除・新規作成'
-	@echo 'make check-mstats-index YEARLY_INDEX=mstats20260815 mappingと件数を表示'
-	@echo 'make switch-mstats-alias YEARLY_INDEX=mstats20260814 mstats aliasをatomicに切替え'
+	@echo 'make reset-mstats-index YEARLY_INDEX=mstats20260816 指定物理indexだけを削除・新規作成'
+	@echo 'make check-mstats-index YEARLY_INDEX=mstats20260816 mappingと件数を表示'
+	@echo 'make switch-mstats-alias YEARLY_INDEX=mstats20260816 mstats aliasをatomicに切替え'
 	@echo 'make validate-csv FILES="..." 投入前に期間・ID・値・出典を検査'
 	@echo 'make cod      CSV更新があればサーバへ送りLogstashで投入'
 	@echo 'make codtr    make codと同じデータ更新（codtr.rbは年未完の月も表示）'
@@ -176,6 +177,12 @@ help:
 	@echo 'make logstash サーバ上でmstats2026.confを一回実行'
 
 fetch: fetch-pop fetch-death
+
+location-config:
+	@ruby "$(ROOT)/bin/export-areas.rb" "$(ROOT)/config/areas.json"
+	@python3 "$(ROOT)/bin/export-regions.py" "$(WPP_DEMOGRAPHIC)" "$(ROOT)/config/regions.json"
+	@cp "$(ROOT)/config/regions.json" "$(ROOT)/../web/mort-regions.json"
+	@echo 'updated config/areas.json, config/regions.json, and web/mort-regions.json'
 
 all: fetch cod
 
@@ -452,11 +459,11 @@ mort-csv:
 	 echo "[mort-csv] $${death:t}と$${pop:t}から週次CSVを生成します。"; \
 	 if ! ruby "$(ROOT)/import/jp-dcause-weekly.rb" --population "$$pop" "$$death" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
 	 header=$$(head -1 "$$tmp"); \
-	 [[ $$header == id,loc_code,location,yearweek,category,*age_50_64 ]] || { echo "wrong weekly mstats2026 header: $$tmp"; rm -f "$$tmp"; exit 1; }; \
+	 [[ $$header == id,loc,area,areaj,yearweek,category,*age_50_64 ]] || { echo "wrong weekly mstats2026 header: $$tmp"; rm -f "$$tmp"; exit 1; }; \
 	 rows=$$(( $$(wc -l < "$$tmp") - 1 )); (( rows > 0 )) || { echo "no weekly data rows: $$tmp"; rm -f "$$tmp"; exit 1; }; \
 	 duplicates=$$(tail -n +2 "$$tmp" | cut -d, -f1 | LC_ALL=C sort | uniq -d | head -1); \
 	 [[ -z $$duplicates ]] || { echo "duplicate weekly id: $$duplicates"; rm -f "$$tmp"; exit 1; }; \
-	 periods=$$(tail -n +2 "$$tmp" | cut -d, -f4 | LC_ALL=C sort -u); \
+	 periods=$$(tail -n +2 "$$tmp" | cut -d, -f5 | LC_ALL=C sort -u); \
 	 first=$$(print -r -- "$$periods" | head -1); last=$$(print -r -- "$$periods" | tail -1); \
 	 mv "$$tmp" "$$out"; \
 	 echo "created $$out: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
@@ -473,7 +480,7 @@ stmf-csv:
 	 rows=$$(( $$(wc -l < "$$tmp") - 1 )); (( rows > 0 )) || { echo "no STMF rows: $$tmp"; rm -f "$$tmp"; exit 1; }; \
 	 duplicates=$$(tail -n +2 "$$tmp" | cut -d, -f1 | LC_ALL=C sort | uniq -d | head -1); \
 	 [[ -z $$duplicates ]] || { echo "duplicate STMF id: $$duplicates"; rm -f "$$tmp"; exit 1; }; \
-	 periods=$$(tail -n +2 "$$tmp" | cut -d, -f4 | LC_ALL=C sort -u); \
+	 periods=$$(tail -n +2 "$$tmp" | cut -d, -f5 | LC_ALL=C sort -u); \
 	 first=$$(print -r -- "$$periods" | head -1); last=$$(print -r -- "$$periods" | tail -1); \
 	 mv "$$tmp" "$$out"; \
 	 echo "created $$out: rows=$$rows periods=$$(print -r -- "$$periods" | wc -l | tr -d ' ') ($$first..$$last)"; \
@@ -664,9 +671,10 @@ logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly lo
 	@echo '[$@] $(YEARLY_INDEX)へ投入します。'; \
 	 for file in $(IMPORT_FILES); do \
 	   resolved=$$(ssh $(SERVER) "readlink -f '$$file'"); test -n "$$resolved" || { echo "cannot resolve $$file"; exit 1; }; \
-	   run_id=$$(date +%s); \
+	   run_id=$$(date +%s); started=$$SECONDS; \
 	   echo "[$@] $${file:t}"; \
 	   ssh -tt $(SERVER) "sudo systemctl stop logstash; sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); export MSTATS_YEARLY_INDEX=$(YEARLY_INDEX); export MSTATS_IMPORT_PATH=$$resolved; exec $(LOGSTASH) --path.settings /etc/logstash --path.data /tmp/mstats-import-$$run_id -w 1 -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-import.conf'"; \
+	   echo "[timing] $${file:t}: $$((SECONDS - started))s"; \
 	 done
 
 switch-mstats-alias:

@@ -6,7 +6,8 @@ require 'json'
 # 死因と人口を共通のmstats2026 CSV形式へ出力する。
 # Emit cause-of-death and population records in the shared mstats2026 CSV schema.
 module Mstats2026
-  ID_FIELDS = %i[loc_code period category rate death_code algo type sex].freeze
+  ID_FIELDS = %i[loc period category rate death_code algo type sex].freeze
+  AREA_FILE = File.expand_path('../config/areas.json', __dir__)
   WHO_WORLD_STANDARD = {
     'age_00_04' => 8.86, 'age_05_09' => 8.69, 'age_10_14' => 8.60,
     'age_15_19' => 8.47, 'age_20_24' => 8.22, 'age_25_29' => 7.93,
@@ -46,24 +47,24 @@ module Mstats2026
   ].freeze
 
   FIELDS = (%w[
-    id loc_code location yearmonth category rate death_code death_cause
+    id loc area areaj yearmonth category rate death_code death_cause
     algo type src_url date year month sex
   ] + AGE_FIELDS).freeze
 
   WEEKLY_FIELDS = (%w[
-    id loc_code location yearweek category rate death_code death_cause
+    id loc area areaj yearweek category rate death_code death_cause
     algo type src_url date year week sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
 
   YEARLY_FIELDS = (%w[
-    id loc_code location category rate death_code death_cause
+    id loc area areaj category rate death_code death_cause
     algo type src_url date year sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
 
   # 日本語: 文書IDを全category共通の8要素から生成し、要素内のunderscoreを拒否する。
   # English: Build document IDs from eight shared components and reject underscores inside components.
-  def self.record_id(loc_code:, period:, category:, rate: '', death_code: '', algo: '', type: '', sex:)
-    values = [loc_code, period, category, rate, death_code, algo, type, sex].map(&:to_s)
+  def self.record_id(loc:, period:, category:, rate: '', death_code: '', algo: '', type: '', sex:)
+    values = [loc, period, category, rate, death_code, algo, type, sex].map(&:to_s)
     invalid = ID_FIELDS.zip(values).select { |_field, value| value.include?('_') }
     unless invalid.empty?
       detail = invalid.map { |field, value| "#{field}=#{value.inspect}" }.join(', ')
@@ -77,9 +78,18 @@ module Mstats2026
   def self.record_id_for(row)
     fetch = ->(field) { row[field] || row[field.to_s] }
     period = fetch.call(:yearmonth) || fetch.call(:yearweek) || fetch.call(:year)
-    record_id(loc_code: fetch.call(:loc_code), period: period, category: fetch.call(:category),
+    record_id(loc: fetch.call(:loc), period: period, category: fetch.call(:category),
               rate: fetch.call(:rate), death_code: fetch.call(:death_code), algo: fetch.call(:algo),
               type: fetch.call(:type), sex: fetch.call(:sex))
+  end
+
+  # 日本語: 地域codeから日英名称を補い、全CSVで同じ表記を使う。
+  # English: Fill bilingual names from the location code for consistent CSV output.
+  def self.area_names(row)
+    @areas ||= JSON.parse(File.read(AREA_FILE))
+    loc = row[:loc] || row['loc']
+    known = @areas.fetch(loc.to_s.downcase, {})
+    [row[:area] || row['area'] || known['area'], row[:areaj] || row['areaj'] || known['areaj']]
   end
 
   # フィールド順を固定し、空値を保ったままCSVを出力する。
@@ -107,8 +117,15 @@ module Mstats2026
     csv << fields
     rows.keys.sort.each do |id|
       row = rows.fetch(id)
+      area, areaj = area_names(row)
       csv << fields.map do |field|
-        value = row[field.to_sym]
+        value = if field == 'area'
+                  area
+                elsif field == 'areaj'
+                  areaj
+                else
+                  row[field.to_sym]
+                end
         value = JSON.generate(value) if value.is_a?(Array)
         # 日本語: 原表の記号の意味は入力ごとに異なるため、共通層で欠測へ変換しない。
         # English: Source-marker meanings vary, so never silently convert them to missing here.

@@ -176,14 +176,14 @@ ARGV.each do |file|
         end
         next if row['区分'] != '人口' || ! (age = $ages[row['年齢階級']])
         $sexes.each do |k, v|
-            id = Mstats2026.record_id(loc_code: 'jpn', period: "#{year}m#{month}",
+            id = Mstats2026.record_id(loc: 'jpn', period: "#{year}m#{month}",
                                       category: 'pop', type: type, sex: v)
             if ! $health[id]
                 $health[id] = {
                     id: id,
                     category: 'pop',
-                    loc_code: 'jpn',
-                    location: 'Japan',
+                    loc: 'jpn',
+                    area: 'Japan',
                     date: "#{year}-#{month}-01",
                     yearmonth: "#{year}m#{month}",
                     year: year,

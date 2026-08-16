@@ -94,11 +94,11 @@ def parse(path)
     next unless sex
 
     values = ages.zip(row.drop(2)).filter_map { |age, value| [age, number(value)] if age }.to_h
-    id = Mstats2026.record_id(loc_code: 'jpn', period: year, category: 'death',
+    id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'death',
                               death_code: previous_code, type: 'cfm', sex: sex)
     raise "duplicate ID: #{id}" if rows.key?(id)
     rows[id] = {
-      id: id, loc_code: 'jpn', location: 'Japan', category: 'death',
+      id: id, loc: 'jpn', area: 'Japan', category: 'death',
       death_code: previous_code, death_cause: previous_cause, type: 'cfm',
       src_url: [source_url(path, year)], date: "#{year}-01-01", year: year, sex: sex
     }.merge(values.transform_keys(&:to_sym))
