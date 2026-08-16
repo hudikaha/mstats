@@ -16,7 +16,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | keyword | Unique record identifier |
-| `loc_code` | keyword | Lowercase location code; normally ISO 3166-1 alpha-3 for countries and codes such as `jp132101` for municipalities |
+| `loc_code` | keyword | Lowercase location code; normally ISO 3166-1 alpha-3 for countries, `jp01`–`jp47` for prefectures, and codes such as `jp132101` for municipalities |
 | `location` | keyword | Location name |
 | `world_region` | keyword | Broad UN geographic region, when supplied by an international source |
 | `date` | date | First day of a month or the reference date for a week |
@@ -43,6 +43,17 @@ algorithm, type, and sex—with `_`. Underscores are not allowed inside a compon
 empty components remain as empty positions. For example,
 `jpn_2009w02_death__allcause__stmfrecon_both` is the source-value
 record for Japan, ISO week 2 of 2009, all causes, and both sexes.
+
+Japan's actual weekly `stmf` records use `Observed_weighted` from the
+[Japan Excess and Exiguous Deaths Dashboard](https://exdeaths-japan.org/).
+They cover Japan (`jpn`) and all prefectures (`jp01`–`jp47`) for all causes,
+malignant neoplasms, circulatory diseases, respiratory diseases, senility,
+suicide, and COVID-19. COVID-19 is derived by subtracting non-COVID-19 deaths
+from all-cause deaths for the same location and week. Weeks where independently
+adjusted values produce a negative difference are treated as missing rather than
+rounded to zero. When actual weekly `stmf` and monthly allocated `stmfrecon`
+overlap, a display prefers `stmf` if it contains the required age fields and
+otherwise uses `stmfrecon`.
 
 Every record has `src_url`. In the source CSV it is a JSON array, because a
 derived record may depend on more than one source, such as mortality counts,

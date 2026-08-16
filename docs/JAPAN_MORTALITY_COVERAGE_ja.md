@@ -19,4 +19,4 @@
 
 ASRは年次の年齢階級別死亡数と人口から直接法で計算します。古い人口表では最高齢層が`75歳以上`または`85歳以上`にまとめられているため、その年に公表された人口階級へ死亡数と標準人口weightも合わせて集約します。この期間のASRは、詳細な高齢階級がある年より粗い近似です。`75歳以上`はASR計算途中の補助区分であり、Elasticsearch fieldとしては保存しません。
 
-人口には、[e-Stat「人口推計 各月1日現在人口」](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0)を使用します。STMFは全死因の週次補完に使用し、UN月次死亡数は全年齢・全死因の月次補完にだけ使用します。
+人口には、[e-Stat「人口推計 各月1日現在人口」](https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0)を使用します。[日本の超過死亡ダッシュボード](https://exdeaths-japan.org/)の実週次STMFは、全年齢の全死因、悪性新生物、循環器系、呼吸器系、老衰、自殺、COVID-19に使用します。実週次がある期間はこれを優先し、その他の期間・年齢階級は月次から按分した週次値で補います。UN月次死亡数は全年齢・全死因の月次補完にだけ使用します。

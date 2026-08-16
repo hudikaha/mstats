@@ -851,40 +851,45 @@ end
 # English: Aggregate weekly deaths and rates into complete influenza years starting in W27 or W36.
 def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = 'crude_rate')
   rates = rate_rows.to_h { |row| [[row[:loc_code], row[:yearweek], row[:sex], row[:death_code]], row] }
+  count_metric = metric == 'deaths'
   seasons = Hash.new do |hash, key|
     hash[key] = { deaths: 0.0, population_days: 0.0, covered_days: {}, src_url: [] }
   end
   count_rows.each do |count|
     rate = rates[[count[:loc_code], count[:yearweek], count[:sex], count[:death_code]]]
-    next unless rate
-    deaths = ages.sum { |age| count[age.to_sym].to_f }
-    rate_values = ages.map { |age| rate[age.to_sym] }
     count_values = ages.map { |age| count[age.to_sym] }
-    next if count_values.any?(&:nil?) || rate_values.any? { |value| value.nil? || value.to_f <= 0 }
+    next if count_values.any?(&:nil?)
 
-    populations = ages.each_index.sum do |index|
-      count_values[index].to_f * DAYS_PER_YEAR * 100_000 / (7 * rate_values[index].to_f)
-    end
+    deaths = count_values.sum(&:to_f)
+    rate_values = ages.map { |age| rate&.dig(age.to_sym) }
+    next if !count_metric && (rate.nil? || rate_values.any? { |value| value.nil? || value.to_f <= 0 })
+
+    populations = if count_metric
+                    0.0
+                  else
+                    ages.each_index.sum do |index|
+                      count_values[index].to_f * DAYS_PER_YEAR * 100_000 / (7 * rate_values[index].to_f)
+                    end
+                  end
     week_end = Date.parse(count[:date].to_s)
     week_start = week_end - 6
     (week_start..week_end).group_by { |date| influenza_year_start(date, start_week) }.each do |season_start, dates|
       key = [count[:loc_code], count[:sex], count[:death_code], season_start]
       target = seasons[key]
       target[:deaths] += deaths * dates.length / 7.0
-      target[:population_days] += populations * dates.length
+      target[:population_days] += populations * dates.length unless count_metric
       dates.each { |date| target[:covered_days][date] = true }
-      target[:src_url] |= (Array(count[:src_url]) + Array(rate[:src_url])).compact
+      target[:src_url] |= (Array(count[:src_url]) + Array(rate&.dig(:src_url))).compact
     end
   end
   seasons.filter_map do |(loc, sex, cause, season_start), values|
     season_end = Date.commercial(season_start.cwyear + 1, start_week, 1) - 1
     required_days = (season_start..season_end).count
     next unless season_start.cwyear >= 1999 && values[:covered_days].length == required_days
-    population = values[:population_days] / required_days
-    next unless population.positive?
+    population = count_metric ? 1.0 : values[:population_days] / required_days
+    next unless count_metric || population.positive?
 
-    crude_rate = values[:deaths] / population * 100_000
-    count_metric = metric == 'deaths'
+    crude_rate = count_metric ? nil : values[:deaths] / population * 100_000
     { loc_code: loc.upcase, sex: sex, death_code: cause, year: season_start.cwyear,
       season: "#{season_start.cwyear}/#{format('%02d', (season_start.cwyear + 1) % 100)}",
       deaths: values[:deaths], population: count_metric ? 1.0 : population,
@@ -1029,6 +1034,19 @@ def insert_detail_gaps(rows)
         [left]
       end
     end.then { |items| sorted.empty? ? [] : items + [sorted.last] }
+  end
+end
+
+# 日本語: 同じ週・条件に実週次と月次按分週次があれば実週次だけを採用する。
+# English: Prefer actual weekly records when reconstructed monthly allocations overlap.
+def prefer_actual_weekly(rows, required_fields)
+  rank = { 'stmf' => 0, 'stmfrecon' => 1 }
+  rows.group_by do |row|
+    [row[:loc_code].to_s.downcase, row[:yearweek], row[:category], row[:rate].to_s,
+     row[:death_code], row[:algo].to_s, row[:sex]]
+  end.values.map do |candidates|
+    complete = candidates.select { |row| required_fields.all? { |field| !row[field.to_sym].nil? } }
+    (complete.empty? ? candidates : complete).min_by { |row| rank.fetch(row[:type].to_s, 2) }
   end
 end
 
@@ -1785,8 +1803,11 @@ catalog_ages = if selected_metric == 'asr' && selected_locations == ['JPN'] &&
                else
                  selected_ages
                end
-available_causes = if selected_period != 'calendar'
+available_causes = if selected_period != 'calendar' && selected_metric == 'asr'
                      ['allcause']
+                   elsif selected_period != 'calendar'
+                     available_death_codes(index: opts[:index], fixture: fixture_data,
+                                           locations: selected_locations, metric: selected_metric)
                    elsif selected_metric == 'std_deaths'
                      available_death_codes(index: opts[:index], fixture: fixture_data,
                                            locations: selected_locations, metric: selected_metric)
@@ -1850,7 +1871,7 @@ annual_records_all = if selected_period != 'calendar'
                          source: annual_source_fields
                        )
                      end
-source_fields = %w[id loc_code yearweek category rate death_code algo date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
+source_fields = %w[id loc_code yearweek category rate death_code algo type date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
 # 日本語: 暦年の英国年次系列はGBR、STMFはENGなので、詳細表示の検索時だけ対応付ける。
 # English: Annual UK records use GBR while STMF uses ENG, so map them only for detailed-view queries.
 weekly_locations_for_query = locations_for_query.flat_map { |code| code == 'gbr' ? %w[gbr eng] : [code] }.uniq
@@ -1901,6 +1922,36 @@ else
     filter: common_filters + [{ 'term' => { 'rate' => 'crude' } }],
     source: source_fields
   )
+end
+
+weekly_required_ages = if selected_metric == 'asr' && selected_ages.include?('age_all')
+                         STMF_ASR_AGES
+                       else
+                         selected_ages
+                       end
+count_rows = prefer_actual_weekly(count_rows, weekly_required_ages)
+rate_rows = prefer_actual_weekly(rate_rows, weekly_required_ages)
+
+# 日本語: 日本の全年齢実週次死亡数には率がないため、月次人口から週次粗死亡率を再計算する。
+# English: Recalculate crude rates for Japan's actual all-age weekly counts from monthly populations.
+if selected_metric == 'crude_rate' && selected_ages == ['age_all'] &&
+   selected_sex == 'both' && weekly_locations_for_query.include?('jpn')
+  population_rows = if opts[:fixture]
+                      fixture_data.select do |row|
+                        row[:loc_code].to_s.casecmp('jpn').zero? && row[:yearmonth] &&
+                          row[:category] == 'pop' && row[:age_all]
+                      end
+                    else
+                      elastic_search(
+                        index: opts[:index], size: 100_000,
+                        filter: [{ 'term' => { 'loc_code' => 'jpn' } },
+                                 { 'term' => { 'category' => 'pop' } },
+                                 { 'exists' => { 'field' => 'yearmonth' } },
+                                 { 'exists' => { 'field' => 'age_all' } }],
+                        source: %w[loc_code yearmonth category type age_all]
+                      )
+                    end
+  rate_rows = replace_japan_weekly_crude_rates(count_rows, rate_rows, population_rows)
 end
 
 if selected_period == 'calendar'
@@ -2272,12 +2323,14 @@ HTML
 show_cause_fieldset = if selected_metric == 'birth_rate'
                         true
                       else
-                        selected_period == 'calendar' && selected_locations == ['JPN']
+                        selected_locations == ['JPN']
                       end
 puts <<~HTML
     <fieldset id="cause-fieldset" style="#{show_cause_fieldset ? '' : 'display:none'}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
 HTML
-japan_causes = if menu_catalog
+japan_causes = if selected_period != 'calendar'
+                 available_causes
+               elsif menu_catalog
                  catalog_available_causes(menu_catalog, ['JPN'], selected_metric, selected_sex, selected_ages)
                else
                  annual_catalog.dig('JPN', :death_codes).to_a
@@ -2295,14 +2348,22 @@ SPECIAL_CAUSES.each do |cause, names|
   puts %(<label><input class="cause-option" data-cause-scope="birth" data-locations="#{locations.join(' ')}" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts %(</div></details>)
-top_causes = japan_causes.select { |cause| cause.match?(/\A\d{2}000\z/) && cause != 'allcause' }
-top_causes.each do |parent|
-  children = japan_causes.select { |cause| cause != parent && cause.start_with?(parent[0, 2]) }
+# 日本語: 上位分類recordがない場合も、同じ先頭2桁の死因を既知の分類名の下へ表示する。
+# English: Show causes under their known two-digit group even when the parent record itself is absent.
+numeric_cause_groups = japan_causes.grep(/\A\d{5}\z/).group_by { |cause| cause[0, 2] }
+numeric_cause_groups.sort.each do |prefix, grouped_causes|
+  parent = "#{prefix}000"
+  parent_available = grouped_causes.include?(parent)
+  children = grouped_causes.reject { |cause| cause == parent }
   names = Death_codes.fetch(parent, { ja: parent, en: parent })
-  open = ([parent] + children).any? { |cause| selected_causes.include?(cause) }
+  open = grouped_causes.any? { |cause| selected_causes.include?(cause) }
   puts %(<details #{open ? 'open' : ''}><summary>)
   type = mode == 'country' ? 'radio' : 'checkbox'
-  puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{parent}" #{checked(selected_causes.include?(parent))}>#{parent}: #{CGI.escapeHTML(names.fetch($l))}</label></summary>)
+  if parent_available
+    puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{parent}" #{checked(selected_causes.include?(parent))}>#{parent}: #{CGI.escapeHTML(names.fetch($l))}</label></summary>)
+  else
+    puts %(#{prefix}: #{CGI.escapeHTML(names.fetch($l))}</summary>)
+  end
   unless children.empty?
     puts %(<div class="mortyear-options">)
     children.each do |cause|
@@ -2950,7 +3011,7 @@ else
           {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')", labelOverlap: "greedy", labelSeparation: 6}, title: #{JSON.generate(if selected_period == 'calendar'
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 ? timeFormat(datum.value, '%Y') : year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : year(datum.value) % 100 <= 2 || year(datum.value) % 100 >= 98 ? '' : timeFormat(datum.value, '%y')", labelOverlap: false, labelSeparation: 6}, title: #{JSON.generate(if selected_period == 'calendar'
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
@@ -2997,6 +3058,13 @@ else
         const simulationControl = document.getElementById("simulation-interval-control");
         const simulationInterval = document.getElementById("simulation-interval-checkbox");
         const weeklyView = document.getElementById("weekly-view-checkbox");
+        // 日本語: browserのform復元値より、URLから決めた表示開始年と学習終了年を優先する。
+        // English: Prefer the years derived from the URL over browser-restored form values.
+        startSlider.value = String(displayStartDefault);
+        startOutput.value = periodYearLabel(displayStartDefault);
+        document.getElementById("start-year-hidden").value = String(displayStartDefault);
+        slider.value = String(trainDefault);
+        output.value = periodYearLabel(trainDefault);
         /* 推定φ表示を再開するときのために残す。Keep for restoring the estimated-phi display.
         const dispersionOutput = document.getElementById("dispersion-output");
         function updateDispersion(value) {

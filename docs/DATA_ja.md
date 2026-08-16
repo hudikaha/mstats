@@ -14,7 +14,7 @@
 | field | 型 | 意味 |
 |---|---|---|
 | `id` | keyword | recordを一意に識別するID |
-| `loc_code` | keyword | 小文字の地域code。国は原則ISO 3166-1 alpha-3、自治体は`jp132101`など |
+| `loc_code` | keyword | 小文字の地域code。国は原則ISO 3166-1 alpha-3、都道府県は`jp01`～`jp47`、市区町村は`jp132101`など |
 | `location` | keyword | 地域名 |
 | `world_region` | keyword | 国際dataに含まれる場合のUN大地域区分 |
 | `date` | date | 月次は月初、週次は対象週の基準日 |
@@ -38,6 +38,13 @@
 IDは地域、期間、category、rate、死因、algo、type、性別の正確に8要素を`_`で連結します。
 要素内のunderscoreは禁止し、空要素も空の位置として残します。
 例えば`jpn_2009w02_death__allcause__stmfrecon_both`は、日本、2009年第2週、全死因、男女計の元系列です。
+
+日本の実週次`stmf`は、[日本の超過死亡ダッシュボード](https://exdeaths-japan.org/)の
+`Observed_weighted`を使用します。全国は`jpn`、都道府県は`jp01`～`jp47`で、全死因、
+悪性新生物、循環器系、呼吸器系、老衰、自殺、COVID-19を収録します。COVID-19は同じ地域・週の
+全死因からCOVID-19以外を引いた派生値です。独立に補正された値の差が負になる週は、0へ丸めず
+欠測として収録しません。同じ週・条件に実週次`stmf`と月次按分の`stmfrecon`がある場合、表示に
+必要な年齢fieldを持つ`stmf`を優先し、持たない場合は`stmfrecon`を使います。
 
 全recordが`src_url`を持ちます。派生recordでは死亡数、分母人口、標準人口など複数の資料を
 使う場合があるため、元CSVではJSON配列として格納します。Elasticsearchでは非indexの

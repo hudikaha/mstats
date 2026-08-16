@@ -44,6 +44,12 @@ UN_MONTHLY_DIR ?= $(ROOT)/src/un
 UN_MONTHLY_ARCHIVE ?= $(UN_MONTHLY_DIR)/un-monthly-mortality.zip
 UN_MONTHLY_SOURCE ?= $(UN_MONTHLY_DIR)/UNdata_Export_mortality.csv
 UN_MONTHLY_URL := https://data.un.org/Handlers/DownloadHandler.ashx?DataFilter=tableCode%3A65&DataMartId=POP&Format=csv
+EXDEATHS_DIR ?= $(ROOT)/src/exdeaths
+EXDEATHS_ALL ?= $(EXDEATHS_DIR)/Observed.csv
+EXDEATHS_CAUSE_ARCHIVE ?= $(EXDEATHS_DIR)/Observed.csv.zip
+EXDEATHS_CAUSE_DIR ?= $(EXDEATHS_DIR)/cause
+EXDEATHS_URL := https://exdeaths-japan.org/data/Observed.csv
+EXDEATHS_CAUSE_URL := https://exdeaths-japan.org/data/Observed.csv.zip
 DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
 
@@ -57,10 +63,10 @@ YEARLY_INDEX ?= mstats20260815
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-wpp fetch-un-monthly check csv schema-csv mort-csv stmf-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv \
+.PHONY: help all fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly check csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv \
   yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed \
-  upload-mstats-all check-latest-id-collisions reset-mstats-index check-mstats-index switch-mstats-alias upload logstash cod codtr
+  upload-exdeaths-sample upload-exdeaths upload-mstats-all check-latest-id-collisions reset-mstats-index check-mstats-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -133,6 +139,9 @@ help:
 	@echo 'make confirmed-sample-csv 1999年だけで確定人口・年次死亡のfieldとIDを短縮検査'
 	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
 	@echo 'make stmf-csv STMF pooled CSVをmstats2026週次CSVへ変換（投入しない）'
+	@echo 'make fetch-exdeaths 超過死亡dashboardの全死因・死因別CSVを取得'
+	@echo 'make exdeaths-sample-csv 全国7系列の短縮検査CSVを生成（投入しない）'
+	@echo 'make exdeaths-csv 全国・47都道府県の7系列CSVを生成（投入しない）'
 	@echo 'make yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
 	@echo 'make jp-yearly-csv 最新の日本月次CSVから年次CSVを生成（投入しない）'
 	@echo 'make jp-infant-yearly-csv 日本の乳児・周産期死亡の年次CSVを生成（投入しない）'
@@ -151,6 +160,10 @@ help:
 	@echo 'make logstash-oecd YEARLY_INDEX=mstats20260814 OECD乳児・周産期dataを指定indexへ投入'
 	@echo 'make logstash-un-monthly YEARLY_INDEX=mstats20260814 UN月次死亡dataを指定indexへ投入'
 	@echo 'make logstash-confirmed YEARLY_INDEX=mstats20260815 日本確定数dataを指定indexへ投入'
+	@echo 'make upload-exdeaths-sample 全国7系列の短縮CSVをserverへ送る（投入しない）'
+	@echo 'make logstash-exdeaths-sample YEARLY_INDEX=mstats20260816 全国7系列を指定indexへ投入'
+	@echo 'make upload-exdeaths 全国・47都道府県の7系列CSVをserverへ送る（投入しない）'
+	@echo 'make logstash-exdeaths YEARLY_INDEX=mstats20260815 全国・47都道府県の7系列を指定indexへ投入'
 	@echo 'make upload-mstats-all 全系列の最新CSVをserverへ送りsymlinkを更新'
 	@echo 'make check-latest-id-collisions 各系列の最新版1本ずつについて横断ID重複を検査'
 	@echo 'make reset-mstats-index YEARLY_INDEX=mstats20260815 指定物理indexだけを削除・新規作成'
@@ -212,7 +225,37 @@ fetch-stmf:
 	 echo '[fetch-stmf] HMDからSTMF pooled CSVを取得します。'; \
 	 if ! ruby "$(ROOT)/import/fetch-stmf.rb" "$$out"; then rm -f "$$out"; exit 1; fi; \
 	 ln -sfn "$${out:t}" "$(STMF_SOURCE)"; \
-	 echo "updated $(STMF_SOURCE) -> $${out:t}"
+	echo "updated $(STMF_SOURCE) -> $${out:t}"
+
+fetch-exdeaths:
+	@mkdir -p "$(EXDEATHS_DIR)" "$(EXDEATHS_CAUSE_DIR)"; \
+	 all_tmp="$(EXDEATHS_ALL).tmp"; cause_tmp="$(EXDEATHS_CAUSE_ARCHIVE).tmp"; \
+	 curl -fL --retry 3 '$(EXDEATHS_URL)' -o "$$all_tmp"; \
+	 curl -fL --retry 3 '$(EXDEATHS_CAUSE_URL)' -o "$$cause_tmp"; \
+	 [[ $$(head -1 "$$all_tmp" | tr -d '\r') == 'prefecture_id,prefectureJP,prefecture_EN,week_ending_date,Observed_weighted,Observed' ]] || { rm -f "$$all_tmp" "$$cause_tmp"; echo 'unexpected Observed.csv header'; exit 1; }; \
+	 unzip -t "$$cause_tmp" >/dev/null; old_causes=("$(EXDEATHS_CAUSE_DIR)"/*.csv(N)); (( $$#old_causes == 0 )) || rm -f $$old_causes; \
+	 unzip -q "$$cause_tmp" -d "$(EXDEATHS_CAUSE_DIR)"; \
+	 mv "$$all_tmp" "$(EXDEATHS_ALL)"; mv "$$cause_tmp" "$(EXDEATHS_CAUSE_ARCHIVE)"; \
+	 echo 'updated exdeaths-japan.org source CSVs'
+
+exdeaths-sample-csv:
+	@test -s "$(EXDEATHS_ALL)" || { echo '先に make fetch-exdeaths を実行してください。'; exit 1; }
+	@mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(DATA_DIR)/exdeaths-weekly-national-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; log="$(STATE_DIR)/exdeaths-sample.log"; \
+	 started=$$SECONDS; \
+	 if ! ruby "$(ROOT)/import/exdeaths-weekly.rb" --prefecture-ids 48 --through 2024-12-29 \
+	   "$(EXDEATHS_ALL)" "$(EXDEATHS_CAUSE_DIR)" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; \
+	 mv "$$tmp" "$$out"; echo "created $$out"; echo "[timing] national conversion/validation: $$((SECONDS - started))s"
+
+exdeaths-csv:
+	@test -s "$(EXDEATHS_ALL)" || { echo '先に make fetch-exdeaths を実行してください。'; exit 1; }
+	@mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
+	 out="$(DATA_DIR)/exdeaths-weekly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; log="$(STATE_DIR)/exdeaths.log"; \
+	 started=$$SECONDS; \
+	 if ! ruby "$(ROOT)/import/exdeaths-weekly.rb" "$(EXDEATHS_ALL)" "$(EXDEATHS_CAUSE_DIR)" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; \
+	 mv "$$tmp" "$$out"; cat "$$log"; echo "created $$out"; echo "[timing] all-area conversion/validation: $$((SECONDS - started))s"
 
 fetch-wpp:
 	@mkdir -p "$(WPP_DIR)"; \
@@ -569,14 +612,28 @@ upload-confirmed:
 	 scp "$$pop" "$$monthly" "$$yearly" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
 	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${pop:t} jp-pop-cfm-legacy-mstats2026.csv && ln -sfn data/$${monthly:t} jp-dcause-cfm-mstats2026.csv && ln -sfn data/$${yearly:t} jp-yearly-cfm-mstats2026.csv"
 
+upload-exdeaths-sample:
+	@files=("$(DATA_DIR)"/exdeaths-weekly-national-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	 test -n "$$file" || { echo '全国短縮CSVがありません。'; exit 1; }; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
+	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} exdeaths-weekly-national-mstats2026.csv"
+
+upload-exdeaths:
+	@files=("$(DATA_DIR)"/exdeaths-weekly-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	 test -n "$$file" || { echo '全地域CSVがありません。'; exit 1; }; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
+	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} exdeaths-weekly-mstats2026.csv"
+
 upload-yearly: upload-official upload-wpp
 
-upload-mstats-all: upload-official upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed
+upload-mstats-all: upload-official upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-exdeaths
 
 check-latest-id-collisions:
 	@patterns=(jp-dcause-mstats2026 jp-pop-mstats2026 jp-dcause-weekly-mstats2026 jp-yearly-mstats2026 \
 	  jp-infant-yearly-mstats2026 us-yearly-mstats2026 jp-pop-cfm-legacy-mstats2026 jp-dcause-cfm-mstats2026 \
-	  jp-yearly-cfm-mstats2026 stmf-weekly-mstats2026 \
+	  jp-yearly-cfm-mstats2026 stmf-weekly-mstats2026 exdeaths-weekly-mstats2026 \
 	  un-wpp-yearly-mstats2026 oecd-infant-yearly-mstats2026 un-monthly-mortality-mstats2026); \
 	 files=(); for pattern in $$patterns; do candidates=("$(DATA_DIR)/$${pattern}-"*.csv(Nom)); \
 	   (( $$#candidates )) || { echo "latest CSV is missing: $$pattern"; exit 1; }; files+=("$${candidates[1]}"); done; \
@@ -601,12 +658,15 @@ logstash-wpp: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-wpp-yearly-ms
 logstash-oecd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/oecd-infant-yearly-mstats2026.csv
 logstash-un-monthly: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-monthly-mortality-mstats2026.csv
 logstash-confirmed: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-cfm-legacy-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-cfm-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-cfm-mstats2026.csv
-logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed:
+logstash-exdeaths-sample: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly-national-mstats2026.csv
+logstash-exdeaths: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly-mstats2026.csv
+logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed logstash-exdeaths-sample logstash-exdeaths:
 	@echo '[$@] $(YEARLY_INDEX)へ投入します。'; \
 	 for file in $(IMPORT_FILES); do \
+	   resolved=$$(ssh $(SERVER) "readlink -f '$$file'"); test -n "$$resolved" || { echo "cannot resolve $$file"; exit 1; }; \
 	   run_id=$$(date +%s); \
 	   echo "[$@] $${file:t}"; \
-	   ssh -tt $(SERVER) "sudo systemctl stop logstash; sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); export MSTATS_YEARLY_INDEX=$(YEARLY_INDEX); export MSTATS_IMPORT_PATH=$$file; exec $(LOGSTASH) --path.settings /etc/logstash --path.data /tmp/mstats-import-$$run_id -w 1 -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-import.conf'"; \
+	   ssh -tt $(SERVER) "sudo systemctl stop logstash; sudo sh -c 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=\$$(cut -d: -f1 \"\$$cred\"); export ES_PASSWORD=\$$(cut -d: -f2- \"\$$cred\"); export MSTATS_YEARLY_INDEX=$(YEARLY_INDEX); export MSTATS_IMPORT_PATH=$$resolved; exec $(LOGSTASH) --path.settings /etc/logstash --path.data /tmp/mstats-import-$$run_id -w 1 -f /Users/magician/$(SERVER_MSTATS_DIR)/mstats-import.conf'"; \
 	 done
 
 switch-mstats-alias:
