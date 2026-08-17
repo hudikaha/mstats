@@ -2421,10 +2421,14 @@ puts <<~HTML
         // 日本語: 複数死因はcod.rbと同じく一つのdeath_codesへ~区切りで保存する。
         // English: Store multiple causes in one tilde-delimited death_codes parameter, as cod.rb does.
         const params = new URLSearchParams(new FormData(event.currentTarget));
-        const ages = params.getAll('age');
+        // 日本語: 非表示の別期間用checkboxを除き、現在の期間に対応する年齢だけをURLへ保存する。
+        // English: Save only ages from the controls for the active period, excluding hidden controls for the other period.
+        const period = params.get('period');
+        const ageSelector = period === 'calendar' ? '.age-option:checked:not(:disabled)' : '.age-season-option:checked:not(:disabled)';
+        const ages = Array.from(event.currentTarget.querySelectorAll(ageSelector)).map(input => input.value);
         params.delete('age');
         params.delete('ages');
-        if (ages.length) params.set('ages', compactAges(ages, params.get('period')));
+        if (ages.length) params.set('ages', compactAges(ages, period));
         const causes = params.getAll('death_codes');
         params.delete('death_codes');
         if (causes.length) params.set('death_codes', causes.join('~'));
@@ -2680,7 +2684,7 @@ puts <<~HTML
           const form = button.closest('form');
           form.querySelector('input[name="l"]').value = button.dataset.language;
           showLoading();
-          form.submit();
+          form.requestSubmit();
         });
       });
       document.querySelectorAll('.location-option').forEach(input => input.addEventListener('change', () => {
