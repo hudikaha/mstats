@@ -81,6 +81,7 @@ __MENU__
 <div class="right-column">
 <div class="site-title">
 <h1 id="h1Title" align=center></h1>
+<a class="site-title-qr" href="https://medicalfacts.info/hpvvhv.rb"><img id="pageQr" src="qr/hpvvhv.rb.svg" alt=""></a>
 </div>
 
 <h2 id="srDesc" class="sr-only"></h2>
@@ -249,6 +250,7 @@ var I18N = {
   ja: {
     title: "HPVワクチン接種後の体調不良新規受診者数の累積と健康被害認定・子宮頸癌患者・死者との比較",
     h1: "HPVワクチン接種後の体調不良新規受診者数の累積と<br>健康被害認定・子宮頸癌患者・死者との比較",
+    qrAlt: "このページのQRコード",
     srDesc: "HPVワクチン健康被害認定者、子宮頸癌罹患者・死亡者、接種後の体調不良を主訴とする協力医療機関の新規受診者について、選択した起点からの累積値を比較する。年齢区分は15歳以上20歳未満から40歳未満まで切り替えられ、自殺・全死因の月次累積値も上段グラフへ追加できる。",
     ageGroupLabel: "15歳以上",
     btn20: "20歳未満",
@@ -298,6 +300,7 @@ var I18N = {
   en: {
     title: "Cumulative Post-HPV-Vaccination Symptom New Hospital Visits Compared with Vaccine Injury Certifications and Cervical Cancer Cases/Deaths",
     h1: "Cumulative Post-HPV-Vaccination Symptom New Hospital Visits<br>Compared with Vaccine Injury Certifications and Cervical Cancer Cases/Deaths",
+    qrAlt: "QR code for this page",
     srDesc: "Cumulative values from the selected starting point for HPV vaccine injury certifications, cervical cancer cases and deaths, and new symptom-related visits to designated medical institutions. Age ranges start at 15, and monthly cumulative suicide and all-cause deaths can also be added to the upper chart.",
     ageGroupLabel: "Age 15 and over",
     btn20: "Under 20",
@@ -922,6 +925,8 @@ function setLang(lang){
   document.title = t.title;
   document.getElementById('pageTitleTag').textContent = t.title;
   document.getElementById('h1Title').innerHTML = t.h1;
+  document.getElementById('pageQr').alt = t.qrAlt;
+  document.getElementById('pageQr').title = t.qrAlt;
   document.getElementById('srDesc').textContent = t.srDesc;
   document.getElementById('ageGroupLabel').textContent = t.ageGroupLabel;
   document.getElementById('btn20').textContent = t.btn20;
