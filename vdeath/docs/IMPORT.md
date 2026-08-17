@@ -21,15 +21,16 @@ vdeathp.rb excess    [options] INPUT...
 The public two-pass workflow first runs `anonymize` to create `IND-WKA`, then
 runs `personyear` or `afterdose` again using that CSV. These outputs retain the
 regular steps (`1`, `3`, `6`, `all`, `week`). Running the aggregation on daily
-source records with `--step-prefix org` creates comparison steps such as
+private disclosure records with `--step-prefix org` creates comparison steps such as
 `org1` and `orgweek`.
 
 Common options are `--headers FILE[,FILE...]`, `--output FILE`, `--age-reference DATE`,
 `--age-seed-version VERSION`, `--open-age-max AGE`, `--allow-dup-id`,
 `--prohibit-reason-in`, and `--report FILE`. Use `--iso-week-dates` for source dates
 stored as week numbers and `--first-infection-only` when reinfections add rows for the
-same person. `--areacode`, `--area`, and `--areaj` supply area metadata when the source
-has no corresponding fields. Use `--skip-source-header` when `--headers` remaps a CSV
+same person. `--loc`, `--area`, and `--areaj` supply area metadata when the source
+has no corresponding fields. Legacy `--areacode` remains an accepted input alias,
+but output uses only `loc`. Use `--skip-source-header` when `--headers` remaps a CSV
 that also contains its own header row. When `--age-reference` is omitted, the day after the latest death in all inputs is used.
 `--spread-weekly-dates SEED` deterministically distributes weekly vaccination, death,
 entry, and exit dates from Monday through Sunday using SHA-256 of the person ID and ISO
@@ -60,18 +61,22 @@ Example:
   --headers src/jp132101_example_header.csv \
   --steps 1,3,6,all \
   --ages 00-09,10-19,80+,all \
-  --output outputs/jp132101_example_PY.csv \
+  --output outputs/jp13210_example_PY.csv \
   src/jp132101_example_all.csv
 ```
 
 The previous multi-purpose implementation is preserved as `import/vdeathp-20251027.rb`.
 
-`import/Makefile` generates `PY`, `PY-WKD`, `CUMD-WK`, and `IND-WKA` for each municipality. Osaka, whose source contains death records only, produces `CUMD-WK` and `DTH-WKA`.
+`import/Makefile` generates `PY-ORG`, `PY-WKD-ORG`, `CUMD-WK`, and `IND-WKA` from
+disclosure records, then re-reads `IND-WKA` to generate the publicly reproducible
+`PY` and `PY-WKD`. Osaka, whose source contains death records only, produces `CUMD-WK`
+and `DTH-WKA`. Because Czech government official records are already public, they
+produce unprefixed `PY`, `PY-WKD`, and `CUMD-WK` directly without producing `IND-WKA`.
 
 ```sh
 cd vdeath/import
 make              # all municipalities
-make jp132101     # Koganei only
+make jp13210      # Koganei only
 make FORCE=1      # regenerate existing outputs
 make cze          # generate vdeath and KCOR from Czech official weekly records
 make cumd-backup  # preserve all current CUMD-WK files for comparison
@@ -83,8 +88,8 @@ make publish-cumd # xz-compress and upload the validated CUMD-WK files
 The Czech official CSV remains outside Git under `~/work/vdeath-src/Czech`. Its 53
 fields are mapped by `import/headers/czech-2024-01.csv`, and the source header row is skipped. Rows for second and later
 infections are excluded, and five-year `RokNarozeni` birth-year bands produce virtual
-birthdays. Because the source is already weekly, Czech output has no daily-precision
-`org*` comparison series.
+birthdays. Czech output has no `org*` comparison series because it has no private
+daily disclosure-record counterpart.
 
 `*-IND-WKA.csv` and `*-DTH-WKA.csv` are anonymized individual records generated from
 private daily individual CSVs. They are published in Elasticsearch as `indiv`

@@ -47,6 +47,13 @@ class VdeathpTest < Minitest::Test
     assert_equal '1', death['deaths']
   end
 
+  def test_six_digit_japanese_code_is_canonicalized_to_five_digits
+    rows, = run_command('personyear', '--start', '2023-01-01', '--until', '2023-02-01',
+                        '--steps', 'all', '--ages', 'all')
+    assert_equal ['jp99999'], rows.map { |row| row['loc'] }.uniq
+    assert rows.all? { |row| row['id'].start_with?('jp99999_') }
+  end
+
   def test_fast_personyear_matches_legacy_output
     options = %w[--start 2021-02-01 --until 2024-07-01 --steps 1,3,6,all --ages 00-09,50-59,70-79,80-89,80+,all]
     fast, = run_command('personyear', *options)
@@ -228,7 +235,7 @@ class VdeathpTest < Minitest::Test
     assert_equal death_risk['deaths'], matching['deaths']
     assert_equal death_risk['at_risk'], matching['pop']
     assert_equal risk_rows.length, cumulative_rows.length
-    assert_equal %w[id areacode area areaj cutoff cweek date age dose deaths pop], cumulative_rows.headers
+    assert_equal %w[id loc area areaj cutoff cweek date age dose deaths pop], cumulative_rows.headers
     risk_rows.zip(cumulative_rows).each do |risk_row, cumulative_row|
       assert_equal risk_row['id'], cumulative_row['id']
       assert_equal risk_row['deaths'], cumulative_row['deaths']
@@ -258,7 +265,7 @@ class VdeathpTest < Minitest::Test
     )
     assert status.success?, "#{stdout}\n#{stderr}"
     death_only_rows = CSV.read(death_only, headers: true)
-    assert_equal %w[id areacode area areaj cutoff cweek date age dose deaths], death_only_rows.headers
+    assert_equal %w[id loc area areaj cutoff cweek date age dose deaths], death_only_rows.headers
     assert death_only_rows.all? { |row| row['deaths'].to_i.positive? }
   end
 
@@ -273,7 +280,7 @@ class VdeathpTest < Minitest::Test
     previous_hazard = 0.0
     start = Date.new(2021, 1, 3)
     CSV.open(input, 'w') do |csv|
-      csv << %w[id areacode area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
+      csv << %w[id loc area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
       80.times do |index|
         date = start + 7 * (index + 1)
         cumulative_hazard = Math.log(1.0 + theta * k * (index + 1)) / theta

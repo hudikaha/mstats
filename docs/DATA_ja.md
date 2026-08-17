@@ -14,7 +14,7 @@
 | field | 型 | 意味 |
 |---|---|---|
 | `id` | keyword | recordを一意に識別するID |
-| `loc` | keyword | 小文字の地域code。国は原則ISO 3166-1 alpha-3、都道府県は`jp01`～`jp47`、市区町村は`jp132101`など |
+| `loc` | keyword | 小文字の地域code。国は原則ISO 3166-1 alpha-3、都道府県は`jp01`～`jp47`、市区町村は`jp13210`など |
 | `area` | keyword | 英語の地域名 |
 | `areaj` | keyword | 日本語の地域名 |
 | `date` | date | 月次は月初、週次は対象週の基準日 |
@@ -103,8 +103,8 @@ UN World Population Prospects 2024の年次recordは1950～2100年を収録し�
 
 | field | 型 | 意味 |
 |---|---|---|
-| `id` | keyword | `areacode_cutoff_cweek_age_dose`形式の一意なID |
-| `areacode` | keyword | 自治体code |
+| `id` | keyword | `loc_cutoff_cweek_age_dose`形式の一意なID |
+| `loc` | keyword | 地域code。日本の市区町村は`jp`と5桁の標準地域code |
 | `area`, `areaj` | keyword | 英語・日本語の自治体名 |
 | `cutoff` | date | cohortの年齢と接種回数を固定する日 |
 | `cweek` | keyword | 累積値を観測するISO週 |
@@ -129,7 +129,7 @@ Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrec
 | field | 型 | 意味 |
 |---|---|---|
 | `id` | keyword | 自治体、step、period、age、doseから作るID |
-| `areacode`, `area`, `areaj` | keyword | 自治体codeと英語・日本語名 |
+| `loc`, `area`, `areaj` | keyword | 地域codeと英語・日本語名 |
 | `step` | keyword / integer | `1`、`3`、`6`か月または`all` |
 | `period` | keyword | `2024m01`などの期間code |
 | `age` | keyword | `00-09`、`80+`、`all`など |
@@ -144,10 +144,10 @@ Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrec
 
 年齢は各期間中の年齢で判定し、誕生日を跨ぐperson-daysは前後の年齢階級へ分割します。
 
-公開`vdeath`には日付精度の異なる2系列があります。通常の`1`、`3`、`6`、
-`all`、`week`は、公開した週単位匿名化`IND-WKA` CSVを再入力して計算した系列です。
-`org1`、`org3`、`org6`、`orgall`、`orgweek`は日単位の元個票から計算した比較系列です。
-各pageは通常系列をdefaultで使い、比較時だけ`org*`を選択します。
+公開`vdeath`には生成元の異なる2系列があります。通常の`1`、`3`、`6`、`all`、`week`は
+誰でも再現できる系列です。日本では公開した週単位匿名化`IND-WKA` CSVを再入力して計算し、
+チェコでは政府公式個票から直接計算します。`org1`、`org3`、`org6`、`orgall`、`orgweek`は、
+非公開の日単位情報開示個票から直接計算した比較系列です。
 
 ## afterdose / PY-WKD（公開CSVなし。表示はElasticsearch）
 
@@ -163,7 +163,7 @@ Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrec
 | field | 意味 |
 |---|---|
 | `id` | 自治体code、年齢階級、元IDのhashから作る匿名ID |
-| `areacode`, `area`, `areaj` | 自治体codeと名称 |
+| `loc`, `area`, `areaj` | 地域codeと名称 |
 | `age`, `date_age` | 年齢階級と、その年齢の基準日 |
 | `vbirthday` | 年齢または年齢区分からhashで決めた仮想誕生日。実際の誕生日ではない |
 | `cweek_in`, `date_in` | 転入のISO週と、その日曜日 |

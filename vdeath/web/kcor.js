@@ -102,7 +102,7 @@
 
   const resetGamma = () => {
     gammaMode = false;
-    const osaka = document.querySelector('input.area[value="jp271004"]');
+    const osaka = document.querySelector('input.area[value="jp27100"]');
     if (osaka) {
       osaka.disabled = false;
       if (osakaCheckedBeforeGamma) osaka.checked = true;
@@ -257,11 +257,11 @@
   };
 
   const rebuildControls = previous => {
-    const compareAreas = (a, b) => Number(a.areacode === 'cze') - Number(b.areacode === 'cze') ||
-      a.areacode.localeCompare(b.areacode);
+    const compareAreas = (a, b) => Number(a.loc === 'cze') - Number(b.loc === 'cze') ||
+      a.loc.localeCompare(b.loc);
     const areas = [...currentData.areas.values()]
       .sort(compareAreas)
-      .map(item => ({value: item.areacode, label: config.language === 'ja' ? item.areaj : item.area}));
+      .map(item => ({value: item.loc, label: config.language === 'ja' ? item.areaj : item.area}));
     areas.sort((a, b) => Number(a.value === 'cze') - Number(b.value === 'cze') || a.value.localeCompare(b.value));
     const availableAges = [...new Set([...currentData.groups.values()].map(rows => rows[0].age))];
     const ages = [
@@ -315,7 +315,7 @@
       if (!cache.has(cutoff)) {
         cache.set(cutoff, fetchJson({
           size: 1000000,
-          _source: ['areacode', 'area', 'areaj', 'date', 'age', 'dose', 'pop', 'deaths'],
+          _source: ['loc', 'areacode', 'area', 'areaj', 'date', 'age', 'dose', 'pop', 'deaths'],
           query: {bool: {filter: [{term: {cutoff}}, {exists: {field: 'date'}}]}},
           sort: [{date: 'asc'}, {id: 'asc'}]
         }).then(result => {
@@ -323,12 +323,14 @@
           const areas = new Map();
           for (const hit of result.hits.hits) {
             const row = hit._source;
+            row.loc ||= row.areacode;
+            if (/^jp\d{6}$/.test(row.loc)) row.loc = row.loc.slice(0, 7);
             row.dose = Number(row.dose);
             row.pop = row.pop == null ? 0 : Number(row.pop);
-            const key = groupKey(row.areacode, row.age, row.dose);
+            const key = groupKey(row.loc, row.age, row.dose);
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push(row);
-            areas.set(row.areacode, row);
+            areas.set(row.loc, row);
           }
           // 週死亡数は固定コホートの累積死亡数の前週差から復元する。
           // Recover weekly deaths from week-to-week differences in fixed-cohort cumulative deaths.
@@ -468,7 +470,7 @@
     const quietStart = Number(document.getElementById('quiet-start').value);
     const quietEnd = Number(document.getElementById('quiet-end').value);
     const fitEnd = Number(document.getElementById('fit-end').value);
-    const gammaEligible = !selected('area').has('jp271004');
+    const gammaEligible = !selected('area').has('jp27100');
     const fit1 = gammaEligible ? fitGamma(series1, quietStart, quietEnd) : null;
     const fit2 = gammaEligible ? fitGamma(series2, quietStart, quietEnd) : null;
     const quietPoints = quietEnd - quietStart + 1;
@@ -917,7 +919,7 @@
           resetGamma();
         } else {
           gammaMode = true;
-          const osaka = document.querySelector('input.area[value="jp271004"]');
+          const osaka = document.querySelector('input.area[value="jp27100"]');
           if (osaka) {
             osakaCheckedBeforeGamma = osaka.checked;
             osaka.checked = false;

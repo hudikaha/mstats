@@ -89,10 +89,10 @@ _source:
 | index | 内容 | 主なfield |
 |---|---|---|
 | `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
-| `kcor` | cutoff別KCOR集計 | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
-| `vdeath` | 年齢区分・接種回数ごとの年齢補正済み接種後死亡分析 | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
-| `indiv` | 週単位匿名化個票（IND-WKA） | `id`, `vbirthday`, `date_doseN`, `date_death` |
-| `indivdth` | 死亡者のみの週単位匿名化個票（DTH-WKA） | `id`, `vbirthday`, `date_death` |
+| `kcor` | cutoff別KCOR集計 | `id`, `loc`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
+| `vdeath` | 年齢区分・接種回数ごとの接種後死亡分析 | `loc`, `period`, `age`, `dose`, `deaths`, `mortality` |
+| `indiv` | 週単位匿名化個票（IND-WKA） | `id`, `loc`, `vbirthday`, `date_doseN`, `date_death` |
+| `indivdth` | 死亡者のみの週単位匿名化個票（DTH-WKA） | `id`, `loc`, `vbirthday`, `date_death` |
 
 ## 基本
 
@@ -165,7 +165,7 @@ curl -sS -H 'Content-Type: application/json' \
 ```
 
 `loc`は小文字の3文字国コードを基本とします。日本は`jpn`です。日本の自治体は
-`jp132101`のようなコードを使用します。
+`jp13210`のようなコードを使用します。
 
 ### 日付、死因、性別を指定
 
@@ -210,7 +210,7 @@ curl -sS -H 'Content-Type: application/json' \
     "query": {
       "bool": {
         "filter": [
-          { "term": { "areacode": "jp132101" } },
+          { "term": { "loc": "jp13210" } },
           { "term": { "cutoff": "2021-06-06" } },
           { "term": { "age": "00-09" } },
           { "term": { "dose": 0 } }
@@ -237,7 +237,7 @@ curl -sS -H 'Content-Type: application/json' \
     "query": {
       "bool": {
         "filter": [
-          { "match": { "areacode": "jp132101" } },
+          { "match": { "loc": "jp13210" } },
           { "match": { "age": "80+" } },
           { "match": { "dose": "0" } }
         ]

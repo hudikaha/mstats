@@ -10,7 +10,16 @@ require_relative '../lib/debug'
 
 COMMANDS = %w[personyear afterdose kcor anonymize excess].freeze
 DEFAULT_AGES = %w[00-09 10-19 20-29 30-39 40-49 50-59 60-69 70-79 80-89 90-99 100+ 80+ all].freeze
-OUTPUT_HEADER = %w[id areacode area areaj step period age dose lives persondays deaths lb0 ub0 rr0 lbm ubm mortality].freeze
+OUTPUT_HEADER = %w[id loc area areaj step period age dose lives persondays deaths lb0 ub0 rr0 lbm ubm mortality].freeze
+
+# 日本の全国地方公共団体codeは検査数字を除いた標準地域codeを保存する。
+# Store Japanese municipalities by the five-digit standard area code, without the check digit.
+def canonical_loc(value)
+  loc = value.to_s.downcase
+  return "jp#{loc[2, 5]}" if loc.match?(/\Ajp\d{6}\z/)
+
+  loc
+end
 
 def parse_date(value, iso_week: false)
   return nil if value.nil? || value.to_s.strip.empty? || value.to_s.match?(/^(NA|#N\/A|NULL|0)$/i)
@@ -179,21 +188,21 @@ class Dataset
 
   def parse_area(file)
     if @opts.values_at(:areacode, :area, :areaj).all? { |value| !value.to_s.empty? }
-      @areacode = @opts[:areacode]
+      @areacode = canonical_loc(@opts[:areacode])
       @area = @opts[:area]
       @areaj = @opts[:areaj]
       return
     end
     match = File.basename(file).match(/^(jp\d+)_([^_]+)_(?:all|lives)/)
     if match
-      @areacode = match[1]
+      @areacode = canonical_loc(match[1])
       names = match[2].split('-', 2)
       @areaj = names[0]
       @area = (names[1] || names[0]).tr('-', '/')
       return
     end
     first = first_raw_row(file)
-    @areacode = first&.[]('areacode').to_s
+    @areacode = canonical_loc(first&.[]('loc').to_s.empty? ? first&.[]('areacode') : first&.[]('loc'))
     @area = first&.[]('area').to_s
     @areaj = first&.[]('areaj').to_s
     raise "入力file名またはCSVから自治体を判定できません: #{file}" if @areacode.empty?
@@ -679,7 +688,7 @@ def run_kcor(dataset, opts)
     end
   end
   CSV.open(opts[:output], 'w') do |csv|
-    csv << %w[id areacode area areaj cutoff cweek date age dose deaths]
+    csv << %w[id loc area areaj cutoff cweek date age dose deaths]
     cutoffs.each do |cutoff|
       grouped = grouped_by_cutoff[cutoff]
       last = dataset.max_death && Date.commercial(dataset.max_death.cwyear, dataset.max_death.cweek, 7)
@@ -738,10 +747,10 @@ def run_kcor_risk(dataset, opts)
 
   last = dataset.max_death && Date.commercial(dataset.max_death.cwyear, dataset.max_death.cweek, 7)
   cumulative_csv = opts[:output] && CSV.open(opts[:output], 'w')
-  cumulative_csv&.then { |csv| csv << %w[id areacode area areaj cutoff cweek date age dose deaths pop] }
+  cumulative_csv&.then { |csv| csv << %w[id loc area areaj cutoff cweek date age dose deaths pop] }
   risk_csv = opts[:risk_output] && CSV.open(opts[:risk_output], 'w')
   risk_csv&.then do |csv|
-    csv << %w[id areacode area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
+    csv << %w[id loc area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week]
   end
   begin
     cutoffs.each do |cutoff|
@@ -776,7 +785,7 @@ end
 
 def run_anonymize(dataset, opts)
   CSV.open(opts[:output], 'w') do |csv|
-    header = %w[id areacode area areaj age date_age vbirthday cweek_in date_in cweek_out date_out cweek_death date_death dose_final]
+    header = %w[id loc area areaj age date_age vbirthday cweek_in date_in cweek_out date_out cweek_death date_death dose_final]
     (1..9).each { |dose| header.concat(["cweek_dose#{dose}", "date_dose#{dose}", "pharma_dose#{dose}"]) }
     csv << header
     dataset.each_person do |person|
@@ -901,7 +910,8 @@ parser = OptionParser.new do |option|
   option.on('--progress-total PEOPLE', Integer) { |value| opts[:progress_total] = value }
   option.on('--legacy-personyear') { opts[:legacy_personyear] = true }
   option.on('--skip-source-header') { opts[:skip_source_header] = true }
-  option.on('--areacode CODE') { |value| opts[:areacode] = value }
+  option.on('--loc CODE') { |value| opts[:areacode] = value }
+  option.on('--areacode CODE', 'Legacy alias for --loc') { |value| opts[:areacode] = value }
   option.on('--area NAME') { |value| opts[:area] = value }
   option.on('--areaj NAME') { |value| opts[:areaj] = value }
   option.on('--debug') { opts[:debug] = true; Log.level = Logger::DEBUG }
@@ -923,7 +933,7 @@ Log.info "#{dataset.areacode} rows=#{dataset.stats[:rows]} age_reference=#{datas
 
 if opts[:report]
   File.write(opts[:report], JSON.pretty_generate({
-    command: command, areacode: dataset.areacode, age_reference: dataset.age_reference,
+    command: command, loc: dataset.areacode, age_reference: dataset.age_reference,
     input_files: ARGV.map { |file| File.basename(file) }, output: opts[:output], stats: dataset.stats
   }) + "\n")
 end

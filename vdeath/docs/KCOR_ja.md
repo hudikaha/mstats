@@ -15,13 +15,13 @@ vdeath/
 ├── import/
 │   └── vdeathp.rb
 └── config/
-    ├── elasticsearch/kcor20260808-mapping.json
+    ├── elasticsearch/kcor20260816-mapping.json
     └── logstash/kcor2025.conf
 ```
 
 ## Elasticsearch
 
-- 実体index名は`kcor20260808`、公開・検索用aliasは`kcor`です。
+- 実体index名は`kcor20260816`、公開・検索用aliasは`kcor`です。
 - `kcor.js`は公開API `/elastic/kcor/_search`からcutoff一覧と選択cutoffのrecordを取得します。
 - `index.max_result_window`とbrowserの1回のrequest上限は100万件です。
 - `mstats2026`とはdocument schemaもindexも統合しません。
@@ -29,12 +29,13 @@ vdeath/
 - `CUMD-WK` CSVの11 fieldを保存します。大阪市のrecordだけ`pop`を持ちません。
 
 ```text
-id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
+id, loc, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
 ```
 
 `dose`、`deaths`、`pop`は整数、`cutoff`と`date`は日付、それ以外はkeywordです。
 Elasticsearchの`_id`にはCSVの`id`を使用し、`id` fieldも`_source`に残します。
-`kcor.rb`は日本の自治体に加えて、`areacode=cze`のチェコ全国系列も同じ形式で表示します。
+`loc`は地域codeで、日本の市区町村には検査数字を除く5桁の標準地域codeを`jp`に続けて保存する。
+`kcor.rb`は日本の自治体に加えて、`loc=cze`のチェコ全国系列も同じ形式で表示します。
 
 ## Gamma-frailty用週次人口
 
@@ -42,7 +43,7 @@ Elasticsearchの`_id`にはCSVの`id`を使用し、`id` fieldも`_source`に残
 週開始時の観察中人数`pop`を持つ。
 
 ```text
-id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
+id, loc, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
 ```
 
 - `deaths`: cutoff後の累積死亡数
@@ -100,7 +101,7 @@ Elasticsearchを正本とし、`kcor.js`は公開API `/elastic/kcor/_search`を�
 最初にcutoff一覧と既定値に必要なmetadataを取得し、選択したcutoffについて次のfieldを取得します。
 
 ```text
-areacode, area, areaj, date, age, dose, deaths
+loc, area, areaj, date, age, dose, pop, deaths
 ```
 
 browserは選択中のcutoffだけを取得し、地域・年齢・接種回数の変更は通信せずに再集計します。

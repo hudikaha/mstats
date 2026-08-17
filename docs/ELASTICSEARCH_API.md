@@ -93,10 +93,10 @@ nonexistent ID returns HTTP 404 with `found` set to `false`.
 | Index | Contents | Main fields |
 |---|---|---|
 | `mstats` | Mortality, causes of death, and population | `id`, `loc`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
-| `kcor` | KCOR results by cutoff | `id`, `areacode`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
-| `vdeath` | Age-adjusted post-vaccination death analyses by age group and dose | `areacode`, `period`, `age`, `dose`, `deaths`, `mortality` |
-| `indiv` | Weekly-anonymized individual records (IND-WKA) | `id`, `vbirthday`, `date_doseN`, `date_death` |
-| `indivdth` | Weekly-anonymized death-only records (DTH-WKA) | `id`, `vbirthday`, `date_death` |
+| `kcor` | KCOR results by cutoff | `id`, `loc`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
+| `vdeath` | Post-vaccination death analyses by age group and dose | `loc`, `period`, `age`, `dose`, `deaths`, `mortality` |
+| `indiv` | Weekly-anonymized individual records (IND-WKA) | `id`, `loc`, `vbirthday`, `date_doseN`, `date_death` |
+| `indivdth` | Weekly-anonymized death-only records (DTH-WKA) | `id`, `loc`, `vbirthday`, `date_death` |
 
 ## Basics
 
@@ -171,7 +171,7 @@ curl -sS -H 'Content-Type: application/json' \
 ```
 
 `loc` normally uses lowercase ISO alpha-3 country codes; Japan is `jpn`.
-Japanese municipalities use codes such as `jp132101`.
+Japanese municipalities use codes such as `jp13210`.
 
 ### Date, cause of death, and sex
 
@@ -217,7 +217,7 @@ curl -sS -H 'Content-Type: application/json' \
     "query": {
       "bool": {
         "filter": [
-          { "term": { "areacode": "jp132101" } },
+          { "term": { "loc": "jp13210" } },
           { "term": { "cutoff": "2021-06-06" } },
           { "term": { "age": "00-09" } },
           { "term": { "dose": 0 } }
@@ -244,7 +244,7 @@ curl -sS -H 'Content-Type: application/json' \
     "query": {
       "bool": {
         "filter": [
-          { "match": { "areacode": "jp132101" } },
+          { "match": { "loc": "jp13210" } },
           { "match": { "age": "80+" } },
           { "match": { "dose": "0" } }
         ]

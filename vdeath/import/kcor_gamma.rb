@@ -6,11 +6,11 @@ require 'date'
 require 'optparse'
 
 PARAM_HEADER = %w[
-  id method areacode area areaj cutoff age dose quiet_start quiet_end
+  id method loc area areaj cutoff age dose quiet_start quiet_end
   points theta k rmse fit_status cohort_size deaths
 ].freeze
 SERIES_HEADER = %w[
-  id method areacode area areaj cutoff cweek date age dose cohort_size at_risk
+  id method loc area areaj cutoff cweek date age dose cohort_size at_risk
   deaths_week deaths censored_week hazard observed_cumulative_hazard
   adjusted_cumulative_hazard theta
 ].freeze
@@ -124,7 +124,7 @@ abort 'min points must be at least 3' if options[:min_points] < 3
 groups = Hash.new { |hash, key| hash[key] = [] }
 ARGV.each do |path|
   CSV.foreach(path, headers: true) do |row|
-    key = %w[areacode area areaj cutoff age dose].map { |field| row[field] }
+    key = %w[loc area areaj cutoff age dose].map { |field| row[field] }
     groups[key] << row.to_h
   end
 end
@@ -167,9 +167,9 @@ end
 CSV.open(options[:output], 'w') do |csv|
   csv << PARAM_HEADER
   fits.each do |key, fit|
-    areacode, area, areaj, cutoff, age, dose = key
+    loc, area, areaj, cutoff, age, dose = key
     rows = fit[:rows]
-    id = [areacode, cutoff, age, dose].join('_')
+    id = [loc, cutoff, age, dose].join('_')
     fit_status = if fit[:theta] <= options[:theta_max] * 1.0e-6
                    'theta_zero'
                  elsif fit[:theta] >= options[:theta_max] * (1.0 - 1.0e-6)
@@ -177,7 +177,7 @@ CSV.open(options[:output], 'w') do |csv|
                  else
                    'ok'
                  end
-    csv << [id, 'gamma_constant_nls_v1', areacode, area, areaj, cutoff, age, dose,
+    csv << [id, 'gamma_constant_nls_v1', loc, area, areaj, cutoff, age, dose,
             options[:quiet_start], options[:quiet_end],
             fit[:points], fit[:theta], fit[:k], fit[:rmse], fit_status,
             rows.first['cohort_size'], rows.last['deaths']]
@@ -195,7 +195,7 @@ if options[:series_output]
         observed = row[:observed_hazard]
         adjusted = theta.zero? ? observed : (Math.exp(theta * observed) - 1.0) / theta
         csv << [row['id'], 'gamma_constant_nls_v1'] +
-               %w[areacode area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week].map { |field| row[field] } +
+               %w[loc area areaj cutoff cweek date age dose cohort_size at_risk deaths_week deaths censored_week].map { |field| row[field] } +
                [row[:hazard], observed, adjusted, theta]
       end
     end

@@ -14,7 +14,7 @@ ES_USER = ENV.fetch('ES_USER', 'elastic')
 ES_PASSWORD = ENV.fetch('ES_PASSWORD')
 OUTPUT_DIR = ARGV.fetch(0)
 PAGE_SIZE = 10_000
-SOURCE_FIELDS = %w[areacode area areaj date age dose deaths].freeze
+SOURCE_FIELDS = %w[loc area areaj date age dose deaths].freeze
 
 # 認証付きでKCOR indexへ検索要求を送り、JSON応答を返す。
 # Send an authenticated request to the KCOR index and return its JSON response.
@@ -71,7 +71,7 @@ files = []
 
 cutoff_values.each do |cutoff|
   documents = documents_for(cutoff)
-  areas = documents.map { |row| [row.fetch('areacode'), row.fetch('area'), row.fetch('areaj')] }.uniq.sort
+  areas = documents.map { |row| [row.fetch('loc'), row.fetch('area'), row.fetch('areaj')] }.uniq.sort
   dates = ordered(documents.map { |row| row.fetch('date')[0, 10] })
   ages = ordered(documents.map { |row| row.fetch('age') }).sort_by { |age| age.to_i }
   area_index = areas.each_with_index.to_h
@@ -79,7 +79,7 @@ cutoff_values.each do |cutoff|
   age_index = ages.each_with_index.to_h
   rows = documents.map do |row|
     [
-      area_index.fetch([row.fetch('areacode'), row.fetch('area'), row.fetch('areaj')]),
+      area_index.fetch([row.fetch('loc'), row.fetch('area'), row.fetch('areaj')]),
       date_index.fetch(row.fetch('date')[0, 10]),
       age_index.fetch(row.fetch('age')),
       row.fetch('dose').to_i,

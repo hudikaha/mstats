@@ -16,7 +16,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | keyword | Unique record identifier |
-| `loc` | keyword | Lowercase location code; normally ISO 3166-1 alpha-3 for countries, `jp01`–`jp47` for prefectures, and codes such as `jp132101` for municipalities |
+| `loc` | keyword | Lowercase location code; normally ISO 3166-1 alpha-3 for countries, `jp01`–`jp47` for prefectures, and codes such as `jp13210` for municipalities |
 | `area` | keyword | English location name |
 | `areaj` | keyword | Japanese location name |
 | `date` | date | First day of a month or the reference date for a week |
@@ -122,8 +122,8 @@ cohort fixed by age group and dose count at the cutoff. Its source CSV suffix is
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | keyword | Unique ID in `areacode_cutoff_cweek_age_dose` form |
-| `areacode` | keyword | Municipality code |
+| `id` | keyword | Unique ID in `loc_cutoff_cweek_age_dose` form |
+| `loc` | keyword | Location code; Japanese municipalities use `jp` plus the five-digit standard area code |
 | `area`, `areaj` | keyword | English and Japanese municipality names |
 | `cutoff` | date | Date on which cohort age and dose count are fixed |
 | `cweek` | keyword | ISO week at which the cumulative value is observed |
@@ -151,7 +151,7 @@ period, age group, and dose count. It is the basic format used by `vdeath`.
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | keyword | ID built from municipality, step, period, age, and dose |
-| `areacode`, `area`, `areaj` | keyword | Municipality code and English/Japanese names |
+| `loc`, `area`, `areaj` | keyword | Location code and English/Japanese names |
 | `step` | keyword / integer | `1`, `3`, or `6` months, or `all` |
 | `period` | keyword | Period code such as `2024m01` |
 | `age` | keyword | Age group such as `00-09`, `80+`, or `all` |
@@ -167,11 +167,11 @@ period, age group, and dose count. It is the basic format used by `vdeath`.
 Age is evaluated within each period. Person-days crossing a virtual birthday
 are split between the age groups before and after that date.
 
-The public `vdeath` dataset has two date-precision series. Regular steps
-(`1`, `3`, `6`, `all`, and `week`) are calculated by re-reading published
-weekly-anonymized `IND-WKA` CSV. `org1`, `org3`, `org6`, `orgall`, and `orgweek`
-are comparison calculations from daily source records. The pages use regular
-steps by default and select `org*` only for comparison.
+The public `vdeath` dataset has two input series. Regular steps (`1`, `3`, `6`,
+`all`, and `week`) are publicly reproducible. For Japan they are calculated by
+re-reading published weekly-anonymized `IND-WKA` CSV; for Czechia they are calculated
+directly from government official records. `org1`, `org3`, `org6`, `orgall`, and
+`orgweek` are comparison series calculated directly from private daily disclosure records.
 
 ## afterdose / PY-WKD (no public CSV; displayed through Elasticsearch)
 
@@ -188,7 +188,7 @@ exported, and event dates are rounded to Sundays ending their ISO weeks.
 | Field | Meaning |
 |---|---|
 | `id` | Anonymous ID derived from municipality, age group, and a hash of the source ID |
-| `areacode`, `area`, `areaj` | Municipality code and names |
+| `loc`, `area`, `areaj` | Location code and names |
 | `age`, `date_age` | Age group and its reference date |
 | `vbirthday` | Hash-selected virtual birthday within the possible age range; not an actual birthday |
 | `cweek_in`, `date_in` | ISO week of entry and its Sunday |

@@ -15,13 +15,13 @@ vdeath/
 ├── import/
 │   └── vdeathp.rb
 └── config/
-    ├── elasticsearch/kcor20260808-mapping.json
+    ├── elasticsearch/kcor20260816-mapping.json
     └── logstash/kcor2025.conf
 ```
 
 ## Elasticsearch
 
-- The physical index is `kcor20260808`; the public search alias is `kcor`.
+- The physical index is `kcor20260816`; the public search alias is `kcor`.
 - `kcor.js` retrieves cutoff metadata and records for the selected cutoff from `/elastic/kcor/_search`.
 - Both `index.max_result_window` and the browser request limit are 1,000,000 records.
 - The document schema and index remain separate from `mstats2026`.
@@ -29,14 +29,15 @@ vdeath/
 - All 11 fields from the `CUMD-WK` CSV are stored. Osaka records omit `pop`.
 
 ```text
-id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
+id, loc, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
 ```
 
 `dose`, `deaths`, and `pop` are integers; `cutoff` and `date` are dates; all other
 fields are keywords. The CSV `id` is used as the Elasticsearch `_id` and is
 also retained in `_source`.
-In addition to Japanese municipalities, `kcor.rb` displays the Czech national series
-in the same format with `areacode=cze`.
+`loc` is the location code. Japanese municipalities use `jp` followed by the five-digit
+standard area code without its check digit. In addition to Japanese municipalities,
+`kcor.rb` displays the Czech national series in the same format with `loc=cze`.
 
 ## Weekly population for gamma frailty
 
@@ -44,7 +45,7 @@ in the same format with `areacode=cze`.
 population at the start of each week as `pop` when it can be derived from the source.
 
 ```text
-id, areacode, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
+id, loc, area, areaj, cutoff, cweek, date, age, dose, deaths, pop
 ```
 
 - `deaths`: cumulative deaths after the cutoff
@@ -111,7 +112,7 @@ Elasticsearch is the authoritative store, and `kcor.js` queries the public
 requests these fields for the selected cutoff:
 
 ```text
-areacode, area, areaj, date, age, dose, deaths
+loc, area, areaj, date, age, dose, pop, deaths
 ```
 
 The browser retrieves only the selected cutoff. Changes to location, age, and

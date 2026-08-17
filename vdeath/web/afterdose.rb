@@ -75,13 +75,13 @@ IFrame = {
 #Object.send(:remove_const, :Cities)
 Cities = {
     'all'      => {sel: nil, ja: '選択市町村合算',  en: 'All selected cities'},
-    'jp132101' => {sel: nil, ja: '東京都小金井市',  en: 'Koganei/Tokyo'},
-    'jp141500' => {sel: nil, ja: '神奈川県相模原市',en: 'Sagamihara/Kanagawa'},
-    'jp221309' => {sel: nil, ja: '静岡県浜松市',    en: 'Hamamatsu/Shizuoka'},
-    'jp222267' => {sel: nil, ja: '静岡県牧之原市',  en: 'Makinohara/Shizuoka'},
-    'jp232076' => {sel: nil, ja: '愛知県豊川市',    en: 'Toyokawa/Aichi'},
-    'jp232068' => {sel: nil, ja: '愛知県春日井市',  en: 'Kasugai/Aichi'},
-    'jp442054' => {sel: nil, ja: '大分県佐伯市',    en: 'Saiki/Oita'},
+    'jp13210' => {sel: nil, ja: '東京都小金井市',  en: 'Koganei/Tokyo'},
+    'jp14150' => {sel: nil, ja: '神奈川県相模原市',en: 'Sagamihara/Kanagawa'},
+    'jp22130' => {sel: nil, ja: '静岡県浜松市',    en: 'Hamamatsu/Shizuoka'},
+    'jp22226' => {sel: nil, ja: '静岡県牧之原市',  en: 'Makinohara/Shizuoka'},
+    'jp23207' => {sel: nil, ja: '愛知県豊川市',    en: 'Toyokawa/Aichi'},
+    'jp23206' => {sel: nil, ja: '愛知県春日井市',  en: 'Kasugai/Aichi'},
+    'jp44205' => {sel: nil, ja: '大分県佐伯市',    en: 'Saiki/Oita'},
 
 #    'jp222038' => {sel: nil, ja: '静岡県沼津市',    en: 'Numazu/Shizuoka'},
 #    'jp222097' => {sel: nil, ja: '静岡県島田市',    en: 'Shimada/Shizuoka'},
@@ -275,7 +275,7 @@ data0 = elastic_search(
         { term: { step: Sources['org'][:sel] ? 'orgweek' : 'week' } }
     ],
     :should => [],
-    :source => [ 'doc_id', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
+    :source => [ 'doc_id', 'loc', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
     #:source => [],
     #:debug => 'SHOWONLY_QUERY',
     #:debug => 'SHOWONLY',
@@ -284,6 +284,9 @@ data0 = elastic_search(
 $data = Hash.new
 data0.each do |k, datum|
     datum2 = datum.dup
+    datum2[:loc] ||= datum2.delete(:areacode)
+    datum2[:loc] = datum2[:loc][0, 7] if datum2[:loc].to_s.match?(/\Ajp\d{6}\z/)
+    k = k.sub(/\A(jp\d{5})\d_/, '\\1_')
     k = k.sub(/_orgweek_/, '_week_')
     datum2[:step] = 'week' if datum2[:step] == 'orgweek'
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
@@ -294,8 +297,8 @@ data0.each do |k, datum|
 
         datum2[field] = value.include?('.') ? value.to_f : value.to_i
     end
-    if $l == :en && Cities[datum2[:areacode]]
-        datum2[:area] = Cities[datum2[:areacode]][:en]
+    if $l == :en && Cities[datum2[:loc]]
+        datum2[:area] = Cities[datum2[:loc]][:en]
     end
     datum2[:mortality] = 0 if datum2[:mortality] == '-'
     datum2[:rr0] = '-' if datum2[:rr0] == 0 || datum2[:rr0] == '0.0'
@@ -303,18 +306,18 @@ data0.each do |k, datum|
 end
 
 # all を作る
-hama = $data.select{|k, v| v[:areacode] == 'jp221309'}
+hama = $data.select{|k, v| v[:loc] == 'jp22130'}
 data2 = Hash.new
 Cities.each do |k1, city|
     next if ! city[:sel]
-    data2.merge!($data.select{|k2, v| v[:areacode] == k1})
+    data2.merge!($data.select{|k2, v| v[:loc] == k1})
 end
 
 data_all = Hash.new
 hama.each do |k, datum|
     datum2 = datum.dup
-    datum2[:doc_id] = k.sub(/^jp221309/, 'all')
-    datum2[:areacode] = 'all'
+    datum2[:doc_id] = k.sub(/^jp22130/, 'all')
+    datum2[:loc] = 'all'
     datum2[:area] = Cities['all'][$l]
     set = data2.select{|k, v| v[:step] == datum[:step] &&
                               v[:period] == datum[:period] &&
@@ -541,7 +544,7 @@ Cities.each do |code, city|
           "height": #{$height},
           "transform": [
             {"filter": "#{$filter_1st[:expr]}"},
-            {"filter": "datum.areacode == '#{code}'"},
+            {"filter": "datum.loc == '#{code}'"},
             {"filter": "datum.step == 'week'"},
             {"filter": "datum.age == '80+'"},
 EOS

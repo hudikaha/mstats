@@ -44,7 +44,7 @@ module MissingHistory
   def build_missing_history_scenarios(observed)
     scenarios = {}
     groups = observed.group_by do |_id, datum|
-      [datum[:areacode], datum[:step].to_s, datum[:period], datum[:age]]
+      [datum[:loc], datum[:step].to_s, datum[:period], datum[:age]]
     end
 
     RATES.each do |rate|

@@ -4,7 +4,7 @@
 require 'csv'
 require 'fileutils'
 
-OUTPUT_HEADER = %w[id areacode area areaj cutoff cweek date age dose deaths pop].freeze
+OUTPUT_HEADER = %w[id loc area areaj cutoff cweek date age dose deaths pop].freeze
 SOURCE_FIELDS = (OUTPUT_HEADER - ['pop']).freeze
 
 abort 'Usage: cumd_wk_from_g.rb CUMD-WK-G.csv [...]' if ARGV.empty?

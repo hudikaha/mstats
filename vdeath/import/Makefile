@@ -8,21 +8,23 @@ RUBY ?= ruby
 SCRIPT := ./vdeathp.rb
 RUN := $(RUBY) $(SCRIPT)
 GAMMA_SCRIPT := ./kcor_gamma.rb
-INDIV_INDEX ?= indiv20260721
+INDIV_INDEX ?= indiv20260816
 INDIV_MAPPING := ../config/elasticsearch/$(INDIV_INDEX).json
-INDIV_FILES := $(wildcard $(OUT_DIR)/*_IND-WKA.csv)
+FULL_NAMES := jp13210_Koganei-Tokyo-JP jp14150_Sagamihara-Kanagawa-JP \
+  jp22130_Hamamatsu-Shizuoka-JP jp22226_Makinohara-Shizuoka-JP \
+  jp23206_Kasugai-Aichi-JP jp23207_Toyokawa-Aichi-JP jp44205_Saiki-Oita-JP
+INDIV_FILES := $(addprefix $(OUT_DIR)/,$(addsuffix _IND-WKA.csv,$(FULL_NAMES)))
 INDIV_PUBLIC_DIR ?= /home/magician/fujikawa/pub/kkcor
 INDIV_LOGSTASH_CONF ?= ../config/logstash/indiv.conf
 KKCOR_HOST ?= fujikawa.org
 KKCOR_DIR ?= /home/magician/fujikawa/pub/kkcor
-INDIVDTH_INDEX ?= indivdth20260721
-INDIVDTH_FILE := $(OUT_DIR)/jp271004_Osaka-Osaka-JP_DTH-WKA.csv
+INDIVDTH_INDEX ?= indivdth20260816
+INDIVDTH_FILE := $(OUT_DIR)/jp27100_Osaka-Osaka-JP_DTH-WKA.csv
 AGES := 00-09,10-19,20-29,30-39,40-49,50-59,60-69,70-79,80-89,90-99,100+,80+,all
-CITIES := jp132101 jp141500 jp221309 jp222267 jp232068 jp232076 jp271004 jp442054
+CITIES := jp13210 jp14150 jp22130 jp22226 jp23206 jp23207 jp27100 jp44205
 CZECH_INPUT := $(CZECH_SRC_DIR)/Otevrena-data-NR-26-30-COVID-19-prehled-populace-2024-01.csv
 CZECH_HEADER := ./headers/czech-2024-01.csv
 CZECH_NAME := cze_Czech-Republic
-CZECH_IND := $(OUT_DIR)/$(CZECH_NAME)_IND-WKA.csv
 CZECH_PY := $(OUT_DIR)/$(CZECH_NAME)_PY.csv
 CZECH_AFTERDOSE := $(OUT_DIR)/$(CZECH_NAME)_PY-WKD.csv
 CZECH_CUMD := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK.csv
@@ -34,64 +36,74 @@ CZECH_SOURCE_ROWS := 12597668
 CZECH_POPULATION_ROWS := 10314685
 WEEKLY_DATE_SEED ?= v1
 CUMD_NAMES := cze_Czech-Republic \
-  jp132101_Koganei-Tokyo-JP jp141500_Sagamihara-Kanagawa-JP \
-  jp221309_Hamamatsu-Shizuoka-JP jp222267_Makinohara-Shizuoka-JP \
-  jp232068_Kasugai-Aichi-JP jp232076_Toyokawa-Aichi-JP \
-  jp271004_Osaka-Osaka-JP jp442054_Saiki-Oita-JP
+  jp13210_Koganei-Tokyo-JP jp14150_Sagamihara-Kanagawa-JP \
+  jp22130_Hamamatsu-Shizuoka-JP jp22226_Makinohara-Shizuoka-JP \
+  jp23206_Kasugai-Aichi-JP jp23207_Toyokawa-Aichi-JP \
+  jp27100_Osaka-Osaka-JP jp44205_Saiki-Oita-JP
 CUMD_FILES := $(addprefix $(OUT_DIR)/,$(addsuffix _CUMD-WK.csv,$(CUMD_NAMES)))
-CUMD_POP_FILES := $(filter-out $(OUT_DIR)/jp271004_Osaka-Osaka-JP_CUMD-WK.csv,$(CUMD_FILES))
+CUMD_POP_FILES := $(filter-out $(OUT_DIR)/jp27100_Osaka-Osaka-JP_CUMD-WK.csv,$(CUMD_FILES))
 CUMD_BACKUP_DIR ?= $(OUT_DIR)/cumd-wk-before-vdeathp
 comma := ,
+SERVER ?= fujikawa.org
+SERVER_DIR ?= /home/magician/vdeath/migration-20260816
+KCOR_INDEX ?= kcor20260816
+KCOR_MAPPING := ../config/elasticsearch/$(KCOR_INDEX)-mapping.json
+VDEATH_INDEX ?= vdeath20260816
+VDEATH_MAPPING := ../config/elasticsearch/$(VDEATH_INDEX).json
+VDEATH_FILES := $(CZECH_PY) $(CZECH_AFTERDOSE) \
+  $(addprefix $(OUT_DIR)/,$(addsuffix _PY.csv,$(FULL_NAMES))) \
+  $(addprefix $(OUT_DIR)/,$(addsuffix _PY-ORG.csv,$(FULL_NAMES))) \
+  $(addprefix $(OUT_DIR)/,$(addsuffix _PY-WKD.csv,$(FULL_NAMES))) \
+  $(addprefix $(OUT_DIR)/,$(addsuffix _PY-WKD-ORG.csv,$(FULL_NAMES)))
+KCOR_FILES := $(CUMD_FILES)
 
-.PHONY: all cze cze-all cze-ind cze-py cze-afterdose cze-kcor cze-gamma \
+.PHONY: all data-all cze cze-all cze-py cze-afterdose cze-kcor cze-gamma \
   cumd cumd-backup cumd-check cumd-compare cze-cumd-direct publish-cumd \
-  indiv-check indiv indivdth publish-kkcor $(CITIES) $(addsuffix -cumd-direct,$(CITIES))
+  indiv-check indiv indivdth publish-kkcor generated-check upload-index-inputs \
+  import-new-indices import-indiv-indices check-new-indices switch-index-aliases $(CITIES) $(addsuffix -cumd-direct,$(CITIES))
 all: $(CITIES)
+data-all: cze-all $(CITIES)
 
-# 日本語: チェコ公式週次個票を一度共通INDへ正規化し、vdeathとKCORを同じ入力から生成する。
-# English: Normalize Czech official weekly records once, then generate vdeath and KCOR from the same IND input.
+# 日本語: チェコ公式週次個票から各集計を直接生成し、公開用匿名化個票は作らない。
+# English: Generate aggregates directly from Czech official weekly records; do not create a public anonymized copy.
 cze: cze-py cze-kcor cze-gamma
 cze-all: cze cze-afterdose
-cze-ind: $(CZECH_IND)
-cze-py: $(CZECH_PY)
-cze-afterdose: $(CZECH_AFTERDOSE)
-
-# 日本語: 既存INDからチェコの新CUMD-WKだけを再生成し、他の集計物には触れない。
-# English: Regenerate only the Czech CUMD-WK from the existing IND without touching other outputs.
-cze-cumd-direct:
-	@test -s "$(CZECH_IND)"
-	$(RUN) kcor --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
-	  --age-reference 2024-09-02 --progress-total $(CZECH_POPULATION_ROWS) \
-	  --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
-	  --output "$(CZECH_CUMD)" "$(CZECH_IND)"
-
-$(CZECH_IND): $(CZECH_INPUT) $(CZECH_HEADER) $(SCRIPT) Makefile
-	@mkdir -p "$(OUT_DIR)"
-	$(RUN) anonymize --headers "$(CZECH_HEADER)" --skip-source-header --first-infection-only --iso-week-dates \
-	  --areacode cze --area "Czech Republic" --areaj "チェコ" --age-reference 2024-09-02 \
-	  --progress-total $(CZECH_SOURCE_ROWS) \
-	  --report "$(OUT_DIR)/$(CZECH_NAME)_IMPORT-REPORT.json" \
-	  --output "$@" "$(CZECH_INPUT)"
-
-$(CZECH_PY): $(CZECH_IND) $(SCRIPT) Makefile
-	$(RUN) personyear --steps 1,3,6,all --ages "$(AGES)" --start 2021-02-01 --until 2024-09-02 \
-	  --age-reference 2024-09-02 \
-	  --progress-total $(CZECH_POPULATION_ROWS) \
-	  --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
-	  --output "$@" "$(CZECH_IND)"
-
-$(CZECH_AFTERDOSE): $(CZECH_IND) $(SCRIPT) Makefile
-	$(RUN) afterdose --weeks 1-99 --ages 80+,all --until 2024-09-02 \
-	  --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
-	  --output "$@" "$(CZECH_IND)"
-
-cze-kcor: $(CZECH_IND)
-	@if [[ ! -s "$(CZECH_CUMD)" || ! -s "$(CZECH_RISK)" || "$(CZECH_IND)" -nt "$(CZECH_RISK)" || "$(SCRIPT)" -nt "$(CZECH_RISK)" ]]; then \
-	  $(RUN) kcor --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
-	    --age-reference 2024-09-02 \
-	    --progress-total $(CZECH_POPULATION_ROWS) \
+cze-py:
+	@if [[ "$(FORCE)" == 1 || ! -s "$(CZECH_PY)" || "$(CZECH_INPUT)" -nt "$(CZECH_PY)" || "$(CZECH_HEADER)" -nt "$(CZECH_PY)" || "$(SCRIPT)" -nt "$(CZECH_PY)" ]]; then \
+	  $(RUN) personyear --headers "$(CZECH_HEADER)" --skip-source-header --first-infection-only --iso-week-dates \
+	    --loc cze --area "Czech Republic" --areaj "チェコ" --steps 1,3,6,all --ages "$(AGES)" \
+	    --start 2021-02-01 --until 2024-09-02 --age-reference 2024-09-02 \
+	    --progress-total $(CZECH_SOURCE_ROWS) --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
+	    --output "$(CZECH_PY)" "$(CZECH_INPUT)"; \
+	fi
+cze-afterdose:
+	@if [[ "$(FORCE)" == 1 || ! -s "$(CZECH_AFTERDOSE)" || "$(CZECH_INPUT)" -nt "$(CZECH_AFTERDOSE)" || "$(CZECH_HEADER)" -nt "$(CZECH_AFTERDOSE)" || "$(SCRIPT)" -nt "$(CZECH_AFTERDOSE)" ]]; then \
+	  $(RUN) afterdose --headers "$(CZECH_HEADER)" --skip-source-header --first-infection-only --iso-week-dates \
+	    --loc cze --area "Czech Republic" --areaj "チェコ" --weeks 1-99 --ages 80+,all \
+	    --until 2024-09-02 --age-reference 2024-09-02 --progress-total $(CZECH_SOURCE_ROWS) \
 	    --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
-	    --risk-output "$(CZECH_RISK)" --output "$(CZECH_CUMD)" "$(CZECH_IND)"; \
+	    --output "$(CZECH_AFTERDOSE)" "$(CZECH_INPUT)"; \
+	fi
+
+# 日本語: チェコ公式CSVからCUMD-WKだけを直接再生成する。
+# English: Regenerate only Czech CUMD-WK directly from the official CSV.
+cze-cumd-direct:
+	$(RUN) kcor --headers "$(CZECH_HEADER)" --skip-source-header --first-infection-only --iso-week-dates \
+	  --loc cze --area "Czech Republic" --areaj "チェコ" \
+	  --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
+	  --age-reference 2024-09-02 --progress-total $(CZECH_SOURCE_ROWS) \
+	  --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
+	  --output "$(CZECH_CUMD)" "$(CZECH_INPUT)"
+
+cze-kcor:
+	@if [[ "$(FORCE)" == 1 || ! -s "$(CZECH_CUMD)" || ! -s "$(CZECH_RISK)" || "$(CZECH_INPUT)" -nt "$(CZECH_RISK)" || "$(SCRIPT)" -nt "$(CZECH_RISK)" ]]; then \
+	  $(RUN) kcor --headers "$(CZECH_HEADER)" --skip-source-header --first-infection-only --iso-week-dates \
+	    --loc cze --area "Czech Republic" --areaj "チェコ" \
+	    --cutoff-start 2021-06-01 --cutoff-until 2024-05-01 --ages "$(AGES)" \
+	    --age-reference 2024-09-02 \
+	    --progress-total $(CZECH_SOURCE_ROWS) \
+	    --spread-weekly-dates "$(CZECH_WEEKLY_DATE_SEED)" \
+	    --risk-output "$(CZECH_RISK)" --output "$(CZECH_CUMD)" "$(CZECH_INPUT)"; \
 	fi
 
 cze-gamma: cze-kcor
@@ -104,7 +116,7 @@ cze-gamma: cze-kcor
 # English: Validate the generated weekly-anonymized IND files used for Elasticsearch import.
 indiv-check:
 	@test -s "$(INDIV_MAPPING)"
-	@test $(words $(INDIV_FILES)) -eq 8
+	@test $(words $(INDIV_FILES)) -eq 7
 	@for f in $(INDIV_FILES); do head -1 "$$f" | grep -q 'vbirthday' || { echo "missing vbirthday: $$f"; exit 1; }; done
 	@wc -l $(INDIV_FILES)
 
@@ -143,11 +155,11 @@ cumd-check:
 	@test $(words $(CUMD_FILES)) -eq 9
 	@for f in $(CUMD_FILES); do test -s "$$f" || { echo "Missing: $$f"; exit 1; }; done
 	@for f in $(CUMD_POP_FILES); do \
-	  test "$$(head -1 "$$f")" = 'id,areacode,area,areaj,cutoff,cweek,date,age,dose,deaths,pop' || \
+	  test "$$(head -1 "$$f")" = 'id,loc,area,areaj,cutoff,cweek,date,age,dose,deaths,pop' || \
 	    { echo "Unexpected header: $$f"; exit 1; }; \
 	done
-	@test "$$(head -1 "$(OUT_DIR)/jp271004_Osaka-Osaka-JP_CUMD-WK.csv")" = \
-	  'id,areacode,area,areaj,cutoff,cweek,date,age,dose,deaths'
+	@test "$$(head -1 "$(OUT_DIR)/jp27100_Osaka-Osaka-JP_CUMD-WK.csv")" = \
+	  'id,loc,area,areaj,cutoff,cweek,date,age,dose,deaths'
 	@wc -l $(CUMD_FILES)
 
 cumd-compare: cumd-check
@@ -176,6 +188,58 @@ publish-cumd: cumd-check
 indivdth:
 	@test -s "$(INDIVDTH_FILE)"
 	@echo "$(INDIVDTH_INDEX): $(INDIVDTH_FILE)"
+
+# 日本語: Makeで再生成した全系列だけを新規index投入対象として検査する。
+# English: Validate only the series regenerated by Make before importing new indices.
+generated-check: cumd-check indiv-check
+	@test -s "$(KCOR_MAPPING)"
+	@test -s "$(VDEATH_MAPPING)"
+	@test -s "$(INDIV_MAPPING)"
+	@test $(words $(VDEATH_FILES)) -eq 30
+	@for f in $(VDEATH_FILES); do test "$$(head -1 "$$f")" = 'id,loc,area,areaj,step,period,age,dose,lives,persondays,deaths,lb0,ub0,rr0,lbm,ubm,mortality' || { echo "Unexpected header: $$f"; exit 1; }; done
+	@for f in $(INDIV_FILES) $(INDIVDTH_FILE); do head -1 "$$f" | grep -q '^id,loc,area,areaj,' || { echo "Unexpected header: $$f"; exit 1; }; done
+	@! rg -n '^([^,]*,)?jp[0-9]{6},' $(KCOR_FILES) $(VDEATH_FILES) $(INDIV_FILES) $(INDIVDTH_FILE)
+	@wc -l $(KCOR_FILES) $(VDEATH_FILES) $(INDIV_FILES) $(INDIVDTH_FILE)
+
+# 日本語: 新規物理index用のscript・mapping・CSVをserverの専用directoryへ転送する。
+# English: Upload scripts, mappings, and CSVs to a dedicated server directory for new physical indices.
+upload-index-inputs: generated-check
+	@ssh "$(SERVER)" 'mkdir -p "$(SERVER_DIR)/data" "$(SERVER_DIR)/config"'
+	@rsync -a --progress ./import_py.rb ./import_indiv.rb "$(SERVER):$(SERVER_DIR)/"
+	@rsync -a --progress "$(KCOR_MAPPING)" "$(VDEATH_MAPPING)" "$(INDIV_MAPPING)" "$(SERVER):$(SERVER_DIR)/config/"
+	@rsync -a --progress $(KCOR_FILES) $(VDEATH_FILES) $(INDIV_FILES) $(INDIVDTH_FILE) "$(SERVER):$(SERVER_DIR)/data/"
+
+# 日本語: 各系列を空の新規物理indexへ投入し、系列ごとの秒数を記録する。
+# English: Import each series into empty versioned indices and record elapsed seconds by series.
+import-new-indices: upload-index-inputs
+	@ssh "$(SERVER)" 'set -eu; cd "$(SERVER_DIR)"; rm -f timings.tsv; \
+	  start=$$(date +%s); ruby ./import_py.rb --replace --index "$(KCOR_INDEX)" --mapping "config/$$(basename "$(KCOR_MAPPING)")" --no-doc-id --integer-fields dose,deaths,pop data/*_CUMD-WK.csv; printf "kcor\\t%s\\n" "$$(($$(date +%s)-start))" >> timings.tsv; \
+	  start=$$(date +%s); ruby ./import_py.rb --replace --index "$(VDEATH_INDEX)" --mapping "config/$$(basename "$(VDEATH_MAPPING)")" data/*_PY.csv data/*_PY-ORG.csv data/*_PY-WKD.csv data/*_PY-WKD-ORG.csv; printf "vdeath\\t%s\\n" "$$(($$(date +%s)-start))" >> timings.tsv; \
+	  start=$$(date +%s); ruby ./import_indiv.rb --replace --index "$(INDIV_INDEX)" --mapping "config/$$(basename "$(INDIV_MAPPING)")" data/*_IND-WKA.csv; printf "indiv\\t%s\\n" "$$(($$(date +%s)-start))" >> timings.tsv; \
+	  start=$$(date +%s); ruby ./import_indiv.rb --replace --index "$(INDIVDTH_INDEX)" --mapping "config/$$(basename "$(INDIV_MAPPING)")" data/*_DTH-WKA.csv; printf "indivdth\\t%s\\n" "$$(($$(date +%s)-start))" >> timings.tsv; cat timings.tsv'
+
+# 日本語: IND投入だけを安全に再実行し、完了済みKCOR・vdeathは作り直さない。
+# English: Retry only IND imports without rebuilding completed KCOR and vdeath indices.
+import-indiv-indices: upload-index-inputs
+	@ssh "$(SERVER)" 'set -eu; cd "$(SERVER_DIR)"; \
+	  start=$$(date +%s); ruby ./import_indiv.rb --replace --index "$(INDIV_INDEX)" --mapping "config/$$(basename "$(INDIV_MAPPING)")" data/*_IND-WKA.csv; printf "indiv\\t%s\\n" "$$(($$(date +%s)-start))" >> timings.tsv; \
+	  start=$$(date +%s); ruby ./import_indiv.rb --replace --index "$(INDIVDTH_INDEX)" --mapping "config/$$(basename "$(INDIV_MAPPING)")" data/*_DTH-WKA.csv; printf "indivdth\\t%s\\n" "$$(($$(date +%s)-start))" >> timings.tsv; tail -2 timings.tsv'
+
+# 日本語: 件数、loc field、6桁自治体codeの不存在をalias切替前に検査する。
+# English: Check counts, loc fields, and absence of six-digit municipality codes before alias switching.
+check-new-indices:
+	@ssh "$(SERVER)" 'cred=$$HOME/.config/mstats/espass.txt; u=$$(cut -d: -f1 "$$cred"); p=$$(cut -d: -f2- "$$cred"); \
+	  for idx in $(KCOR_INDEX) $(VDEATH_INDEX) $(INDIV_INDEX) $(INDIVDTH_INDEX); do \
+	    curl -fsS -u "$$u:$$p" -H "Content-Type: application/json" "http://127.0.0.1:9200/$$idx/_count"; echo " $$idx"; \
+	    response=$$(curl -fsS -u "$$u:$$p" -H "Content-Type: application/json" "http://127.0.0.1:9200/$$idx/_count" -d '\''{"query":{"bool":{"must_not":{"exists":{"field":"loc"}}}}}'\''); [[ "$$response" == *'\''"count":0'\''* ]] || exit 1; \
+	    response=$$(curl -fsS -u "$$u:$$p" -H "Content-Type: application/json" "http://127.0.0.1:9200/$$idx/_count" -d '\''{"query":{"regexp":{"loc":"jp[0-9]{6}"}}}'\''); [[ "$$response" == *'\''"count":0'\''* ]] || exit 1; \
+	  done; exit 0'
+
+# 日本語: 検査済み物理indexへ4つの公開aliasを一回のcluster operationで切り替える。
+# English: Switch four public aliases to validated physical indices in one cluster operation.
+switch-index-aliases: check-new-indices
+	@ssh "$(SERVER)" 'cred=$$HOME/.config/mstats/espass.txt; u=$$(cut -d: -f1 "$$cred"); p=$$(cut -d: -f2- "$$cred"); \
+	  curl -fsS -u "$$u:$$p" -H "Content-Type: application/json" -X POST "http://127.0.0.1:9200/_aliases" -d '\''{"actions":[{"remove":{"index":"*","alias":"kcor"}},{"add":{"index":"$(KCOR_INDEX)","alias":"kcor"}},{"remove":{"index":"*","alias":"vdeath"}},{"add":{"index":"$(VDEATH_INDEX)","alias":"vdeath"}},{"remove":{"index":"*","alias":"indiv"}},{"add":{"index":"$(INDIV_INDEX)","alias":"indiv"}},{"remove":{"index":"*","alias":"indivdth"}},{"add":{"index":"$(INDIVDTH_INDEX)","alias":"indivdth"}}]}'\''; echo'
 
 # 日本語: 自治体ごとの差だけをここで宣言し、生成手順は共通化する。
 # English: Declare only municipality-specific differences here and share the generation procedure.
@@ -229,11 +293,11 @@ $(1):
 	printf '%s\t%s\n' '$(1)' "$$$$elapsed" | tee "$(OUT_DIR)/timings/$(1).tsv"
 endef
 
-$(eval $(call municipality,jp132101,jp132101_Koganei-Tokyo-JP,--prohibit-reason-in,$(SRC_DIR)/jp132101_東京都小金井市-Koganei-Tokyo-JP_all.csv,$(SRC_DIR)/jp132101_東京都小金井市-Koganei-Tokyo-JP_header.csv,IND-WKA,yes))
-$(eval $(call municipality,jp141500,jp141500_Sagamihara-Kanagawa-JP,--allow-dup-id,$(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_all.csv $(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_all-death.csv,$(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_header.csv$$(comma)$(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_header-death.csv,IND-WKA,yes))
-$(eval $(call municipality,jp221309,jp221309_Hamamatsu-Shizuoka-JP,,$(SRC_DIR)/jp221309_静岡県浜松市-Hamamatsu-Shizuoka-JP_all.csv,$(SRC_DIR)/jp221309_静岡県浜松市-Hamamatsu-Shizuoka-JP_header.csv,IND-WKA,yes))
-$(eval $(call municipality,jp222267,jp222267_Makinohara-Shizuoka-JP,,$(SRC_DIR)/jp222267_静岡県牧之原市-Makinohara-Shizuoka-JP_all.csv,$(SRC_DIR)/jp222267_静岡県牧之原市-Makinohara-Shizuoka-JP_header.csv,IND-WKA,yes))
-$(eval $(call municipality,jp232068,jp232068_Kasugai-Aichi-JP,,$(SRC_DIR)/jp232068_愛知県春日井市-Kasugai-Aichi-JP_all.csv,$(SRC_DIR)/jp232068_愛知県春日井市-Kasugai-Aichi-JP_header.csv,IND-WKA,yes))
-$(eval $(call municipality,jp232076,jp232076_Toyokawa-Aichi-JP,--allow-dup-id,$(SRC_DIR)/jp232076_愛知県豊川市-Toyokawa-Aichi-JP_all.csv,$(SRC_DIR)/jp232076_愛知県豊川市-Toyokawa-Aichi-JP_header.csv,IND-WKA,yes))
-$(eval $(call municipality,jp271004,jp271004_Osaka-Osaka-JP,,$(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_all.csv $(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_all-death.csv,$(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_header.csv$$(comma)$(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_header-death.csv,DTH-WKA,no))
-$(eval $(call municipality,jp442054,jp442054_Saiki-Oita-JP,,$(SRC_DIR)/jp442054_大分県佐伯市-Saiki-Oita-JP_all.csv,$(SRC_DIR)/jp442054_大分県佐伯市-Saiki-Oita-JP_header.csv,IND-WKA,yes))
+$(eval $(call municipality,jp13210,jp13210_Koganei-Tokyo-JP,--prohibit-reason-in,$(SRC_DIR)/jp132101_東京都小金井市-Koganei-Tokyo-JP_all.csv,$(SRC_DIR)/jp132101_東京都小金井市-Koganei-Tokyo-JP_header.csv,IND-WKA,yes))
+$(eval $(call municipality,jp14150,jp14150_Sagamihara-Kanagawa-JP,--allow-dup-id,$(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_all.csv $(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_all-death.csv,$(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_header.csv$$(comma)$(SRC_DIR)/jp141500_神奈川県相模原市-Sagamihara-Kanagawa-JP_header-death.csv,IND-WKA,yes))
+$(eval $(call municipality,jp22130,jp22130_Hamamatsu-Shizuoka-JP,,$(SRC_DIR)/jp221309_静岡県浜松市-Hamamatsu-Shizuoka-JP_all.csv,$(SRC_DIR)/jp221309_静岡県浜松市-Hamamatsu-Shizuoka-JP_header.csv,IND-WKA,yes))
+$(eval $(call municipality,jp22226,jp22226_Makinohara-Shizuoka-JP,,$(SRC_DIR)/jp222267_静岡県牧之原市-Makinohara-Shizuoka-JP_all.csv,$(SRC_DIR)/jp222267_静岡県牧之原市-Makinohara-Shizuoka-JP_header.csv,IND-WKA,yes))
+$(eval $(call municipality,jp23206,jp23206_Kasugai-Aichi-JP,,$(SRC_DIR)/jp232068_愛知県春日井市-Kasugai-Aichi-JP_all.csv,$(SRC_DIR)/jp232068_愛知県春日井市-Kasugai-Aichi-JP_header.csv,IND-WKA,yes))
+$(eval $(call municipality,jp23207,jp23207_Toyokawa-Aichi-JP,--allow-dup-id,$(SRC_DIR)/jp232076_愛知県豊川市-Toyokawa-Aichi-JP_all.csv,$(SRC_DIR)/jp232076_愛知県豊川市-Toyokawa-Aichi-JP_header.csv,IND-WKA,yes))
+$(eval $(call municipality,jp27100,jp27100_Osaka-Osaka-JP,,$(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_all.csv $(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_all-death.csv,$(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_header.csv$$(comma)$(SRC_DIR)/jp271004_大阪府大阪市-Osaka-Osaka-JP_header-death.csv,DTH-WKA,no))
+$(eval $(call municipality,jp44205,jp44205_Saiki-Oita-JP,,$(SRC_DIR)/jp442054_大分県佐伯市-Saiki-Oita-JP_all.csv,$(SRC_DIR)/jp442054_大分県佐伯市-Saiki-Oita-JP_header.csv,IND-WKA,yes))

@@ -53,7 +53,7 @@ class MissingHistoryTest < Minitest::Test
 
   def row(dose, deaths, persondays)
     {
-      areacode: 'area', step: '1', period: '2022-01', age: '80+', dose: dose,
+      loc: 'area', step: '1', period: '2022-01', age: '80+', dose: dose,
       deaths: deaths, persondays: persondays, lives: 100, mortality: 0,
       rr0: '-', lb0: '-', ub0: '-'
     }

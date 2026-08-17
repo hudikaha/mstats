@@ -12,10 +12,10 @@ server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
 ```text
 公開名  Elasticsearchでの接続先
 mstats  alias -> mstats20260816
-kcor    alias -> kcor20260808
-vdeath   index vdeath（年齢補正後の接種後死亡data）
-indiv    alias -> indiv20260721（週単位匿名化IND）
-indivdth 死亡者のみの週単位匿名化個票（DTH-WKA）
+kcor    alias -> kcor20260816
+vdeath  alias -> vdeath20260816（接種後死亡data）
+indiv   alias -> indiv20260816（週単位匿名化IND）
+indivdth alias -> indivdth20260816（死亡者のみの週単位匿名化個票）
 ```
 
 公開pathは次に限定します。

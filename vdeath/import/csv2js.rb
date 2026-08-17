@@ -37,7 +37,7 @@ inputs.each do |in_path|
     tbl = CSV.read(in_path, headers: true, encoding: "UTF-8")
 
     # 必須ヘッダの存在チェック
-    need = %w[areacode area areaj cutoff date age dose deaths]
+    need = %w[loc area areaj cutoff date age dose deaths]
     have = tbl.headers.map { |h| h.to_s.strip.downcase }
     missing = need.reject { |k| have.include?(k) }
     abort "#{in_path}: Missing required columns: #{missing.join(", ")}" unless missing.empty?
@@ -49,7 +49,7 @@ inputs.each do |in_path|
     end
 
     tbl.each do |r|
-        areacode  = r[idx["areacode"]]
+        loc       = r[idx["loc"]]
         area      = r[idx["area"]]
         areaj     = r[idx["areaj"]]
         cutoff    = r[idx["cutoff"]]
@@ -63,7 +63,7 @@ inputs.each do |in_path|
         deaths = ((Float(deaths_s) rescue deaths_s.to_i)).to_i
         next if deaths == 0
 
-        rows << %{  {areacode:#{q(areacode)}, area:#{q(area)}, areaj:#{q(areaj)}, cutoff:#{q(cutoff)}, date:#{q(date)}, age:#{q(age)}, dose:#{dose}, deaths:#{deaths}}}
+        rows << %{  {loc:#{q(loc)}, area:#{q(area)}, areaj:#{q(areaj)}, cutoff:#{q(cutoff)}, date:#{q(date)}, age:#{q(age)}, dose:#{dose}, deaths:#{deaths}}}
     end
 end
 

@@ -20,15 +20,16 @@ vdeathp.rb excess    [options] INPUT...
 
 公開用の2段階処理では、最初に`anonymize`で`IND-WKA`を作り、そのCSVを入力として
 `personyear`または`afterdose`をもう一度実行します。この出力は通常の`1`、`3`、`6`、
-`all`、`week`を使います。日単位の元個票に`--step-prefix org`を付けて同じ集計を行うと、
-`org1`や`orgweek`という比較系列になります。
+`all`、`week`を使います。非公開の日単位情報開示個票を直接集計するときは
+`--step-prefix org`を付け、`org1`や`orgweek`という比較系列を作ります。
 
 共通optionは`--headers FILE[,FILE...]`、`--output FILE`、`--age-reference DATE`、
 `--age-seed-version VERSION`、`--open-age-max AGE`、`--allow-dup-id`、
 `--prohibit-reason-in`、`--report FILE`である。週番号を日付として持つ入力では
 `--iso-week-dates`、再感染で同一人物の行が増える入力では`--first-infection-only`を使う。
 元CSVにもheaderがあり、別の対応headerを`--headers`で与える場合は`--skip-source-header`を使う。
-入力に地域fieldがない場合は`--areacode`、`--area`、`--areaj`で指定できる。
+入力に地域fieldがない場合は`--loc`、`--area`、`--areaj`で指定できる。旧`--areacode`も
+入力互換のため受け付けるが、出力fieldは`loc`だけを使用する。
 `--spread-weekly-dates SEED`は週次化された接種日、死亡日、転入日、転出日を、人物IDとISO週に対するSHA-256から月曜〜日曜へ決定的に分散する。同じ人物の同じ週はeventの種類によらず同じ日になる。同一人物に同一ISO週の複数接種がある場合、その人物は不正な接種系列として集計から除外し、reportの`same_week_doses`へ数える。
 `personyear`は人物ごとに観察時系列を一度だけ作り、期間の内部を差分配列で集計する。旧実装との検算が必要な場合だけ`--legacy-personyear`を指定できる。
 `--progress-total PEOPLE`を指定すると、phaseの開始と処理人口10%ごとの人数・経過時間をstderrへ表示する。
@@ -48,18 +49,21 @@ vdeathp.rb excess    [options] INPUT...
   --headers src/jp132101_example_header.csv \
   --steps 1,3,6,all \
   --ages 00-09,10-19,80+,all \
-  --output outputs/jp132101_example_PY.csv \
+  --output outputs/jp13210_example_PY.csv \
   src/jp132101_example_all.csv
 ```
 
 旧式の複数用途版は`import/vdeathp-20251027.rb`として保存している。
 
-`import/Makefile`は自治体ごとに`PY`、`PY-WKD`、`CUMD-WK`、`IND-WKA`を生成する。死亡者個票だけの大阪市は`CUMD-WK`と`DTH-WKA`を生成する。
+`import/Makefile`は情報開示個票から`PY-ORG`、`PY-WKD-ORG`、`CUMD-WK`、`IND-WKA`を生成し、
+`IND-WKA`の再入力から公開再現用の`PY`と`PY-WKD`を作る。死亡者個票だけの大阪市は
+`CUMD-WK`と`DTH-WKA`を生成する。チェコ政府公式個票は公開済みなので`IND-WKA`を作らず、
+無接頭辞の`PY`、`PY-WKD`、`CUMD-WK`を直接生成する。
 
 ```sh
 cd vdeath/import
 make              # 全自治体
-make jp132101     # 小金井市だけ
+make jp13210      # 小金井市だけ
 make FORCE=1      # 既存出力も再生成
 make cze          # チェコ公式週次個票からvdeathとKCORを生成
 make cumd-backup  # 現在の全CUMD-WKを比較用directoryへ退避
@@ -71,7 +75,7 @@ make publish-cumd # 検査済みCUMD-WKをxz圧縮して公開directoryへ転送
 チェコ公式CSVはrepository外の`~/work/vdeath-src/Czech`に置き、53 fieldの対応は
 `import/headers/czech-2024-01.csv`で指定し、元CSVのheader行は読み飛ばす。`Infekce`が2以上の再感染行を除外し、
 `RokNarozeni`の5年出生年区分からvirtual birthdayを生成する。元dataがすでに週単位なので、
-チェコでは日単位の`org*`比較系列を作らない。
+チェコでは非公開の日単位情報開示個票との比較がないため、`org*`系列を作らない。
 
 `*-IND-WKA.csv`と`*-DTH-WKA.csv`は、非公開の日単位個票CSVから生成した匿名化個票です。これらはそれぞれElasticSearchの`indiv`と`indivdth`として公開します。公開個票は日付を週単位へ丸めているため、内部処理の再現・検証に使えますが、日単位の精度は失われています。
 

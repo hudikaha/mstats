@@ -1,13 +1,99 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
-require 'csv'; require 'json'; require 'net/http'; require 'optparse'; require 'uri'
-o={index:'indiv20260721',url:'http://localhost:9200',credentials:File.expand_path('~/.config/mstats/espass.txt'),mapping:File.expand_path('../config/elasticsearch/indiv20260721.json',__dir__),batch_size:1000,replace:false}
-OptionParser.new{|p| p.on('--index NAME'){|v|o[:index]=v};p.on('--url URL'){|v|o[:url]=v};p.on('--credentials FILE'){|v|o[:credentials]=v};p.on('--mapping FILE'){|v|o[:mapping]=v};p.on('--batch-size N',Integer){|v|o[:batch_size]=v};p.on('--replace'){o[:replace]=true}}.parse!
+
+require 'csv'
+require 'json'
+require 'net/http'
+require 'optparse'
+require 'uri'
+
+options = {
+  index: 'indiv20260721',
+  url: 'http://localhost:9200',
+  credentials: File.expand_path('~/.config/mstats/espass.txt'),
+  mapping: File.expand_path('../config/elasticsearch/indiv20260721.json', __dir__),
+  batch_size: 1_000,
+  replace: false
+}
+
+OptionParser.new do |parser|
+  parser.on('--index NAME') { |value| options[:index] = value }
+  parser.on('--url URL') { |value| options[:url] = value }
+  parser.on('--credentials FILE') { |value| options[:credentials] = value }
+  parser.on('--mapping FILE') { |value| options[:mapping] = value }
+  parser.on('--batch-size N', Integer) { |value| options[:batch_size] = value }
+  parser.on('--replace') { options[:replace] = true }
+end.parse!
 abort 'CSV file is required' if ARGV.empty?
-a,pass=File.read(o[:credentials]).strip.split(':',2); abort 'Invalid credentials file' if a.to_s.empty?||pass.to_s.empty?; base=URI(o[:url])
-def req(base,a,p,m,path,body=nil,ct='application/json'); u=base.dup;u.path=path;r=m.new(u);r.basic_auth(a,p);r['Content-Type']=ct;r.body=body if body;h=Net::HTTP.new(u.hostname,u.port);h.use_ssl=u.scheme=='https';x=h.start{|z|z.request(r)};abort "Elasticsearch #{path} failed: HTTP #{x.code} #{x.body}" unless x.is_a?(Net::HTTPSuccess);x end
-head=req(base,a,pass,Net::HTTP::Head,"/#{o[:index]}") rescue nil
-if o[:replace] && head; req(base,a,pass,Net::HTTP::Delete,"/#{o[:index]}"); head=nil end
-req(base,a,pass,Net::HTTP::Put,"/#{o[:index]}",File.read(o[:mapping])) unless head
-batch=[];count=0; flush=-> { next if batch.empty?; x=JSON.parse(req(base,a,pass,Net::HTTP::Post,'/_bulk',batch.join("\n")+"\n",'application/x-ndjson').body); abort 'Bulk import failed' if x['errors'];batch.clear }
-ARGV.each{|path| CSV.foreach(path,headers:true){|row| s=row.to_h; id=s.fetch('id'); s['dose_final']=s['dose_final'].to_i if s['dose_final']; s.delete_if{|k,v| v.nil?||v.empty?}; batch << JSON.generate(index:{_index:o[:index],_id:id}) << JSON.generate(s); count+=1;flush.call if (count%o[:batch_size]).zero? }};flush.call;puts "Imported #{count} documents into #{o[:index]}"
+
+account, password = File.read(options[:credentials]).strip.split(':', 2)
+abort 'Invalid credentials file' if account.to_s.empty? || password.to_s.empty?
+base_uri = URI(options[:url])
+
+# Elasticsearchへ認証付きrequestを送り、応答を返す。
+# Send an authenticated Elasticsearch request and return its response.
+def es_response(base_uri, account, password, method, path, body = nil, content_type = 'application/json')
+  uri = base_uri.dup
+  uri.path = path
+  request = method.new(uri)
+  request.basic_auth(account, password)
+  request['Content-Type'] = content_type
+  request.body = body if body
+  http = Net::HTTP.new(uri.hostname, uri.port)
+  http.use_ssl = uri.scheme == 'https'
+  http.start { |client| client.request(request) }
+end
+
+# 成功以外は秘密値を出さず終了する。
+# Abort on failure without exposing credentials.
+def es_request(base_uri, account, password, method, path, body = nil, content_type = 'application/json')
+  response = es_response(base_uri, account, password, method, path, body, content_type)
+  return response if response.is_a?(Net::HTTPSuccess)
+
+  abort "Elasticsearch #{method::METHOD} #{path} failed: HTTP #{response.code} #{response.body}"
+end
+
+index_path = "/#{options[:index]}"
+head = es_response(base_uri, account, password, Net::HTTP::Head, index_path)
+if options[:replace] && head.is_a?(Net::HTTPSuccess)
+  es_request(base_uri, account, password, Net::HTTP::Delete, index_path)
+  head = nil
+end
+unless head.is_a?(Net::HTTPSuccess)
+  abort "Cannot inspect #{options[:index]}: HTTP #{head.code}" if head && head.code != '404'
+
+  es_request(base_uri, account, password, Net::HTTP::Put, index_path, File.read(options[:mapping]))
+end
+
+batch = []
+count = 0
+
+# bulk requestを一定件数ずつ送り、同じIDの再実行を安全な上書きにする。
+# Send bounded bulk requests; reruns safely replace documents with the same ID.
+flush = lambda do
+  next if batch.empty?
+
+  response = es_request(base_uri, account, password, Net::HTTP::Post, '/_bulk',
+                        batch.join("\n") + "\n", 'application/x-ndjson')
+  result = JSON.parse(response.body)
+  if result['errors']
+    failure = result.fetch('items').map { |item| item.fetch('index')['error'] }.compact.first
+    abort "Bulk import failed: #{failure.to_json}"
+  end
+  batch.clear
+end
+
+ARGV.each do |path|
+  CSV.foreach(path, headers: true) do |row|
+    source = row.to_h
+    id = source.fetch('id')
+    source['dose_final'] = source['dose_final'].to_i if source['dose_final']
+    source.delete_if { |_field, value| value.nil? || (value.respond_to?(:empty?) && value.empty?) }
+    batch << JSON.generate(index: { _index: options[:index], _id: id })
+    batch << JSON.generate(source)
+    count += 1
+    flush.call if count.modulo(options[:batch_size]).zero?
+  end
+end
+flush.call
+puts "Imported #{count} documents into #{options[:index]}"
