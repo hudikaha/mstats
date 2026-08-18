@@ -6,7 +6,7 @@ require 'json'
 # 死因と人口を共通のmstats2026 CSV形式へ出力する。
 # Emit cause-of-death and population records in the shared mstats2026 CSV schema.
 module Mstats2026
-  ID_FIELDS = %i[loc period category rate death_code algo type sex].freeze
+  ID_FIELDS = %i[loc period category rate dcode algo type sex].freeze
   AREA_FILE = File.expand_path('../config/areas.json', __dir__)
   WHO_WORLD_STANDARD = {
     'age_00_04' => 8.86, 'age_05_09' => 8.69, 'age_10_14' => 8.60,
@@ -47,24 +47,24 @@ module Mstats2026
   ].freeze
 
   FIELDS = (%w[
-    id loc area areaj yearmonth category rate death_code death_cause
+    id loc area areaj yearmonth category rate dcode death_cause
     algo type src_url date year month sex
   ] + AGE_FIELDS).freeze
 
   WEEKLY_FIELDS = (%w[
-    id loc area areaj yearweek category rate death_code death_cause
+    id loc area areaj yearweek category rate dcode death_cause
     algo type src_url date year week sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
 
   YEARLY_FIELDS = (%w[
-    id loc area areaj category rate death_code death_cause
+    id loc area areaj category rate dcode death_cause
     algo type src_url date year sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
 
   # 日本語: 文書IDを全category共通の8要素から生成し、要素内のunderscoreを拒否する。
   # English: Build document IDs from eight shared components and reject underscores inside components.
-  def self.record_id(loc:, period:, category:, rate: '', death_code: '', algo: '', type: '', sex:)
-    values = [loc, period, category, rate, death_code, algo, type, sex].map(&:to_s)
+  def self.record_id(loc:, period:, category:, rate: '', dcode: '', algo: '', type: '', sex:)
+    values = [loc, period, category, rate, dcode, algo, type, sex].map(&:to_s)
     invalid = ID_FIELDS.zip(values).select { |_field, value| value.include?('_') }
     unless invalid.empty?
       detail = invalid.map { |field, value| "#{field}=#{value.inspect}" }.join(', ')
@@ -79,7 +79,7 @@ module Mstats2026
     fetch = ->(field) { row[field] || row[field.to_s] }
     period = fetch.call(:yearmonth) || fetch.call(:yearweek) || fetch.call(:year)
     record_id(loc: fetch.call(:loc), period: period, category: fetch.call(:category),
-              rate: fetch.call(:rate), death_code: fetch.call(:death_code), algo: fetch.call(:algo),
+              rate: fetch.call(:rate), dcode: fetch.call(:dcode), algo: fetch.call(:algo),
               type: fetch.call(:type), sex: fetch.call(:sex))
   end
 

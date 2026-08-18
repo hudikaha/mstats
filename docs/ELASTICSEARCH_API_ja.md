@@ -88,7 +88,7 @@ _source:
 
 | index | 内容 | 主なfield |
 |---|---|---|
-| `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
+| `mstats` | 国別・日本の死亡数、死因別死亡数、人口 | `id`, `loc`, `date`, `year`, `category`, `dcode`, `sex`, `age_*` |
 | `kcor` | cutoff別KCOR集計 | `id`, `loc`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
 | `vdeath` | 年齢区分・接種回数ごとの接種後死亡分析 | `loc`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | 週単位匿名化個票（IND-WKA） | `id`, `loc`, `vbirthday`, `date_doseN`, `date_death` |
@@ -105,13 +105,13 @@ curl -sS -H 'Content-Type: application/json' \
   -X POST 'https://medicalfacts.info/elastic/mstats/_search' \
   -d '{
     "size": 100,
-    "_source": ["id", "date", "yearweek", "death_code", "sex", "age_all"],
+    "_source": ["id", "date", "yearweek", "dcode", "sex", "age_all"],
     "query": {
       "bool": {
         "filter": [
           { "match": { "loc": "jpn" } },
           { "match": { "category": "death" } },
-          { "match": { "death_code": "allcause" } },
+          { "match": { "dcode": "allcause" } },
           { "match": { "sex": "both" } }
         ]
       }
@@ -144,7 +144,7 @@ curl -sS -H 'Content-Type: application/json' \
     "size": 100,
     "_source": [
       "id", "loc", "area", "areaj", "date", "year",
-      "yearmonth", "yearweek", "category", "death_code", "sex", "age_all"
+      "yearmonth", "yearweek", "category", "dcode", "sex", "age_all"
     ],
     "query": {
       "bool": {
@@ -173,14 +173,14 @@ curl -sS -H 'Content-Type: application/json' \
 {
   "size": 100,
   "_source": [
-    "id", "date", "yearmonth", "death_code", "death_cause", "sex", "age_all"
+    "id", "date", "yearmonth", "dcode", "death_cause", "sex", "age_all"
   ],
   "query": {
     "bool": {
       "filter": [
         { "match": { "loc": "jpn" } },
         { "match": { "category": "death" } },
-        { "match": { "death_code": "02100" } },
+        { "match": { "dcode": "02100" } },
         { "match": { "sex": "both" } },
         { "range": { "date": { "gte": "2020-01-01", "lt": "2025-01-01" } } }
       ]
@@ -193,7 +193,7 @@ curl -sS -H 'Content-Type: application/json' \
 }
 ```
 
-全死因の`death_code`は`allcause`です。人口recordは`category=pop`で、`type`は
+全死因の`dcode`は`allcause`です。人口recordは`category=pop`で、`type`は
 `cfm`、`est`、`cfmjpns`、`estjpns`などの系列を区別します。
 
 ## kcorの検索例

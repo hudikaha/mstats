@@ -10,7 +10,7 @@ class MstatsTest < Minitest::Test
   def test_document_id_has_exactly_eight_components
     record = {
       loc_code: 'jpn', yearweek: '2024w01', category: 'death', rate: '',
-      death_code: 'allcause', algo: 'whostd', type: 'cfm', sex: 'both'
+      dcode: 'allcause', algo: 'whostd', type: 'cfm', sex: 'both'
     }
     assert_equal 'jpn_2024w01_death__allcause_whostd_cfm_both', Mstats.document_id(record)
     assert_equal 8, Mstats.document_id(record).split('_', -1).length
@@ -18,7 +18,7 @@ class MstatsTest < Minitest::Test
 
   def test_document_id_rejects_underscore_inside_component
     record = {
-      loc_code: 'jpn', year: 2024, category: 'death', rate: '', death_code: 'allcause',
+      loc_code: 'jpn', year: 2024, category: 'death', rate: '', dcode: 'allcause',
       algo: 'who_std', type: 'cfm', sex: 'both'
     }
     assert_raises(ArgumentError) { Mstats.document_id(record) }
@@ -29,7 +29,7 @@ class MstatsTest < Minitest::Test
     (2015..2020).each do |year|
       record = {
         loc_code: 'jpn', yearweek: "#{year}w01", category: 'death', rate: '',
-        death_code: 'allcause', algo: '', type: 'cfm', sex: 'both', year: year,
+        dcode: 'allcause', algo: '', type: 'cfm', sex: 'both', year: year,
         week: 1, age_all: 100 + year - 2015
       }
       id = Mstats.document_id(record)

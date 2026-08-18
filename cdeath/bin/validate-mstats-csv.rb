@@ -17,7 +17,7 @@ OptionParser.new do |parser|
 end.parse!
 abort 'one or more CSV files are required' if ARGV.empty?
 
-ALLOWED_CATEGORIES = %w[death pop birth delivery fetal-death].freeze
+ALLOWED_CATEGORIES = %w[death incidence pop birth delivery fetal-death].freeze
 SPECIAL_DEATH_CODES = %w[infant perm].freeze
 LEGACY_RATES = %w[adj amr].freeze
 LEGACY_TYPES = %w[conf jpns reconst unwpp2024proj unwpp2024expproj].freeze
@@ -106,33 +106,33 @@ ARGV.each do |file|
       errors << "#{where}: month and week must be empty for yearly data" if present?(row['month']) || present?(row['week'])
     end
 
-    death_code = row['death_code'].to_s
-    %w[loc category rate death_code algo type sex].each do |field|
+    dcode = row['dcode'].to_s
+    %w[loc category rate dcode algo type sex].each do |field|
       value = row[field].to_s
       errors << "#{where}: #{field} must be lowercase: #{value.inspect}" unless value == value.downcase
     end
     errors << "#{where}: legacy rate is forbidden: #{row['rate']}" if LEGACY_RATES.include?(row['rate'])
     errors << "#{where}: legacy type is forbidden: #{row['type']}" if LEGACY_TYPES.include?(row['type'])
-    if category == 'death'
-      errors << "#{where}: death_code is missing" if death_code.empty?
-      system = if death_code == 'allcause'
+    if %w[death incidence].include?(category)
+      errors << "#{where}: dcode is missing" if dcode.empty?
+      system = if dcode == 'allcause'
                  'all'
-               elsif SPECIAL_DEATH_CODES.include?(death_code)
+               elsif SPECIAL_DEATH_CODES.include?(dcode)
                  'indicator'
-               elsif death_code.match?(/\A\d/)
+               elsif dcode.match?(/\A\d/)
                  'japan'
-               elsif death_code.match?(/\A[a-z]/)
+               elsif dcode.match?(/\A[a-z]/)
                  'icd10'
                else
                  'unknown'
                end
       cause_systems[system] += 1
-      errors << "#{where}: unrecognized death_code #{death_code.inspect}" if system == 'unknown'
-      key = [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], death_code,
+      errors << "#{where}: unrecognized dcode #{dcode.inspect}" if system == 'unknown'
+      key = [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], category, dcode,
              row['type'], row['sex']]
       rate_rows.puts "#{key.join("\t")}\t#{row['rate']}"
-    elsif present?(death_code)
-      warnings << "#{where}: death_code is ignored for category #{category}"
+    elsif present?(dcode)
+      warnings << "#{where}: dcode is ignored for category #{category}"
     end
 
     birth_keys << [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']] if category == 'birth'
@@ -144,7 +144,7 @@ ARGV.each do |file|
     elsif category == 'death' && row['rate'] == 'imr'
       errors << "#{where}: infant mortality rate requires age_0" unless row['age_0'].to_s.match?(NUMERIC)
       infant_rate_keys << [where, [row['loc'], unit, row['yearmonth'] || row['yearweek'] || row['year'], row['sex']]]
-    elsif category == 'death' && death_code == 'perm'
+    elsif category == 'death' && dcode == 'perm'
       errors << "#{where}: perm age_all must be positive" unless row['age_all'].to_s.match?(NUMERIC) && row['age_all'].to_f.positive?
       denominator = row['type'] == 'recon' ? birth_keys : delivery_keys
       birth_denominator_keys << [where, denominator,

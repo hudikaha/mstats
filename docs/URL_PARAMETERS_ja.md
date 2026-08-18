@@ -14,14 +14,15 @@
 
 ## 死因・症例
 
-一つの`death_codes` parameterを使い、複数codeを`~`で連結します。
+一つの`dcodes` parameterを使い、複数codeを`~`で連結します。
 
 ```text
-death_codes=infant~perm
-death_codes=04000~05000~06000
+dcodes=infant~perm
+dcodes=04000~05000~06000
 ```
 
-`mortyear.rb`は`death_codes`を複数回書いた旧URLも読み込めますが、formから送信すると上記形式になります。
+`mortyear.rb`は旧名`death_codes`や反復parameterも読み込めますが、formから送信すると
+`dcodes`一つの上記形式になります。
 
 ## 年齢
 

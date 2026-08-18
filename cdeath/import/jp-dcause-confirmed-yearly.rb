@@ -95,11 +95,11 @@ def parse(path)
 
     values = ages.zip(row.drop(2)).filter_map { |age, value| [age, number(value)] if age }.to_h
     id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'death',
-                              death_code: previous_code, type: 'cfm', sex: sex)
+                              dcode: previous_code, type: 'cfm', sex: sex)
     raise "duplicate ID: #{id}" if rows.key?(id)
     rows[id] = {
       id: id, loc: 'jpn', area: 'Japan', category: 'death',
-      death_code: previous_code, death_cause: previous_cause, type: 'cfm',
+      dcode: previous_code, death_cause: previous_cause, type: 'cfm',
       src_url: [source_url(path, year)], date: "#{year}-01-01", year: year, sex: sex
     }.merge(values.transform_keys(&:to_sym))
   end
@@ -113,7 +113,7 @@ ARGV.sort.each do |path|
   overlap = all_rows.keys & rows.keys
   abort "duplicate IDs across files: #{overlap.first}" unless overlap.empty?
   all_rows.merge!(rows)
-  causes = rows.values.map { |row| row[:death_code] }.uniq.length
+  causes = rows.values.map { |row| row[:dcode] }.uniq.length
   expected = causes * 3
   abort "incomplete annual death cube #{year}: rows=#{rows.length} expected=#{expected}" unless rows.length == expected
   warn "#{year}: annual rows=#{rows.length} causes=#{causes}"

@@ -339,7 +339,7 @@ $cgi = CGI.new
 DefaultParams = {
     'ages' => 'all~00_04~05_09~10_14~15_19~20_24~25_29~30_34~35_39~40_44~45_49~50_54~55_59~60_64~65_69~70_74~75_79~80_84~85_89~90_94~95_99~100plus',
     'years' => '2021~2022~2023~2024~2025',
-    'death_codes' => '04000~05000~06000~10000~11000~13000~14000~18000~20000~22000',
+    'dcodes' => '04000~05000~06000~10000~11000~13000~14000~18000~20000~22000',
     'columns' => '3',
     'graph_type' => 'yearly_diff_2020',
     'top' => 'dai10',
@@ -351,14 +351,19 @@ $legacy_regression = $cgi['graph_type'][/^yearly_reg_(2019|2020)$/, 1]
 [
     {keys: 'ages', hash: Ages},
     {keys: 'years', hash: Years},
-    {keys: 'death_codes', hash: Death_codes},
+    {keys: 'dcodes', hash: Death_codes},
     {keys: 'columns', hash: Columns},
     {keys: 'graph_type', hash: Graph_types},
     {keys: 'align_max', hash: Align_max},
     {keys: 'per_capita', hash: Per_capita},
     {keys: 'top', hash: Top},
 ].each do |v|
-    value = $cgi.has_key?(v[:keys]) ? $cgi[v[:keys]] : DefaultParams[v[:keys]]
+    legacy_dcodes = v[:keys] == 'dcodes' && !$cgi.has_key?('dcodes') && $cgi.has_key?('death_codes')
+    value = if legacy_dcodes
+              $cgi['death_codes']
+            else
+              $cgi.has_key?(v[:keys]) ? $cgi[v[:keys]] : DefaultParams[v[:keys]]
+            end
     if value
         keys = value.split(/,|~|、/)
         keys.map! { |key| key.sub(/over\z/, 'plus') } if v[:keys] == 'ages'
@@ -377,7 +382,7 @@ $legacy_regression = $cgi['graph_type'][/^yearly_reg_(2019|2020)$/, 1]
                     key
                 end
             end
-        elsif v[:keys] == 'death_codes'
+        elsif v[:keys] == 'dcodes'
             keys = keys.map{|key| %w[all 00000].include?(key.downcase) ? 'allcause' : key.downcase}
         end
         keys.each do |key|
@@ -696,7 +701,7 @@ canonical_params = [
     ['graph_type', Graph_types.find{|key, value| value[:sel] == 'selected'}[0]],
     ['top', Top.find{|key, value| value[:sel] == 'selected'}[0]],
     ['columns', $columns.to_s],
-    ['death_codes', Death_codes.select{|key, value| value[:sel] == 'checked'}.keys.join('~')],
+    ['dcodes', Death_codes.select{|key, value| value[:sel] == 'checked'}.keys.join('~')],
     ['scale', $scale_mode],
     ['per_capita', Per_capita['true'][:sel] == 'checked' ? 'true' : ''],
     ['adjustment', $adjustment],
@@ -914,7 +919,7 @@ if ! $iframeflag
   }
 
   function clearDeathCodes() {
-    document.querySelectorAll('input[name="death_code"]').forEach(checkbox => {
+    document.querySelectorAll('input[name="dcode"]').forEach(checkbox => {
       checkbox.checked = false;
     });
     updateDeathCodeSummary();
@@ -923,7 +928,7 @@ if ! $iframeflag
   function updateDeathCodeSummary() {
     var summary = document.getElementById('death-code-summary');
     if (!summary) return;
-    var checked = Array.from(document.querySelectorAll('input[name="death_code"]:checked'));
+    var checked = Array.from(document.querySelectorAll('input[name="dcode"]:checked'));
     if (checked.some(checkbox => checkbox.dataset.searchRank)) {
       checked.sort((a, b) =>
         Number(a.dataset.searchRank || Number.MAX_SAFE_INTEGER) -
@@ -996,7 +1001,7 @@ if ! $iframeflag
                                 option => option.value);
     var columns = Array.from(document.querySelectorAll('select[name="columns"] option:checked'),
                                 option => option.value);
-    var death_codes= Array.from(document.querySelectorAll('input[name="death_code"]:checked'),
+    var dcodes= Array.from(document.querySelectorAll('input[name="dcode"]:checked'),
                                 checkbox => checkbox.value);
     var scale = document.querySelector('select[name="scale"]').value;
     var per_capita = Array.from(document.querySelectorAll('input[name="per_capita"]:checked'),
@@ -1038,7 +1043,7 @@ if ! $iframeflag
         + '&graph_type=' + graph_type
         + '&top=' + top
         + '&columns=' + columns
-        + '&death_codes=' + death_codes.join('~')
+        + '&dcodes=' + dcodes.join('~')
         + '&scale=' + scale
         + '&per_capita=' + per_capita
         + '&adjustment=' + adjustment
@@ -1061,7 +1066,7 @@ if ! $iframeflag
         if (window.renderInstantSelection) window.renderInstantSelection();
       });
     });
-    document.querySelectorAll('input[name="death_code"]').forEach(input => {
+    document.querySelectorAll('input[name="dcode"]').forEach(input => {
       input.addEventListener('change', updateDeathCodeSummary);
     });
     document.getElementById('regression-select').addEventListener('change', input => {
@@ -1149,7 +1154,7 @@ print <<EOF
     <details id="death-code-details"><summary id="death-code-summary" class="disclosure-summary">#{{ja: '死因チェックボックスを', en: ''}[$l]}<span class="disclosure-action">#{{ja:'開く', en:'Open'}[$l]}</span>#{{ja:'', en:' cause checkboxes'}[$l]}</summary>
       <button type="button" onclick="clearDeathCodes()">#{{ja:'死因選択をクリア', en:'Clear causes'}[$l]}</button>
       <details>
-        <summary><span><input type="checkbox" name="death_code" value="allcause" #{Death_codes['allcause'][:sel]}> #{{ja: '全死因', en: 'All cause'}[$l]}</span></summary>
+        <summary><span><input type="checkbox" name="dcode" value="allcause" #{Death_codes['allcause'][:sel]}> #{{ja: '全死因', en: 'All cause'}[$l]}</span></summary>
         <ul style="list-style-type: none;">
 EOF
     Death_codes.each do |k, v|
@@ -1159,12 +1164,12 @@ EOF
         </ul>
       </details>
       <details open>
-        <summary><span><input type="checkbox" name="death_code" value="#{k}" #{v[:sel]}> #{k}: #{v[$l]} <!-- (#{{ja: 'クリックして更に展開', en: 'Expand more by clicking'}[$l]}) --> </span></summary>
+        <summary><span><input type="checkbox" name="dcode" value="#{k}" #{v[:sel]}> #{k}: #{v[$l]} <!-- (#{{ja: 'クリックして更に展開', en: 'Expand more by clicking'}[$l]}) --> </span></summary>
         <ul style="list-style-type: none;">
 EOF
         else
             print <<EOF
-          <li> <span><input type="checkbox" name="death_code" value="#{k}" #{v[:sel]}> #{k}: #{v[$l]}</span>
+          <li> <span><input type="checkbox" name="dcode" value="#{k}" #{v[:sel]}> #{k}: #{v[$l]}</span>
 EOF
         end
     end
@@ -1291,7 +1296,7 @@ EOF
 
 # 選択した死因の月次Vega-Liteグラフ定義を出力する。
 # Render monthly Vega-Lite chart specifications for the selected causes of death.
-def print_monthly(death_codes)
+def print_monthly(dcodes)
 
     print <<EOF
       },
@@ -1300,7 +1305,7 @@ def print_monthly(death_codes)
 EOF
 
     $firstflag = true
-    death_codes.each do |code|
+    dcodes.each do |code|
         if code =~ /population/
             cause = {sel: 'checked', ja: '人口', en: 'Population'}
         else
@@ -1322,7 +1327,7 @@ EOF
             "x": { "field": "month", "type": "ordinal", "title": null}
           },
           "transform": [
-            { "filter": "datum['death_code'] == '#{code}'"}
+            { "filter": "datum['dcode'] == '#{code}'"}
           ],
           "layer": [
             {
@@ -1402,7 +1407,7 @@ end # def print_monthly
 
 # 選択した死因の年次Vega-Liteグラフ定義を出力する。
 # Render yearly Vega-Lite chart specifications for the selected causes of death.
-def print_yearly(death_codes)
+def print_yearly(dcodes)
 
     print <<EOF
       },
@@ -1411,7 +1416,7 @@ def print_yearly(death_codes)
 EOF
 
     $firstflag = true
-    death_codes.each do |code|
+    dcodes.each do |code|
         if code =~ /population/
             cause = {sel: 'checked', ja: '人口', en: 'Population'}
         else
@@ -1431,7 +1436,7 @@ EOF
             "x": { "field": "year", "type": "ordinal", "title": null}
           },
           "transform": [
-            { "filter": "datum['death_code'] == '#{code}'"}
+            { "filter": "datum['dcode'] == '#{code}'"}
           ],
           "layer": [
             {
@@ -1513,7 +1518,7 @@ end # def print_yearly
 # Render yearly ratio and derived-series charts.
 def print_yearly_ratio(subtype, appdx, formats)
     rank_sort = $topflag ? '"sort": {"field": "rank", "order": "ascending"},' : ''
-    category_count = [$death_codes.count, 1].max
+    category_count = [$dcodes.count, 1].max
     year_count = [$years.count, 1].max
     bar_size = [[(2400.0 / category_count / year_count * 0.55).floor, 2].max, 12].min
     category_width = 1200.0 / category_count
@@ -1577,12 +1582,12 @@ def print_yearly_ratio(subtype, appdx, formats)
 EOF
 end # def print_yearly_ratio
 
-death_code_terms = if $topflag
+dcode_terms = if $topflag
                        Death_codes.keys
                    else
                        Death_codes.select{|k, v| v[:sel] == 'checked'}.keys
                    end
-death_code_terms = death_code_terms.map{|code| %w[all 00000].include?(code) ? 'allcause' : code.downcase}
+dcode_terms = dcode_terms.map{|code| %w[all 00000].include?(code) ? 'allcause' : code.downcase}
 per_capita_selected = Per_capita['true'][:sel] == 'checked'
 population_selected = $cgi['category'] =~ /population/
 needs_population = $adjustment != 'none' || per_capita_selected || population_selected
@@ -1593,7 +1598,7 @@ should = [
         'bool' => {
             'must' => [
                 {'term' => {'category' => 'death'}},
-                {'terms' => {'death_code' => death_code_terms}},
+                {'terms' => {'dcode' => dcode_terms}},
                 {
                     'bool' => {
                         'should' => [
@@ -1647,7 +1652,7 @@ data0 = elastic_search(
         {'term' => {'type' => 'unmonth'}},
     ],
     :should => should,
-    :source => ['id', 'category', 'date', 'year', 'month', 'death_code', 'death_cause', 'sex', 'type'] +
+    :source => ['id', 'category', 'date', 'year', 'month', 'dcode', 'death_cause', 'sex', 'type'] +
                age_sources,
     #:debug => 'SHOWONLY',
 )
@@ -1655,7 +1660,7 @@ data0 = elastic_search(
 # 日本語: 同じ年月・死因の確定値と速報値が共存するときは確定値を使う。
 # English: Prefer confirmed records when confirmed and provisional monthly values coexist.
 data0 = data0.group_by do |datum|
-    [datum[:category], datum[:year], datum[:month], datum[:sex], datum[:death_code],
+    [datum[:category], datum[:year], datum[:month], datum[:sex], datum[:dcode],
      datum[:rate].to_s, datum[:algo].to_s]
 end.values.map do |records|
     records.min_by { |datum| datum[:type].to_s == 'cfm' ? 0 : 1 }
@@ -1684,7 +1689,7 @@ data0.each do |datum0|
         if k =~ /^category/
             datum[k] = (v == 'pop' ? 'population' : v)
             if v == 'pop'
-                datum['death_code'] = 'population'
+                datum['dcode'] = 'population'
                 datum['death_cause'] = '人口'
                 datum['death_cause_ja'] = '人口'
                 datum['death_cause_en'] = 'Population'
@@ -1693,7 +1698,7 @@ data0.each do |datum0|
             datum[k] = v
         elsif k == 'year'
             datum[k] = v.to_s
-        elsif k =~ /^death_code/
+        elsif k =~ /^dcode/
             internal_code = (%w[00000 all].include?(v.to_s.downcase) ? 'allcause' : v.to_s.downcase)
             datum[k] = internal_code
             if Death_codes[internal_code]
@@ -1801,74 +1806,74 @@ end
 sums = Hash.new
 
 if $topflag
-    $death_codes = Death_codes.map{|k, v| k}
+    $dcodes = Death_codes.map{|k, v| k}
 else
-    $death_codes = Death_codes.select{|k,v| v[:sel] == 'checked'}.map{|k, v| k}
+    $dcodes = Death_codes.select{|k,v| v[:sel] == 'checked'}.map{|k, v| k}
 end
 if $cgi['category'] =~ /population/
-    $death_codes.unshift('population')
+    $dcodes.unshift('population')
 end
 
 data_by_code_year = Hash.new{|hash, key| hash[key] = []}
 $data.each_value do |datum|
-    data_by_code_year[[datum['death_code'], datum['year']]] << datum
+    data_by_code_year[[datum['dcode'], datum['year']]] << datum
 end
 
-#pp $death_codes
+#pp $dcodes
 #pp $topflag
 #exit
 
-$death_codes.each do |death_code|
-    sums[death_code] = Hash.new
+$dcodes.each do |dcode|
+    sums[dcode] = Hash.new
     $years_ref.each do |year|
-        sums[death_code][year] = data_by_code_year[[death_code, year]].sum{|datum| datum['sum']}
+        sums[dcode][year] = data_by_code_year[[dcode, year]].sum{|datum| datum['sum']}
     end
 end
 
-#pp $death_codes
+#pp $dcodes
 #pp sums
 #exit
 
 sums_per_capita = Hash.new
 if per_capita_selected
-    $death_codes.each do |death_code|
-        sums_per_capita[death_code] = Hash.new
+    $dcodes.each do |dcode|
+        sums_per_capita[dcode] = Hash.new
         $years_ref.each do |year|
-            sums_per_capita[death_code][year] = data_by_code_year[[death_code, year]].sum{|datum| datum['sum_per_capita']}.round(6)
+            sums_per_capita[dcode][year] = data_by_code_year[[dcode, year]].sum{|datum| datum['sum_per_capita']}.round(6)
         end
     end
 end
 
 avgs = Hash.new
-$death_codes.each do |death_code|
-    next if sums[death_code].count == 0
-    avgs[death_code] = (sums[death_code].sum{|k, v| v}.to_f / sums[death_code].count).round(6)
+$dcodes.each do |dcode|
+    next if sums[dcode].count == 0
+    avgs[dcode] = (sums[dcode].sum{|k, v| v}.to_f / sums[dcode].count).round(6)
 end
 
 avgs_per_capita = Hash.new
 if per_capita_selected
-    $death_codes.each do |death_code|
-        next if sums[death_code].count == 0
-        avgs_per_capita[death_code] = (sums_per_capita[death_code].sum{|_k, v| v}.to_f / sums_per_capita[death_code].count).round(6)
+    $dcodes.each do |dcode|
+        next if sums[dcode].count == 0
+        avgs_per_capita[dcode] = (sums_per_capita[dcode].sum{|_k, v| v}.to_f / sums_per_capita[dcode].count).round(6)
     end
 end
 
-$death_codes.each do |death_code|
+$dcodes.each do |dcode|
     ($years + $years_context).uniq.each do |year|
-        values = data_by_code_year[[death_code, year]]
+        values = data_by_code_year[[dcode, year]]
         datum = values.find{|value| value['month'] == '01'}
         next if ! datum
         datum['yearly_sum'] =
             values.sum{|v| v['sum']}
-        if death_code == 'population'
+        if dcode == 'population'
             datum['yearly_sum'] /= 12
         end
         if per_capita_selected
             datum['yearly_sum_per_capita'] =
                 values.sum{|v| v['sum_per_capita']}.round(6)
         end
-        datum['yearly_avg'] = avgs[death_code]
-        datum['yearly_avg_per_capita'] = avgs_per_capita[death_code] if per_capita_selected
+        datum['yearly_avg'] = avgs[dcode]
+        datum['yearly_avg_per_capita'] = avgs_per_capita[dcode] if per_capita_selected
 
         if datum['yearly_sum'] && datum['yearly_avg']
             datum['yearly_diff'] = datum['yearly_sum'] - datum['yearly_avg']
@@ -1878,17 +1883,17 @@ $death_codes.each do |death_code|
                 datum['yearly_sum_per_capita'] - datum['yearly_avg_per_capita']
         end
 
-        next if ! avgs[death_code] || avgs[death_code] == 0
+        next if ! avgs[dcode] || avgs[dcode] == 0
 
-        datum['yearly_ratio'] = (datum['yearly_sum'] / avgs[death_code] - 1).round(6)
+        datum['yearly_ratio'] = (datum['yearly_sum'] / avgs[dcode] - 1).round(6)
         if per_capita_selected
-            if avgs_per_capita[death_code] > 0
-                datum['yearly_ratio_per_capita'] = (datum['yearly_sum_per_capita'] / avgs_per_capita[death_code] - 1).round(6)
+            if avgs_per_capita[dcode] > 0
+                datum['yearly_ratio_per_capita'] = (datum['yearly_sum_per_capita'] / avgs_per_capita[dcode] - 1).round(6)
             else
                 datum['yearly_ratio_per_capita'] = 0
             end
         end
-        #puts "#{datum['yearly_ratio_per_capita']} #{datum['yearly_sum_per_capita']} #{avgs_per_capita[death_code]}"
+        #puts "#{datum['yearly_ratio_per_capita']} #{datum['yearly_sum_per_capita']} #{avgs_per_capita[dcode]}"
     end
 end
 
@@ -1896,16 +1901,16 @@ end
 # Top 20 を検索
 #
 if $topflag
-    #$death_codes = $data.select{|k, v| v['yearly_diff'] && v['year'] == $last_year}.
+    #$dcodes = $data.select{|k, v| v['yearly_diff'] && v['year'] == $last_year}.
     #                  sort{|(ak, av), (bk, bv)| bv['yearly_diff'] <=> av['yearly_diff']}.
-    #                  map{|k, v| v['death_code']}.slice(0, 20)
+    #                  map{|k, v| v['dcode']}.slice(0, 20)
 
-    $death_codes = Array.new
+    $dcodes = Array.new
     if Death_codes['allcause'][:sel] == 'checked'
-        $death_codes.push('all')
+        $dcodes.push('all')
     end
     if Death_codes['02100'][:sel] == 'checked'
-        $death_codes.push('02100')
+        $dcodes.push('02100')
     end
     count = 1
     yearly_diff = (Per_capita['true'][:sel] == 'checked') ?
@@ -1918,7 +1923,7 @@ if $topflag
                                    Top['cancer10'][:sel] == 'selected' ) ?
                  bv[yearly_diff] <=> av[yearly_diff] :
                  av[yearly_diff] <=> bv[yearly_diff]}.
-        map{|k, v| v['death_code']}.
+        map{|k, v| v['dcode']}.
         each do |code|
         if Top['cancer20'][:sel] == 'selected' || Top['cancer10'][:sel] == 'selected'
             next if code !~ /^021..$/ || code =~ /^02100$/
@@ -1930,7 +1935,7 @@ if $topflag
         elsif Top['dai10'][:sel] == 'selected'
             next if code !~ /^..000$/
         end
-        $death_codes.push(code)
+        $dcodes.push(code)
         count += 1
         break if count > 20 ||
                  ((Top['dai10'][:sel] == 'selected' || Top['cancer10'][:sel] == 'selected') &&
@@ -1938,15 +1943,15 @@ if $topflag
     end
 
     #$data = $data.select{|k, v| Years[v['year']][:sel] == 'checked' &&
-    #                     $death_codes.find{|code| code == v['death_code']}}
+    #                     $dcodes.find{|code| code == v['dcode']}}
 
     $data2 = Hash.new
     $data.each do |k, v|
         next if Years[v['year']][:sel] != 'checked' &&
                 ! $years_context.include?(v['year'])
-        v2 = $death_codes.find{|code| code == v['death_code']}
+        v2 = $dcodes.find{|code| code == v['dcode']}
         next if ! v2
-        index = $death_codes.index(v['death_code']) + 1
+        index = $dcodes.index(v['dcode']) + 1
         index -= 1 if Death_codes['allcause'][:sel] == 'checked'
         index -= 1 if Death_codes['02100'][:sel] == 'checked'
         index = 0 if index < 0
@@ -1995,9 +2000,9 @@ end
 # submitで確定した年齢調整・人口あたり系列について回帰線を計算する。
 regression_field = Per_capita['true'][:sel] == 'checked' ? 'yearly_sum_per_capita' : 'yearly_sum'
 [2019, 2020].each do |until_year|
-    $death_codes.each do |death_code|
+    $dcodes.each do |dcode|
         data = ($years + $years_ref + $years_context).uniq.flat_map{|year|
-            data_by_code_year[[death_code, year]]
+            data_by_code_year[[dcode, year]]
         }.select{|datum|
             datum['month'] == '01' && datum[regression_field]
         }.sort_by{|datum| datum['year'].to_i}
@@ -2028,14 +2033,14 @@ $target = 'sum_per_capita' if Per_capita['true'][:sel] == 'checked'
 
 p = ($graph_key == 'yearly') ? 'yearly_' : ''
 s = (Per_capita['true'][:sel] == 'checked') ? '_per_capita' : ''
-codes = $data.values.map{|v| v['death_code']}.compact.uniq
+codes = $data.values.map{|v| v['dcode']}.compact.uniq
 %w[aligned aligned_except_all].each do |mode|
-    max = $data.values.select{|v| v['death_code'] != 'population' && (mode == 'aligned' || v['death_code'] != 'all') && v["#{p}sum#{s}"]}.
+    max = $data.values.select{|v| v['dcode'] != 'population' && (mode == 'aligned' || v['dcode'] != 'all') && v["#{p}sum#{s}"]}.
               max{|a, b| a["#{p}sum#{s}"].to_f <=> b["#{p}sum#{s}"].to_f}
 $domain_str[mode] = '"domain": [ 0, ' + (max["#{p}sum#{s}"].to_f * 1.05).to_s + ' ]' if max
 end
 
-$data.values.group_by{|v| v['death_code']}.each do |code, rows|
+$data.values.group_by{|v| v['dcode']}.each do |code, rows|
     values = rows.map{|v| v["#{p}sum#{s}"].to_f}.select(&:finite?)
     next if values.empty?
     low = [values.min * 0.9, 0].max
@@ -2055,13 +2060,15 @@ $domain_debug = {current: $scale_mode, current_domains: $domain_debug[$scale_mod
 #exit
 
 
-death_codes2 = $cgi['death_codes'].split(/,|~|、/)
-$death_codes = death_codes2 if !$topflag && $death_codes.sort == death_codes2.sort
+raw_dcodes = $cgi['dcodes']
+raw_dcodes = $cgi['death_codes'] if raw_dcodes.empty?
+dcodes2 = raw_dcodes.split(/,|~|、/)
+$dcodes = dcodes2 if !$topflag && $dcodes.sort == dcodes2.sort
 
 if $graph_key =~ /^monthly$/
-    print_monthly($death_codes)
+    print_monthly($dcodes)
 elsif $graph_key =~ /^yearly$/
-    print_yearly($death_codes)
+    print_yearly($dcodes)
 elsif $graph_key =~ /^yearly_/
     $years.each do |year|
         if $filter_str == ''
@@ -2095,7 +2102,7 @@ print <<EOF
     const instantTopResult = #{$topflag};
     const instantShowYearlyOverview = #{$show_yearly_overview ? 'true' : 'false'};
     const instantYearlyField = #{JSON.generate(Per_capita['true'][:sel] == 'checked' ? 'yearly_sum_per_capita' : 'yearly_sum')};
-    const instantSearchedDeathCodes = #{JSON.generate($topflag ? $death_codes : [])};
+    const instantSearchedDeathCodes = #{JSON.generate($topflag ? $dcodes : [])};
     function setScaleDomains(chart, values, scaleMode) {
       if (!chart || typeof chart != 'object') return;
       var domainText = rubyDomainStrings[scaleMode];
@@ -2104,8 +2111,8 @@ print <<EOF
         return;
       }
       var isAllCause = (chart.transform || []).some(transform =>
-        typeof transform.filter == 'string' && transform.filter.includes("death_code'] == 'all'"));
-      var codeMatch = (chart.transform || []).map(transform => String(transform.filter || '').match(/death_code.*?==\s*['"]([^'"]+)['"]/)).find(Boolean);
+        typeof transform.filter == 'string' && transform.filter.includes("dcode'] == 'all'"));
+      var codeMatch = (chart.transform || []).map(transform => String(transform.filter || '').match(/dcode.*?==\s*['"]([^'"]+)['"]/)).find(Boolean);
       var code = isAllCause ? 'all' : (codeMatch ? codeMatch[1] : null);
       var fields = [];
       function visit(value) {
@@ -2133,7 +2140,7 @@ print <<EOF
     function buildYearlyOverviewSpec(values, language, columns) {
       var yearTitle = language == 'ja' ? '年' : 'Year';
       var panels = instantSearchedDeathCodes.map(code => {
-        var sample = values.find(datum => datum.death_code == code);
+        var sample = values.find(datum => datum.dcode == code);
         var title = sample ? sample.death_cause : code;
         var layers = [
           {
@@ -2175,7 +2182,7 @@ print <<EOF
           width: {step: #{$step}},
           title: [title],
           encoding: {x: {field: 'year', type: 'ordinal', title: null}},
-          transform: [{filter: `datum['death_code'] == '${code}'`}],
+          transform: [{filter: `datum['dcode'] == '${code}'`}],
           layer: layers
         };
       });
@@ -2192,7 +2199,7 @@ print <<EOF
 
     function checkSearchedDeathCodes() {
       if (!instantTopResult) return;
-      document.querySelectorAll('input[name="death_code"]').forEach(checkbox => {
+      document.querySelectorAll('input[name="dcode"]').forEach(checkbox => {
         checkbox.checked = instantSearchedDeathCodes.includes(checkbox.value);
         var rank = instantSearchedDeathCodes.indexOf(checkbox.value);
         if (rank >= 0) checkbox.dataset.searchRank = rank + 1;

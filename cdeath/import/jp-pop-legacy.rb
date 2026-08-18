@@ -26,7 +26,7 @@ ARGV.each do |file|
       yearmonth: format('%dm%02d', year, month),
       category: 'pop',
       rate: '',
-      death_code: '',
+      dcode: '',
       death_cause: '',
       algo: '',
       type: type,

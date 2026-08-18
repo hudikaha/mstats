@@ -92,7 +92,7 @@ nonexistent ID returns HTTP 404 with `found` set to `false`.
 
 | Index | Contents | Main fields |
 |---|---|---|
-| `mstats` | Mortality, causes of death, and population | `id`, `loc`, `date`, `year`, `category`, `death_code`, `sex`, `age_*` |
+| `mstats` | Mortality, causes of death, and population | `id`, `loc`, `date`, `year`, `category`, `dcode`, `sex`, `age_*` |
 | `kcor` | KCOR results by cutoff | `id`, `loc`, `date`, `cutoff`, `cweek`, `age`, `dose`, `deaths`, `pop` |
 | `vdeath` | Post-vaccination death analyses by age group and dose | `loc`, `period`, `age`, `dose`, `deaths`, `mortality` |
 | `indiv` | Weekly-anonymized individual records (IND-WKA) | `id`, `loc`, `vbirthday`, `date_doseN`, `date_death` |
@@ -110,13 +110,13 @@ curl -sS -H 'Content-Type: application/json' \
   -X POST 'https://medicalfacts.info/elastic/mstats/_search' \
   -d '{
     "size": 100,
-    "_source": ["id", "date", "yearweek", "death_code", "sex", "age_all"],
+    "_source": ["id", "date", "yearweek", "dcode", "sex", "age_all"],
     "query": {
       "bool": {
         "filter": [
           { "match": { "loc": "jpn" } },
           { "match": { "category": "death" } },
-          { "match": { "death_code": "allcause" } },
+          { "match": { "dcode": "allcause" } },
           { "match": { "sex": "both" } }
         ]
       }
@@ -150,7 +150,7 @@ curl -sS -H 'Content-Type: application/json' \
     "size": 100,
     "_source": [
       "id", "loc", "area", "areaj", "date", "year",
-      "yearmonth", "yearweek", "category", "death_code", "sex", "age_all"
+      "yearmonth", "yearweek", "category", "dcode", "sex", "age_all"
     ],
     "query": {
       "bool": {
@@ -179,14 +179,14 @@ Japanese municipalities use codes such as `jp13210`.
 {
   "size": 100,
   "_source": [
-    "id", "date", "yearmonth", "death_code", "death_cause", "sex", "age_all"
+    "id", "date", "yearmonth", "dcode", "death_cause", "sex", "age_all"
   ],
   "query": {
     "bool": {
       "filter": [
         { "match": { "loc": "jpn" } },
         { "match": { "category": "death" } },
-        { "match": { "death_code": "02100" } },
+        { "match": { "dcode": "02100" } },
         { "match": { "sex": "both" } },
         { "range": { "date": { "gte": "2020-01-01", "lt": "2025-01-01" } } }
       ]
@@ -199,7 +199,7 @@ Japanese municipalities use codes such as `jp13210`.
 }
 ```
 
-The all-cause `death_code` is `allcause`. Population records use `category=pop`;
+The all-cause `dcode` is `allcause`. Population records use `category=pop`;
 their `type` distinguishes series such as `cfm`, `est`, `cfmjpns`, and `estjpns`.
 
 ## kcor example

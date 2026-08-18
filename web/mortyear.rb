@@ -155,6 +155,39 @@ SPECIAL_CAUSES = {
   'infant' => { ja: '乳児死亡率', en: 'Infant mortality rate' },
   'perm' => { ja: '周産期死亡率', en: 'Perinatal mortality rate' }
 }.freeze
+CANCER_DATASETS = {
+  'vital' => { category: 'death', types: nil,
+               ja: '人口動態統計・死亡', en: 'Vital Statistics mortality' },
+  'cancer-incidence' => { category: 'incidence', types: %w[mcij ncr],
+                          ja: 'がん統計・罹患', en: 'Cancer Statistics incidence' },
+  'cancer-death' => { category: 'death', types: %w[ncc],
+                      ja: 'がん統計・死亡', en: 'Cancer Statistics mortality' }
+}.freeze
+CANCER_SITES = {
+  'allcancer' => { ja: '全部位の癌', en: 'All cancer sites' },
+  'c00-c14' => { ja: '口腔・咽頭癌', en: 'Oral cavity and pharynx cancer' },
+  'c15' => { ja: '食道癌', en: 'Esophageal cancer' }, 'c16' => { ja: '胃癌', en: 'Stomach cancer' },
+  'c18-c20' => { ja: '大腸癌', en: 'Colorectal cancer' }, 'c18' => { ja: '結腸癌', en: 'Colon cancer' },
+  'c19-c20' => { ja: '直腸癌', en: 'Rectal cancer' }, 'c22' => { ja: '肝癌', en: 'Liver cancer' },
+  'c23-c24' => { ja: '胆嚢・胆管癌', en: 'Gallbladder and bile duct cancer' },
+  'c25' => { ja: '膵癌', en: 'Pancreatic cancer' }, 'c32' => { ja: '喉頭癌', en: 'Laryngeal cancer' },
+  'c33-c34' => { ja: '肺癌', en: 'Lung cancer' }, 'c43-c44' => { ja: '皮膚癌', en: 'Skin cancer' },
+  'c50' => { ja: '乳癌', en: 'Breast cancer' }, 'c53-c55' => { ja: '子宮癌', en: 'Uterine cancer' },
+  'c53' => { ja: '子宮頸癌', en: 'Cervical cancer' }, 'c54' => { ja: '子宮体癌', en: 'Cancer of the uterine corpus' },
+  'c56' => { ja: '卵巣癌', en: 'Ovarian cancer' }, 'c61' => { ja: '前立腺癌', en: 'Prostate cancer' },
+  'c67' => { ja: '膀胱癌', en: 'Bladder cancer' },
+  'c64-c66c68' => { ja: '腎・尿路癌（膀胱を除く）', en: 'Kidney and urinary tract cancer excluding bladder' },
+  'c70-c72' => { ja: '脳・中枢神経系癌', en: 'Brain and central nervous system cancer' },
+  'c73' => { ja: '甲状腺癌', en: 'Thyroid cancer' },
+  'c81-c85c96' => { ja: '悪性リンパ腫', en: 'Malignant lymphoma' },
+  'c88-c90' => { ja: '多発性骨髄腫', en: 'Multiple myeloma' },
+  'c91-c95' => { ja: '白血病', en: 'Leukemia' }
+}.freeze
+CANCER_SITE_CHILDREN = {
+  'allcancer' => CANCER_SITES.keys - ['allcancer'],
+  'c18-c20' => %w[c18 c19-c20],
+  'c53-c55' => %w[c53 c54]
+}.freeze
 REGION_LABELS = {
   'Africa' => { ja: 'アフリカ', en: 'Africa' },
   'Asia' => { ja: 'アジア', en: 'Asia' },
@@ -212,9 +245,17 @@ $l = if requested_language.match?(/^(en|english)/i) ||
        :ja
      end
 mode = cgi['mode'] == 'series' ? 'series' : 'country'
+selected_dataset = CANCER_DATASETS.key?(cgi['dataset']) ? cgi['dataset'] : 'vital'
+$mortyear_category = CANCER_DATASETS.fetch(selected_dataset).fetch(:category)
+$mortyear_types = CANCER_DATASETS.fetch(selected_dataset).fetch(:types)
 requested_locations = cgi.params.fetch('c', []).flat_map { |value| value.split(/[~,]/) }.
                       map(&:upcase).uniq
 selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
+if selected_dataset != 'vital'
+  selected_period = 'calendar'
+  mode = 'series'
+  requested_locations = ['JPN']
+end
 # 日本語: cod.rb互換のages範囲表記と旧来の反復age parameterを内部field名へ展開する。
 # English: Expand cod.rb-compatible age ranges and legacy repeated age parameters into field names.
 age_values = cgi.params.fetch('ages', []) + cgi.params.fetch('age', [])
@@ -247,6 +288,8 @@ end.flatten.select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
 selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
+selected_metric = 'deaths' if selected_dataset != 'vital' && !%w[deaths crude_rate asr].include?(selected_metric)
+selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric == 'asr'
 selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
@@ -268,12 +311,21 @@ selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_
 selected_ages &= STMF_AGES if selected_period != 'calendar'
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_ages = ['age_all'] if selected_period != 'calendar' && selected_ages.include?('age_all')
-requested_causes = cgi.params.fetch('death_codes', []).flat_map { |value| value.split(/[~,]/) }.
+requested_dcodes = cgi.params.fetch('dcodes', [])
+requested_dcodes = cgi.params.fetch('death_codes', []) if requested_dcodes.empty?
+requested_causes = requested_dcodes.flat_map { |value| value.split(/[~,]/) }.
                    map do |code|
                      normalized = code.downcase
                      %w[all 00000].include?(normalized) ? 'allcause' :
                        (normalized == 'perinatal' ? 'perm' : normalized)
                    end.uniq
+include_incidence = %w[1 true yes on].include?(cgi['include_incidence'].downcase) ||
+                    selected_dataset == 'cancer-incidence'
+if selected_dataset != 'vital' && selected_sex == 'both'
+  requested_site_codes = requested_causes.empty? ? ['c53'] : requested_causes
+  selected_sex = 'female' if (requested_site_codes - %w[c53-c55 c53 c54 c56]).empty?
+  selected_sex = 'male' if requested_site_codes == ['c61']
+end
 requested_start_year = cgi['start_year'].to_i
 period_start_year = selected_period == 'calendar' ? 2000 : 1999
 default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : period_start_year
@@ -319,7 +371,7 @@ def available_location_rates(index:, fixture:)
     size: 0,
     query: { bool: { filter: [
       { term: { category: 'death' } },
-      { term: { death_code: 'allcause' } },
+      { term: { dcode: 'allcause' } },
       { exists: { field: 'yearweek' } }
     ] } },
     aggs: { locations: { terms: { field: 'loc', size: 300 },
@@ -345,12 +397,12 @@ def available_annual_catalog(index:, fixture:)
         area: sample[:area].to_s, areaj: sample[:areaj].to_s,
         rates: rows.map { |row| row[:rate].to_s }.uniq,
         categories: rows.map { |row| row[:category].to_s }.uniq,
-        death_codes: rows.map { |row| row[:death_code].to_s }.reject(&:empty?).uniq,
-        death_code_max_years: rows.select { |row| !row[:death_code].to_s.empty? }.
-                              group_by { |row| row[:death_code].to_s }.
+        dcodes: rows.map { |row| row[:dcode].to_s }.reject(&:empty?).uniq,
+        dcode_max_years: rows.select { |row| !row[:dcode].to_s.empty? }.
+                              group_by { |row| row[:dcode].to_s }.
                               transform_values { |items| items.map { |row| row[:year].to_i }.max },
         infant_all_cause_max_year: rows.select do |row|
-          row[:category] == 'death' && row[:death_code] == 'allcause' && row[:type] == 'cfm' &&
+          row[:category] == 'death' && row[:dcode] == 'allcause' && row[:type] == 'cfm' &&
             row[:rate].to_s.empty? && row[:algo].to_s.empty? && !row[:age_0].nil?
         end.map { |row| row[:year].to_i }.max.to_i,
         algos: rows.map { |row| row[:algo].to_s }.uniq
@@ -370,10 +422,10 @@ def available_annual_catalog(index:, fixture:)
       sample: { top_hits: { size: 1, _source: %w[area areaj] } },
       rates: { terms: { field: 'rate', size: 20 } },
       categories: { terms: { field: 'category', size: 20 } },
-      death_codes: { terms: { field: 'death_code', size: 1000 },
+      dcodes: { terms: { field: 'dcode', size: 1000 },
                      aggs: { max_year: { max: { field: 'year' } } } },
       infant_all_cause: { filter: { bool: { filter: [
-        { term: { category: 'death' } }, { term: { death_code: 'allcause' } },
+        { term: { category: 'death' } }, { term: { dcode: 'allcause' } },
         { term: { type: 'cfm' } }, { exists: { field: 'age_0' } }
       ], must_not: [{ exists: { field: 'rate' } }, { exists: { field: 'algo' } }] } },
                           aggs: { max_year: { max: { field: 'year' } } } },
@@ -389,8 +441,8 @@ def available_annual_catalog(index:, fixture:)
     [bucket['key'].upcase, {
       area: source['area'].to_s, areaj: source['areaj'].to_s,
       rates: values.call('rates'), categories: values.call('categories'),
-      death_codes: values.call('death_codes'),
-      death_code_max_years: bucket.dig('death_codes', 'buckets').to_h do |entry|
+      dcodes: values.call('dcodes'),
+      dcode_max_years: bucket.dig('dcodes', 'buckets').to_h do |entry|
         [entry['key'].to_s, entry.dig('max_year', 'value').to_i]
       end,
       infant_all_cause_max_year: bucket.dig('infant_all_cause', 'max_year', 'value').to_i,
@@ -434,7 +486,7 @@ def annual_metric_available?(code, catalog, metric)
 
   rates = catalog.fetch(:rates)
   categories = catalog.fetch(:categories)
-  codes = catalog.fetch(:death_codes)
+  codes = catalog.fetch(:dcodes)
   case metric
   when 'deaths' then categories.include?('death') && codes.include?('allcause')
   when 'crude_rate' then rates.include?('crude')
@@ -461,10 +513,10 @@ def birth_cause_available?(_location, catalog, cause)
     end
   end
 
-  codes = catalog.fetch(:death_codes)
+  codes = catalog.fetch(:dcodes)
   # 日本語: 最短cutoff 2015と、その後2年の予測評価を作れる系列だけを表示対象にする。
   # English: Require enough data for the earliest 2015 cutoff plus two evaluation years.
-  max_years = catalog.fetch(:death_code_max_years, {})
+  max_years = catalog.fetch(:dcode_max_years, {})
   if cause == 'perm'
     codes.include?('perm') && max_years.fetch('perm', 0) >= 2017
   else
@@ -473,12 +525,12 @@ def birth_cause_available?(_location, catalog, cause)
   end
 end
 
-def available_death_codes(index:, fixture:, locations:, metric:)
+def available_dcodes(index:, fixture:, locations:, metric:)
   wanted_rate = metric == 'asr' ? 'asr' : ''
   if fixture
     return fixture.select do |row|
       locations.include?(row[:loc].to_s.upcase) && row[:yearweek] && row[:rate].to_s == wanted_rate
-    end.map { |row| row[:death_code].to_s }.uniq.sort
+    end.map { |row| row[:dcode].to_s }.uniq.sort
   end
   public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
   uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
@@ -491,19 +543,24 @@ def available_death_codes(index:, fixture:, locations:, metric:)
   request.body = JSON.generate(size: 0, query: { bool: { filter: [
     { term: { category: 'death' } }, { terms: { loc: locations.map(&:downcase) } },
     { exists: { field: 'yearweek' } }, rate_filter
-  ] } }, aggs: { codes: { terms: { field: 'death_code', size: 1000 } } })
+  ] } }, aggs: { codes: { terms: { field: 'dcode', size: 1000 } } })
   response = Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(request) }
   raise "Elasticsearch cause aggregation failed: HTTP #{response.code}: #{response.body}" unless response.is_a?(Net::HTTPSuccess)
   JSON.parse(response.body).dig('aggregations', 'codes', 'buckets').map { |bucket| bucket['key'] }.sort
 end
 
-def available_annual_death_codes(index:, fixture:, locations:, metric:)
-  wanted_rate = { 'crude_rate' => 'crude', 'asr' => 'asr' }.fetch(metric, '')
+def available_annual_dcodes(index:, fixture:, locations:, metric:)
+  wanted_rate = if $mortyear_category == 'incidence' || $mortyear_types == %w[ncc]
+                  metric == 'asr' ? 'asr' : ''
+                else
+                  { 'crude_rate' => 'crude', 'asr' => 'asr' }.fetch(metric, '')
+                end
   if fixture
     return fixture.select do |row|
       locations.include?(row[:loc].to_s.upcase) && !row[:yearmonth] && !row[:yearweek] &&
-        row[:category] == 'death' && row[:rate].to_s == wanted_rate
-    end.map { |row| row[:death_code].to_s }.reject(&:empty?).uniq.sort
+        row[:category] == $mortyear_category &&
+        (!$mortyear_types || $mortyear_types.include?(row[:type].to_s)) && row[:rate].to_s == wanted_rate
+    end.map { |row| row[:dcode].to_s }.reject(&:empty?).uniq.sort
   end
   public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
   uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
@@ -513,13 +570,21 @@ def available_annual_death_codes(index:, fixture:, locations:, metric:)
   rate_filter = wanted_rate.empty? ? {
     bool: { should: [{ term: { rate: '' } }, { bool: { must_not: [{ exists: { field: 'rate' } }] } }], minimum_should_match: 1 }
   } : { term: { rate: wanted_rate } }
+  filters = [{ term: { category: $mortyear_category } }, { terms: { loc: locations.map(&:downcase) } }, rate_filter]
+  filters << { terms: { type: $mortyear_types } } if $mortyear_types
   request.body = JSON.generate(size: 0, query: { bool: {
-    filter: [{ term: { category: 'death' } }, { terms: { loc: locations.map(&:downcase) } }, rate_filter],
+    filter: filters,
     must_not: [{ exists: { field: 'yearmonth' } }, { exists: { field: 'yearweek' } }]
-  } }, aggs: { codes: { terms: { field: 'death_code', size: 1000 } } })
+  } }, aggs: { codes: { terms: { field: 'dcode', size: 1000 } } })
   response = Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(request) }
   raise "Elasticsearch annual cause aggregation failed: HTTP #{response.code}: #{response.body}" unless response.is_a?(Net::HTTPSuccess)
   JSON.parse(response.body).dig('aggregations', 'codes', 'buckets').map { |bucket| bucket['key'] }.sort
+end
+
+# 日本語: categoryとtypeを組み合わせ、現在選択中の統計系列だけを採用する。
+# English: Match the selected statistical series by its category and type together.
+def mortyear_stat_record?(row, category: $mortyear_category, types: $mortyear_types)
+  row[:category] == category && (!types || types.include?(row[:type].to_s))
 end
 
 # 日本語: 2x2行列の逆行列を、回帰処理で外部gemなしに利用する。
@@ -673,7 +738,7 @@ def poisson_simulation_predictions(rows, fit, seed)
     lower = simulations[(POISSON_SIMULATIONS * 0.025).floor]
     upper = simulations[(POISSON_SIMULATIONS * 0.975).floor - 1]
     expected = Math.exp(fit[:beta][0] + fit[:beta][1] * x) * scale
-    [[row[:year], row[:death_code]], { expected: expected, lower: lower, upper: upper }]
+    [[row[:year], row[:dcode]], { expected: expected, lower: lower, upper: upper }]
   end
 end
 
@@ -786,17 +851,17 @@ def annualize_weekly_counts(rows, age)
     next if value.nil?
     week_end = Date.parse(row[:date].to_s)
     (week_end - 6..week_end).group_by(&:year).each do |year, dates|
-      target = annual[[row[:loc], row[:sex], row[:death_code], year]]
+      target = annual[[row[:loc], row[:sex], row[:dcode], year]]
       target[:value] += value.to_f * dates.length / 7.0
       dates.each { |date| target[:covered_days][date] = true }
       target[:src_url] |= Array(row[:src_url]).compact
     end
   end
-  annual.map do |(loc, sex, death_code, year), values|
+  annual.map do |(loc, sex, dcode, year), values|
     required_days = Date.leap?(year) ? 366 : 365
     next unless year >= 2000 && values[:covered_days].length == required_days
     {
-      loc: loc.upcase, sex: sex, death_code: death_code, year: year,
+      loc: loc.upcase, sex: sex, dcode: dcode, year: year,
       deaths: values[:value], population: 1.0, observed: values[:value], unit_scale: 1.0,
       src_url: values[:src_url].empty? ? default_source_urls(loc) : values[:src_url]
     }
@@ -806,14 +871,14 @@ end
 # 日本語: 週の7日を暦年へ配分する。死亡数だけを日数按分し、人口は週率から逆算する。
 # English: Split a seven-day week across calendar years; prorate deaths only and infer weekly population from the annualized rate.
 def annualize_weekly(count_rows, rate_rows, age)
-  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:death_code]], row] }
+  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:dcode]], row] }
   annual = Hash.new do |hash, key|
     hash[key] = { deaths: 0.0, population_days: 0.0, covered_days: {}, src_url: [] }
   end
 
   count_rows.each do |count|
     value = count[age.to_sym]
-    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:death_code]]]
+    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:dcode]]]
     rate_value = rate && rate[age.to_sym]
     next if value.nil? || rate_value.nil? || rate_value.to_f <= 0
 
@@ -821,7 +886,7 @@ def annualize_weekly(count_rows, rate_rows, age)
     week_start = week_end - 6
     weekly_population = value.to_f * DAYS_PER_YEAR * 100_000 / (7 * rate_value.to_f)
     (week_start..week_end).group_by(&:year).each do |year, dates|
-      target = annual[[count[:loc], count[:sex], count[:death_code], year]]
+      target = annual[[count[:loc], count[:sex], count[:dcode], year]]
       target[:deaths] += value.to_f * dates.length / 7.0
       target[:population_days] += weekly_population * dates.length
       dates.each { |date| target[:covered_days][date] = true }
@@ -830,7 +895,7 @@ def annualize_weekly(count_rows, rate_rows, age)
     end
   end
 
-  annual.map do |(loc, sex, death_code, year), values|
+  annual.map do |(loc, sex, dcode, year), values|
     required_days = Date.leap?(year) ? 366 : 365
     next unless year >= 2000 && values[:covered_days].length == required_days
 
@@ -838,7 +903,7 @@ def annualize_weekly(count_rows, rate_rows, age)
     next unless population.positive?
 
     {
-      loc: loc.upcase, sex: sex, death_code: death_code, year: year,
+      loc: loc.upcase, sex: sex, dcode: dcode, year: year,
       deaths: values[:deaths], population: population,
       observed: values[:deaths] / population * 100_000, unit_scale: 100_000.0,
       src_url: values[:src_url].empty? ? default_source_urls(loc) : values[:src_url]
@@ -854,13 +919,13 @@ end
 # 日本語: 週次死亡数と率を、第27週または第36週開始の完全なインフルエンザ年へ集計する。
 # English: Aggregate weekly deaths and rates into complete influenza years starting in W27 or W36.
 def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = 'crude_rate')
-  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:death_code]], row] }
+  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:dcode]], row] }
   count_metric = metric == 'deaths'
   seasons = Hash.new do |hash, key|
     hash[key] = { deaths: 0.0, population_days: 0.0, covered_days: {}, src_url: [] }
   end
   count_rows.each do |count|
-    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:death_code]]]
+    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:dcode]]]
     count_values = ages.map { |age| count[age.to_sym] }
     next if count_values.any?(&:nil?)
 
@@ -878,7 +943,7 @@ def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = '
     week_end = Date.parse(count[:date].to_s)
     week_start = week_end - 6
     (week_start..week_end).group_by { |date| influenza_year_start(date, start_week) }.each do |season_start, dates|
-      key = [count[:loc], count[:sex], count[:death_code], season_start]
+      key = [count[:loc], count[:sex], count[:dcode], season_start]
       target = seasons[key]
       target[:deaths] += deaths * dates.length / 7.0
       target[:population_days] += populations * dates.length unless count_metric
@@ -894,7 +959,7 @@ def annualize_influenza_year(count_rows, rate_rows, ages, start_week, metric = '
     next unless count_metric || population.positive?
 
     crude_rate = count_metric ? nil : values[:deaths] / population * 100_000
-    { loc: loc.upcase, sex: sex, death_code: cause, year: season_start.cwyear,
+    { loc: loc.upcase, sex: sex, dcode: cause, year: season_start.cwyear,
       season: "#{season_start.cwyear}/#{format('%02d', (season_start.cwyear + 1) % 100)}",
       deaths: values[:deaths], population: count_metric ? 1.0 : population,
       observed: count_metric ? values[:deaths] : crude_rate,
@@ -912,7 +977,7 @@ def annualize_influenza_asr(count_rows, rate_rows, start_week, ages, weights)
     annualize_influenza_year(count_rows, rate_rows, [age], start_week, 'crude_rate').map do |row|
       [row, age]
     end
-  end.group_by { |row, _age| [row[:loc], row[:sex], row[:death_code], row[:year]] }
+  end.group_by { |row, _age| [row[:loc], row[:sex], row[:dcode], row[:year]] }
 
   grouped.filter_map do |(_loc, _sex, _cause, _year), items|
     next unless items.map(&:last).sort == selected.sort
@@ -934,7 +999,7 @@ end
 # 日本語: 選択系列の週次死亡率を年率換算のまま補助表示用に作る。
 # English: Build annualized weekly mortality rates for the contextual view.
 def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
-  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:death_code]], row] }
+  rates = rate_rows.to_h { |row| [[row[:loc], row[:yearweek], row[:sex], row[:dcode]], row] }
   age_members = {
     'age_00_14' => %w[age_00_04 age_05_09 age_10_14],
     'age_15_64' => %w[age_15_19 age_20_24 age_25_29 age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59 age_60_64],
@@ -945,7 +1010,7 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
   selected_asr_ages = ages.include?('age_all') ? STMF_ASR_AGES : ages
   weight_total = selected_asr_ages.sum { |age| weights.fetch(age) }
   count_rows.filter_map do |count|
-    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:death_code]]]
+    rate = rates[[count[:loc], count[:yearweek], count[:sex], count[:dcode]]]
     next unless rate
 
     observed = if metric == 'asr'
@@ -963,7 +1028,7 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
                  end
                  deaths * DAYS_PER_YEAR * 100_000 / (7 * population)
                end
-    { loc: count[:loc].to_s.upcase, death_code: count[:death_code],
+    { loc: count[:loc].to_s.upcase, dcode: count[:dcode],
       date: count[:date], observed: observed }
   end.sort_by { |row| [row[:loc], row[:date].to_s] }
 end
@@ -1000,11 +1065,11 @@ end
 # 日本語: UN月次crude rateを、同じ系列のSTMF週次値が始まる前だけ短期変動表示へ加える。
 # English: Add UN monthly crude rate to the detailed view only before the matching STMF weekly series begins.
 def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, selected_ages)
-  weekly_first = weekly_rows.group_by { |row| [row[:loc], row[:death_code]] }
+  weekly_first = weekly_rows.group_by { |row| [row[:loc], row[:dcode]] }
                             .transform_values { |rows| rows.map { |row| Date.iso8601(row[:date].to_s) }.min }
   monthly_rows.filter_map do |row|
     loc = row[:loc].to_s.upcase
-    cause = row[:death_code].to_s
+    cause = row[:dcode].to_s
     first_week = weekly_first[[loc, cause]]
 
     date = Date.iso8601(row[:date].to_s)
@@ -1015,7 +1080,7 @@ def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, s
     midpoint = date + (Date.new(date.year, date.month, -1).day - 1) / 2
     series_key = mode == 'country' ? loc :
       "#{selected_locations.first}-#{selected_ages.join('+')}-#{cause}"
-    { loc: loc, death_code: cause, date: midpoint.iso8601,
+    { loc: loc, dcode: cause, date: midpoint.iso8601,
       observed: row[:age_all].to_f, series: series_key,
       detail_period: $l == :ja ? '月' : 'Month' }
   end + weekly_rows.map { |row| row.merge(detail_period: $l == :ja ? '週' : 'Week') }
@@ -1047,7 +1112,7 @@ def prefer_actual_weekly(rows, required_fields)
   rank = { 'stmf' => 0, 'stmfrecon' => 1 }
   rows.group_by do |row|
     [row[:loc].to_s.downcase, row[:yearweek], row[:category], row[:rate].to_s,
-     row[:death_code], row[:algo].to_s, row[:sex]]
+     row[:dcode], row[:algo].to_s, row[:sex]]
   end.values.map do |candidates|
     complete = candidates.select { |row| required_fields.all? { |field| !row[field.to_sym].nil? } }
     (complete.empty? ? candidates : complete).min_by { |row| rank.fetch(row[:type].to_s, 2) }
@@ -1056,7 +1121,8 @@ end
 
 # 日本語: 年次recordを直接使い、同じ指標では各国公式系列をWPPより優先する。
 # English: Read annual records directly and prefer national series over WPP for the same measure.
-def annual_record_rows(records, locations, sex, causes, metric, ages)
+def annual_record_rows(records, locations, sex, causes, metric, ages, category: $mortyear_category,
+                       types: $mortyear_types)
   relevant = records.select do |row|
     locations.include?(row[:loc].to_s.upcase) && row[:sex] == sex &&
       !projected_record?(row)
@@ -1074,12 +1140,13 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
   end
   rate_name = metric == 'asr' ? 'asr' : ''
   value_groups = relevant.select do |row|
-    row[:category] == 'death' && causes.include?(row[:death_code].to_s) &&
+    mortyear_stat_record?(row, category: category, types: types) && causes.include?(row[:dcode].to_s) &&
       row[:rate].to_s == rate_name
-  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:dcode].to_s] }
   raw_groups = relevant.select do |row|
-    row[:category] == 'death' && causes.include?(row[:death_code].to_s) && row[:rate].to_s.empty?
-  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+    mortyear_stat_record?(row, category: category, types: types) &&
+      causes.include?(row[:dcode].to_s) && row[:rate].to_s.empty?
+  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:dcode].to_s] }
   populations = relevant.select { |row| row[:category] == 'pop' }.group_by do |row|
     [row[:loc].to_s.upcase, row[:year].to_i]
   end
@@ -1121,7 +1188,7 @@ def annual_record_rows(records, locations, sex, causes, metric, ages)
     next unless deaths && denominator && denominator.to_f.positive?
 
     {
-      loc: loc, sex: sex, death_code: cause, year: year,
+      loc: loc, sex: sex, dcode: cause, year: year,
       deaths: deaths.to_f, population: denominator.to_f, observed: observed.to_f,
       unit_scale: metric == 'deaths' ? 1.0 : 100_000.0,
       src_url: (Array(row[:src_url]) + Array(raw&.dig(:src_url)) + Array(population&.dig(:src_url))).compact.uniq
@@ -1133,7 +1200,8 @@ end
 # 同じ階級に各国公式値があればWPPより優先し、人口はWPPではpopulation exposureを使う。
 # English: Build ASR regression inputs from age-specific deaths and populations.
 # Prefer national values for each stratum and use WPP population exposure as the fallback denominator.
-def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil)
+def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil,
+                        category: $mortyear_category, types: $mortyear_types)
   relevant = records.select do |row|
     locations.include?(row[:loc].to_s.upcase) && row[:sex] == sex &&
       !projected_record?(row)
@@ -1150,31 +1218,77 @@ def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil)
     end
   end
   death_groups = relevant.select do |row|
-    row[:category] == 'death' && row[:rate].to_s.empty? && causes.include?(row[:death_code].to_s)
-  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:death_code].to_s] }
+    mortyear_stat_record?(row, category: category, types: types) &&
+      row[:rate].to_s.empty? && causes.include?(row[:dcode].to_s)
+  end.group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i, row[:dcode].to_s] }
   population_groups = relevant.select { |row| row[:category] == 'pop' }.
                       group_by { |row| [row[:loc].to_s.upcase, row[:year].to_i] }
   standard_groups ||= WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] }
-  weight_total = standard_groups.sum { |_ages, weight| weight }
+  # 日本語: 資料ごとの最高齢階級（75歳以上・85歳以上・5歳階級）に合わせて値を合算する。
+  # English: Aggregate values to each source's oldest age band (75+, 85+, or five-year groups).
+  stratum_value = lambda do |row, age|
+    value = row[age.to_sym]
+    next value unless value.nil?
+
+    lower, parts = case age
+                   when 'age_75plus'
+                     [%w[age_00_04 age_05_09 age_10_14 age_15_19 age_20_24 age_25_29
+                         age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59
+                         age_60_64 age_65_69 age_70_74],
+                      %w[age_75_79 age_80_84 age_85_89 age_90_94 age_95_99 age_100plus]]
+                   when 'age_85plus'
+                     [%w[age_00_04 age_05_09 age_10_14 age_15_19 age_20_24 age_25_29
+                         age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59
+                         age_60_64 age_65_69 age_70_74 age_75_79 age_80_84],
+                      %w[age_85_89 age_90_94 age_95_99 age_100plus]]
+                   else
+                     next nil
+                   end
+    values = parts.map { |field| row[field.to_sym] }
+    next values.sum(&:to_f) if values.all? { |part| !part.nil? }
+
+    # 日本語: 集約fieldが保存されない古い人口recordは、全年齢から下位階級を引いて復元する。
+    # English: Recover an unstored old aggregate by subtracting younger bands from all ages.
+    younger = lower.map { |field| row[field.to_sym] }
+    row[:age_all] && younger.all? { |part| !part.nil? } ? row[:age_all].to_f - younger.sum(&:to_f) : nil
+  end
 
   death_groups.filter_map do |(loc, year, cause), death_candidates|
     population_candidates = population_groups.fetch([loc, year], [])
-    strata = standard_groups.filter_map do |ages, weight|
-      death_row = death_candidates.select { |row| ages.all? { |age| !row[age.to_sym].nil? } }.
+    groups_for_year = standard_groups
+    covered = lambda do |candidates, groups|
+      groups.all? do |ages, _weight|
+        candidates.any? { |row| ages.all? { |age| !stratum_value.call(row, age).nil? } }
+      end
+    end
+    [%w[age_85_89 age_90_94 age_95_99 age_100plus],
+     %w[age_75_79 age_80_84 age_85plus]].each_with_index do |tail, index|
+      break if covered.call(death_candidates, groups_for_year) &&
+               covered.call(population_candidates, groups_for_year)
+
+      tail_groups, other_groups = groups_for_year.partition { |ages, _weight| (ages - tail).empty? }
+      next if tail_groups.empty?
+
+      aggregate = index.zero? ? 'age_85plus' : 'age_75plus'
+      groups_for_year = other_groups + [[[aggregate], tail_groups.sum { |_ages, weight| weight }]]
+    end
+    group_weight_total = groups_for_year.sum { |_ages, weight| weight }
+    strata = groups_for_year.filter_map do |ages, weight|
+      death_row = death_candidates.select { |row| ages.all? { |age| !stratum_value.call(row, age).nil? } }.
                   min_by { |row| source_rank.call(row) }
-      population_row = population_candidates.select { |row| ages.all? { |age| !row[age.to_sym].nil? } }.
+      population_row = population_candidates.select { |row| ages.all? { |age| !stratum_value.call(row, age).nil? } }.
                        min_by { |row| source_rank.call(row, population: true) }
       next unless death_row && population_row
-      deaths = ages.sum { |age| death_row[age.to_sym].to_f }
-      population = ages.sum { |age| population_row[age.to_sym].to_f }
+      deaths = ages.sum { |age| stratum_value.call(death_row, age).to_f }
+      population = ages.sum { |age| stratum_value.call(population_row, age).to_f }
       next unless population.positive?
-      { age: ages.join('+'), deaths: deaths, population: population, weight: weight.to_f / weight_total,
+      { age: ages.join('+'), deaths: deaths, population: population, weight: weight.to_f / group_weight_total,
         src_url: (Array(death_row[:src_url]) + Array(population_row[:src_url])).compact.uniq }
     end
-    next unless strata.length == standard_groups.length
+    next unless strata.length == groups_for_year.length
 
     {
-      loc: loc, sex: sex, death_code: cause, year: year, strata: strata,
+      loc: loc, sex: sex, dcode: cause, year: year, strata: strata,
       deaths: strata.sum { |item| item[:deaths] }, population: strata.sum { |item| item[:population] },
       observed: strata.sum { |item| item[:deaths] / item[:population] * 100_000.0 * item[:weight] },
       unit_scale: 100_000.0, src_url: strata.flat_map { |item| item[:src_url] }.uniq
@@ -1211,12 +1325,12 @@ def birth_rate_rows(records)
   deliveries = choose_by_year.call('delivery')
   numerators = records.filter_map do |row|
     loc = row[:loc].to_s.upcase
-    cause, value = if row[:category] == 'death' && row[:death_code] == 'infant'
+    cause, value = if row[:category] == 'death' && row[:dcode] == 'infant'
                      ['infant', row[:age_all]]
-                   elsif row[:category] == 'death' && row[:death_code] == 'allcause' &&
+                   elsif row[:category] == 'death' && row[:dcode] == 'allcause' &&
                          row[:rate].to_s.empty? && row[:algo].to_s.empty? && row[:type].to_s == 'cfm'
                      ['infant', row[:age_0]]
-                   elsif row[:category] == 'death' && row[:death_code] == 'perm'
+                   elsif row[:category] == 'death' && row[:dcode] == 'perm'
                      ['perm', row[:age_all]]
                    end
     next unless cause && value
@@ -1227,12 +1341,12 @@ def birth_rate_rows(records)
 
     population = denominator[:age_all].to_f
     urls = (Array(denominator[:src_url]) + Array(row[:src_url])).compact.uniq
-    numerator_rank = [row[:death_code] == 'allcause' ? 1 : 0, source_rank.call(row)]
-    { loc: loc, sex: 'both', death_code: cause, year: row[:year].to_i,
+    numerator_rank = [row[:dcode] == 'allcause' ? 1 : 0, source_rank.call(row)]
+    { loc: loc, sex: 'both', dcode: cause, year: row[:year].to_i,
       deaths: value.to_f, population: population, observed: value.to_f / population * 1000.0,
       unit_scale: 1000.0, src_url: urls, source_rank: numerator_rank }
   end
-  numerators.group_by { |row| [row[:loc], row[:year], row[:death_code]] }.
+  numerators.group_by { |row| [row[:loc], row[:year], row[:dcode]] }.
     values.map do |rows|
       selected = rows.min_by { |row| row[:source_rank] }.dup
       selected.delete(:source_rank)
@@ -1288,7 +1402,7 @@ def compute_simulation_scenarios(rows, series_key, label)
     seed = Digest::SHA256.hexdigest("#{input_digest}:#{cutoff}:#{POISSON_SIMULATIONS}")[0, 8].to_i(16)
     predictions = poisson_simulation_predictions(rows, fit, seed)
     rows.map do |row|
-      prediction = predictions.fetch([row[:year], row[:death_code]])
+      prediction = predictions.fetch([row[:year], row[:dcode]])
       {
         series: series_key, label: label, model: 'poisson', train_to: cutoff,
         year: row[:year], season: row[:season], observed: row[:observed], expected: prediction[:expected],
@@ -1307,24 +1421,31 @@ end
 def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
   return [] if rows.empty?
 
-  stratum_ages = rows.first.fetch(:strata).map { |item| item.fetch(:age) }
+  stratum_ages = rows.flat_map { |row| row.fetch(:strata).map { |item| item.fetch(:age) } }.uniq
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
-    rows.count { |row| row[:year].between?($mortyear_training_start, cutoff) } >= MIN_TRAINING_YEARS
+    training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
+    training.length >= MIN_TRAINING_YEARS && stratum_ages.all? do |age|
+      training.count { |row| row[:strata].any? { |item| item[:age] == age } } >= MIN_TRAINING_YEARS
+    end
   end
   candidates.flat_map do |cutoff|
     training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
     fits = stratum_ages.to_h do |age|
-      age_rows = training.map do |row|
+      age_rows = training.filter_map do |row|
         stratum = row[:strata].find { |item| item[:age] == age }
+        next unless stratum
         { year: row[:year], deaths: stratum[:deaths], population: stratum[:population] }
       end
       [age, poisson_fit(age_rows)]
     end
-    residual_df = [training.length - 2, 0].max
-    total_df = residual_df * fits.length
+    residual_dfs = stratum_ages.to_h do |age|
+      count = training.count { |row| row[:strata].any? { |item| item[:age] == age } }
+      [age, [count - 2, 0].max]
+    end
+    total_df = residual_dfs.values.sum
     dispersion = if total_df.positive?
-                   fits.values.sum { |fit| fit[:dispersion].to_f * residual_df } / total_df
+                   fits.sum { |age, fit| fit[:dispersion].to_f * residual_dfs.fetch(age) } / total_df
                  end
     predictions = rows.to_h do |row|
       expected = 0.0
@@ -1379,17 +1500,21 @@ end
 def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
   return [] if rows.empty?
 
-  stratum_ages = rows.first.fetch(:strata).map { |item| item.fetch(:age) }
+  stratum_ages = rows.flat_map { |row| row.fetch(:strata).map { |item| item.fetch(:age) } }.uniq
   input_digest = Digest::SHA256.hexdigest(canonical_json(rows.map { |row| canonical_value(row) }))
   last_year = rows.map { |row| row[:year] }.max
   candidates = (2015..(last_year - 2)).select do |cutoff|
-    rows.count { |row| row[:year].between?($mortyear_training_start, cutoff) } >= MIN_TRAINING_YEARS
+    training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
+    training.length >= MIN_TRAINING_YEARS && stratum_ages.all? do |age|
+      training.count { |row| row[:strata].any? { |item| item[:age] == age } } >= MIN_TRAINING_YEARS
+    end
   end
   candidates.flat_map do |cutoff|
     training = rows.select { |row| row[:year].between?($mortyear_training_start, cutoff) }
     fits = stratum_ages.to_h do |age|
-      age_rows = training.map do |row|
+      age_rows = training.filter_map do |row|
         stratum = row[:strata].find { |item| item[:age] == age }
+        next unless stratum
         { year: row[:year], deaths: stratum[:deaths], population: stratum[:population] }
       end
       [age, poisson_fit(age_rows)]
@@ -1617,7 +1742,7 @@ def catalog_location_series(records, loc)
   relevant = records.reject { |row| projected_record?(row) }
   rank = ->(row) { wpp_record?(row) ? 1 : 0 }
   deaths = relevant.select { |row| row[:category] == 'death' && row[:rate].to_s.empty? }.
-           group_by { |row| [row[:sex].to_s, row[:death_code].to_s, row[:year].to_i] }
+           group_by { |row| [row[:sex].to_s, row[:dcode].to_s, row[:year].to_i] }
   populations = relevant.select { |row| row[:category] == 'pop' }.
                 group_by { |row| [row[:sex].to_s, row[:year].to_i] }
   rows_by_series = Hash.new { |hash, key| hash[key] = [] }
@@ -1653,7 +1778,7 @@ def catalog_location_series(records, loc)
     rows_by_series[['asr', cause, sex, 'age_all']] << { year: year } if strata_complete
   end
   birth_rate_rows(records).each do |row|
-    rows_by_series[['birth_rate', row[:death_code], 'both', 'age_all']] << { year: row[:year] }
+    rows_by_series[['birth_rate', row[:dcode], 'both', 'age_all']] << { year: row[:year] }
   end
   rows_by_series.map do |(metric, cause, sex, age), rows|
     catalog_series(metric, cause, sex, age, rows)
@@ -1665,13 +1790,14 @@ end
 def rebuild_mortyear_catalog(index)
   base = available_annual_catalog(index: index, fixture: nil)
   weekly_rates = available_location_rates(index: index, fixture: nil)
+  stmf_weights = stmf_standard_weights(WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] })
   {
     'ENG' => { area: 'England and Wales', areaj: 'イングランド・ウェールズ（英国）' },
     'SCO' => { area: 'Scotland', areaj: 'スコットランド（英国）' }
   }.each do |code, entry|
     base[code] ||= entry if weekly_rates.key?(code)
   end
-  fields = %w[loc area areaj category rate death_code algo type year sex src_url] + AGES.keys
+  fields = %w[loc area areaj category rate dcode algo type year sex src_url] + AGES.keys
   locations = {}
   total = base.length
   next_report = 10
@@ -1687,9 +1813,9 @@ def rebuild_mortyear_catalog(index)
       weekly = elastic_search(
         index: index, size: 100_000,
         filter: [{ 'term' => { 'loc' => loc.downcase } },
-                 { 'term' => { 'category' => 'death' } }, { 'term' => { 'death_code' => 'allcause' } },
+                 { 'term' => { 'category' => 'death' } }, { 'term' => { 'dcode' => 'allcause' } },
                  { 'exists' => { 'field' => 'yearweek' } }],
-        source: %w[loc yearweek category rate death_code date year week sex src_url] + STMF_AGES
+        source: %w[loc yearweek category rate dcode date year week sex src_url] + STMF_AGES
       )
       weekly.group_by { |row| row[:sex].to_s }.each do |sex, sex_rows|
         counts = sex_rows.select { |row| row[:rate].to_s.empty? }
@@ -1702,7 +1828,7 @@ def rebuild_mortyear_catalog(index)
               series << catalog_series(metric, 'allcause', sex, age, rows, period: period)
             end
           end
-          asr_rows = annualize_influenza_asr(counts, rates, start_week)
+          asr_rows = annualize_influenza_asr(counts, rates, start_week, ['age_all'], stmf_weights)
           series << catalog_series('asr', 'allcause', sex, 'age_all', asr_rows, period: period) unless asr_rows.empty?
         end
       end
@@ -1734,7 +1860,7 @@ def rebuild_mortyear_catalog(index)
                             series: locations.values.sum { |entry| entry[:series].length },
                             displayable_locations: summary)
 ensure
-  File.unlink(tmp) if defined?(tmp) && File.file?(tmp)
+  File.unlink(tmp) if defined?(tmp) && tmp && File.file?(tmp)
 end
 
 if opts[:process_cache_jobs]
@@ -1755,7 +1881,12 @@ fixture_data = if opts[:fixture]
                  parsed
                end
 menu_catalog = fixture_data ? nil : load_mortyear_catalog(opts[:index])
+vital_menu_catalog = menu_catalog
 annual_catalog = menu_catalog || available_annual_catalog(index: opts[:index], fixture: fixture_data)
+if selected_dataset != 'vital'
+  menu_catalog = nil
+  annual_catalog.select! { |code, _entry| code == 'JPN' }
+end
 if selected_period != 'calendar'
   location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
   weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('crude') }.keys
@@ -1773,6 +1904,7 @@ metric_locations = annual_catalog.select do |code, catalog|
   selected_period == 'calendar' ? annual_metric_available?(code, catalog, selected_metric) :
     %w[deaths crude_rate asr].include?(selected_metric)
 end.keys.sort
+metric_locations = ['JPN'] if selected_dataset != 'vital' && annual_catalog.key?('JPN')
 metric_locations = ['JPN'].select { |code| annual_catalog.key?(code) } if selected_metric == 'std_deaths'
 available_locations = annual_catalog.keys.sort
 selected_locations = requested_locations.select { |code| available_locations.include?(code) }
@@ -1791,6 +1923,8 @@ if selected_metric == 'birth_rate' && requested_birth_causes.any?
   end
 end
 selected_locations = [selected_locations.first] if mode == 'series'
+mixed_japan_series = mode == 'series' && selected_period == 'calendar' &&
+                     selected_locations == ['JPN'] && selected_metric != 'birth_rate'
 # 日本語: 日本2015年モデル人口は95歳以上が一括なので、片方だけの選択を一組へそろえる。
 # English: The Japan 2015 model has one 95-plus weight, so keep 95-99 and 100+ together.
 if selected_metric == 'asr' && selected_locations == ['JPN'] &&
@@ -1805,25 +1939,45 @@ catalog_ages = if selected_metric == 'asr' && selected_locations == ['JPN'] &&
                else
                  selected_ages
                end
-available_causes = if selected_period != 'calendar' && selected_metric == 'asr'
+available_causes = if mixed_japan_series
+                     vital = if menu_catalog
+                               catalog_available_causes(menu_catalog, selected_locations, catalog_metric,
+                                                        selected_sex, catalog_ages)
+                             else
+                               available_annual_dcodes(index: opts[:index], fixture: fixture_data,
+                                                      locations: selected_locations, metric: selected_metric)
+                             end
+                     vital.select { |code| code == 'allcause' || code.match?(/\A\d{5}\z/) } + CANCER_SITES.keys
+                   elsif selected_period != 'calendar' && selected_metric == 'asr'
                      ['allcause']
                    elsif selected_period != 'calendar'
-                     available_death_codes(index: opts[:index], fixture: fixture_data,
+                     available_dcodes(index: opts[:index], fixture: fixture_data,
                                            locations: selected_locations, metric: selected_metric)
                    elsif selected_metric == 'std_deaths'
-                     available_death_codes(index: opts[:index], fixture: fixture_data,
+                     available_dcodes(index: opts[:index], fixture: fixture_data,
                                            locations: selected_locations, metric: selected_metric)
+                   elsif selected_dataset != 'vital'
+                     available_annual_dcodes(index: opts[:index], fixture: fixture_data,
+                                                  locations: selected_locations, metric: selected_metric)
                    elsif menu_catalog
                      catalog_available_causes(menu_catalog, selected_locations, catalog_metric,
                                               selected_sex, catalog_ages)
                    else
-                     available_annual_death_codes(index: opts[:index], fixture: fixture_data,
+                     available_annual_dcodes(index: opts[:index], fixture: fixture_data,
                                                   locations: selected_locations, metric: selected_metric)
                    end
 selected_causes = requested_causes.select { |code| available_causes.include?(code) }
-selected_causes = ['allcause'].select { |code| available_causes.include?(code) } if selected_causes.empty?
+default_dcode = selected_dataset == 'vital' ? 'allcause' : 'c53'
+selected_causes = [default_dcode].select { |code| available_causes.include?(code) } if selected_causes.empty?
 selected_causes = [available_causes.first].compact if selected_causes.empty?
 selected_causes = [selected_causes.first] if mode == 'country'
+if selected_dataset != 'vital' && !mixed_japan_series
+  CANCER_SITE_CHILDREN.each do |parent, children|
+    selected_causes.delete(parent) if selected_causes.include?(parent) && (selected_causes & children).any?
+  end
+end
+selected_vital_causes = selected_causes.reject { |code| CANCER_SITES.key?(code) }
+selected_cancer_causes = selected_causes.select { |code| CANCER_SITES.key?(code) }
 if selected_metric == 'birth_rate'
   available_causes = SPECIAL_CAUSES.keys.select do |cause|
     selected_locations.all? { |loc| birth_cause_available?(loc, annual_catalog.fetch(loc), cause) }
@@ -1833,7 +1987,8 @@ if selected_metric == 'birth_rate'
   selected_causes = [selected_causes.first] if mode == 'country'
 end
 available_menu_ages = AGES.keys
-if menu_catalog && selected_period == 'calendar' && selected_metric != 'birth_rate' && selected_metric != 'std_deaths'
+if menu_catalog && !mixed_japan_series && selected_period == 'calendar' &&
+   selected_metric != 'birth_rate' && selected_metric != 'std_deaths'
   available_menu_ages = AGES.keys.select do |age|
     age_metric = selected_metric == 'asr' && age != 'age_all' ? 'crude_rate' : selected_metric
     catalog_age = selected_metric == 'asr' && selected_locations == ['JPN'] &&
@@ -1856,7 +2011,8 @@ end
 
 locations_for_query = selected_locations.map(&:downcase)
 ages_for_query = selected_ages
-annual_source_fields = %w[id loc area areaj category rate death_code algo type date year sex src_url] + AGES.keys
+annual_source_fields = %w[id loc area areaj category rate dcode algo type date year sex src_url] +
+                       (AGES.keys + STMF_AGES).uniq
 annual_records_all = if selected_period != 'calendar'
                        []
                      elsif opts[:fixture]
@@ -1873,7 +2029,7 @@ annual_records_all = if selected_period != 'calendar'
                          source: annual_source_fields
                        )
                      end
-source_fields = %w[id loc yearweek category rate death_code algo type date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
+source_fields = %w[id loc yearweek category rate dcode algo type date year week sex src_url] + (AGES.keys + STMF_AGES).uniq
 # 日本語: 暦年の英国年次系列はGBR、STMFはENGなので、詳細表示の検索時だけ対応付ける。
 # English: Annual UK records use GBR while STMF uses ENG, so map them only for detailed-view queries.
 weekly_locations_for_query = locations_for_query.flat_map { |code| code == 'gbr' ? %w[gbr eng] : [code] }.uniq
@@ -1881,7 +2037,7 @@ common_filters = [
   { 'term' => { 'category' => 'death' } },
   { 'terms' => { 'loc' => weekly_locations_for_query } },
   { 'term' => { 'sex' => selected_sex } },
-  { 'terms' => { 'death_code' => selected_causes.reject { |code| SPECIAL_CAUSES.key?(code) }.yield_self { |codes| codes.empty? ? ['__none__'] : codes } } },
+  { 'terms' => { 'dcode' => selected_causes.reject { |code| SPECIAL_CAUSES.key?(code) }.yield_self { |codes| codes.empty? ? ['__none__'] : codes } } },
   { 'exists' => { 'field' => 'yearweek' } }
 ]
 
@@ -1899,7 +2055,7 @@ elsif opts[:fixture]
   fixture = fixture_data.dup
   fixture.select! do |row|
     weekly_locations_for_query.include?(row[:loc].to_s.downcase) &&
-      row[:category] == 'death' && selected_causes.include?(row[:death_code]) &&
+      row[:category] == 'death' && selected_causes.include?(row[:dcode]) &&
       row[:sex] == selected_sex && row[:yearweek]
   end
   count_rows = fixture.select { |row| row[:rate].to_s.empty? }
@@ -1968,6 +2124,13 @@ sex_labels = {
   'male' => { ja: '男性', en: 'Male' },
   'female' => { ja: '女性', en: 'Female' }
 }.freeze
+incidence_metric_names = {
+  'deaths' => { ja: '罹患数', en: 'Incidence count' },
+  'crude_rate' => { ja: '粗罹患率', en: 'Crude incidence rate' },
+  'asr' => { ja: '年齢調整罹患率', en: 'Age-standardized incidence rate' }
+}.freeze
+selected_metric_names = selected_dataset == 'cancer-incidence' && !mixed_japan_series ?
+                          incidence_metric_names : METRICS
 age_selection_label = if selected_period != 'calendar'
                         if selected_ages.include?('age_all')
                           $l == :ja ? '全年齢' : 'All ages'
@@ -1991,20 +2154,24 @@ age_selection_label = if selected_period != 'calendar'
                           selected_ages.map { |age| AGES.fetch(age).fetch($l) }.join(', ')
                         end
                       end
-jpn_2015_asr = selected_metric == 'asr' && selected_locations == ['JPN']
-asr_standard_groups = if jpn_2015_asr
-                        JPN_2015_STANDARD_GROUPS
-                      else
-                        WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] }
-                      end
-selected_asr_groups = selected_standard_groups(asr_standard_groups, selected_ages)
-asr_stmf_weights = stmf_standard_weights(asr_standard_groups)
-panel_label = lambda do |loc, cause|
-  cause_name = SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
+jpn_2015_asr = selected_metric == 'asr' && selected_locations == ['JPN'] && selected_vital_causes.any?
+vital_asr_standard_groups = selected_standard_groups(JPN_2015_STANDARD_GROUPS, selected_ages)
+cancer_asr_standard_groups = selected_standard_groups(
+  WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] }, selected_ages
+)
+asr_stmf_weights = stmf_standard_weights(JPN_2015_STANDARD_GROUPS)
+panel_label = lambda do |loc, cause, dataset|
+  cause_name = if dataset == 'vital'
+                 SPECIAL_CAUSES.fetch(cause, Death_codes.fetch(cause, { ja: cause, en: cause })).fetch($l)
+               else
+                 CANCER_SITES.fetch(cause, { ja: cause, en: cause }).fetch($l)
+               end
+  metric_names = dataset == 'cancer-incidence' ? incidence_metric_names : METRICS
+  panel_metric_label = metric_names.fetch(selected_metric).fetch($l)
   parts = if selected_metric == 'birth_rate'
             [location_names(loc).fetch($l)]
           else
-            [location_names(loc).fetch($l), METRICS.fetch(selected_metric).fetch($l), age_selection_label]
+            [location_names(loc).fetch($l), panel_metric_label, age_selection_label]
           end
   parts << sex_labels.fetch(selected_sex).fetch($l) unless selected_sex == 'both'
   parts << cause_name
@@ -2016,29 +2183,40 @@ panel_label = lambda do |loc, cause|
            else
              $l == :ja ? '（出生1,000人当たり）' : '(per 1,000 births)'
            end
-         elsif selected_metric == 'asr' && jpn_2015_asr
+         elsif selected_metric == 'asr' && dataset == 'vital' && selected_locations == ['JPN']
            $l == :ja ? '（人口10万人あたり、2015年人口モデル）' : '(per 100,000 pop, Japan 2015 population model)'
          elsif %w[crude_rate asr].include?(selected_metric)
            $l == :ja ? '（人口10万人当たり）' : '(per 100,000 pop)'
          elsif %w[deaths std_deaths].include?(selected_metric)
-           $l == :ja ? '（人）' : '(persons)'
+           if dataset == 'cancer-incidence'
+             $l == :ja ? '（件）' : '(cases)'
+           else
+             $l == :ja ? '（人）' : '(persons)'
+           end
          end
   [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
 end
 
+series_datasets = [['vital', selected_vital_causes], ['cancer-death', selected_cancer_causes]]
+series_datasets << ['cancer-incidence', selected_cancer_causes] if include_incidence
 series_specs = if mode == 'country'
                  selected_locations.map do |loc|
                    cause = selected_causes.first
-                   [loc, selected_ages, cause, panel_label.call(loc, cause)]
+                   dataset = CANCER_SITES.key?(cause) ? selected_dataset : 'vital'
+                   [loc, selected_ages, cause, panel_label.call(loc, cause, dataset), dataset]
                  end
                else
-                 selected_causes.map do |cause|
-                   key = "#{selected_locations.first}-#{selected_ages.join('+')}-#{cause}"
-                   [key, selected_ages, cause, panel_label.call(selected_locations.first, cause)]
+                 series_datasets.flat_map do |dataset, causes|
+                   causes.map do |cause|
+                     key = "#{selected_locations.first}-#{selected_ages.join('+')}-#{dataset}-#{cause}"
+                     [key, selected_ages, cause,
+                      panel_label.call(selected_locations.first, cause, dataset), dataset]
+                   end
                  end
                end
 
-annual_by_age = { selected_ages => begin
+annual_by_dataset = series_datasets.to_h do |dataset, causes|
+  definition = CANCER_DATASETS.fetch(dataset)
   annual = if selected_period != 'calendar' && selected_metric == 'asr'
              annualize_influenza_asr(count_rows, rate_rows,
                                      selected_period == 'flu27' ? 27 : 36,
@@ -2049,30 +2227,33 @@ annual_by_age = { selected_ages => begin
                                       selected_metric)
            elsif selected_metric == 'asr'
              stratified_asr_rows(annual_records_all, selected_locations, selected_sex,
-                                 selected_causes, standard_groups: selected_asr_groups)
+                                 causes,
+                                 standard_groups: dataset == 'vital' ? vital_asr_standard_groups : cancer_asr_standard_groups,
+                                 category: definition.fetch(:category), types: definition.fetch(:types))
            elsif selected_metric != 'std_deaths'
              annual_record_rows(annual_records_all, selected_locations, selected_sex,
-                                selected_causes, selected_metric, selected_ages)
+                                causes, selected_metric, selected_ages,
+                                category: definition.fetch(:category), types: definition.fetch(:types))
            elsif %w[deaths std_deaths].include?(selected_metric)
              annualize_weekly_counts(count_rows, selected_ages.first)
            else
              annualize_weekly(count_rows, rate_rows, selected_ages.first)
            end
-  annual
-end }
+  [dataset, annual]
+end
 
 # 日本語: 年次の出生分母と乳児・周産期死亡分子を同じmstats indexから取得する。
 # English: Read annual birth denominators and infant/perinatal numerators from the shared mstats index.
-annual_source_fields = %w[id loc category rate death_code algo date year sex src_url age_all age_0]
+annual_source_fields = %w[id loc category rate dcode algo date year sex src_url age_all age_0]
 annual_records = selected_metric == 'birth_rate' ? annual_records_all : []
 special_rows = birth_rate_rows(annual_records)
 
-chart_data = series_specs.flat_map do |series_key, age, cause, label|
+chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
   loc = mode == 'country' ? series_key : selected_locations.first
   rows = if SPECIAL_CAUSES.key?(cause)
-           special_rows.select { |row| row[:loc] == loc && row[:death_code] == cause }
+           special_rows.select { |row| row[:loc] == loc && row[:dcode] == cause }
          else
-           annual_by_age.fetch(age).select { |row| row[:loc] == loc && row[:death_code] == cause }
+           annual_by_dataset.fetch(dataset).select { |row| row[:loc] == loc && row[:dcode] == cause }
          end
   build_scenarios(rows, series_key, label,
                   use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1')
@@ -2091,7 +2272,7 @@ weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include
                    weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages,
                                     asr_weights: asr_stmf_weights).map do |row|
                      series_key = mode == 'country' ? row[:loc] :
-                       "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:death_code]}"
+                       "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:dcode]}"
                      row.merge(series: series_key)
                    end
                  else
@@ -2101,12 +2282,12 @@ weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include
 # 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次crude rateで補完する。
 # English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly crude rate.
 if monthly_supplement_enabled
-  monthly_source = %w[loc yearmonth category rate death_code type date year month sex age_all]
+  monthly_source = %w[loc yearmonth category rate dcode type date year month sex age_all]
   monthly_rows = if opts[:fixture]
                    fixture_data.select do |row|
                      locations_for_query.include?(row[:loc].to_s.downcase) &&
                        row[:yearmonth] && row[:category] == 'death' && row[:rate] == 'crude' &&
-                       row[:type] == 'unmonth' && row[:death_code] == 'allcause' && row[:sex] == 'both'
+                       row[:type] == 'unmonth' && row[:dcode] == 'allcause' && row[:sex] == 'both'
                    end
                  else
                    elastic_search(
@@ -2115,7 +2296,7 @@ if monthly_supplement_enabled
                               { 'term' => { 'category' => 'death' } },
                               { 'term' => { 'rate' => 'crude' } },
                               { 'term' => { 'type' => 'unmonth' } },
-                              { 'term' => { 'death_code' => 'allcause' } },
+                              { 'term' => { 'dcode' => 'allcause' } },
                               { 'term' => { 'sex' => 'both' } },
                               { 'exists' => { 'field' => 'yearmonth' } }],
                      source: monthly_source
@@ -2177,9 +2358,15 @@ if opts[:summary]
   exit
 end
 
-metric_label = METRICS.fetch(selected_metric).fetch($l)
+metric_label = selected_metric_names.fetch(selected_metric).fetch($l)
 metric_label = $l == :ja ? '0歳人口当たり死亡率' : 'Mortality rate per age-0 population' if selected_metric == 'crude_rate' && selected_ages == ['age_0']
-title = $l == :ja ? '各国・各地域の死亡数・死亡率と予測区間' : 'Deaths, mortality rates, and prediction intervals by country and area'
+title = if selected_dataset == 'cancer-incidence'
+          $l == :ja ? '日本のがん罹患数・罹患率と予測区間' : 'Cancer incidence and prediction intervals in Japan'
+        elsif selected_dataset == 'cancer-death'
+          $l == :ja ? '日本のがん死亡数・死亡率と予測区間' : 'Cancer mortality and prediction intervals in Japan'
+        else
+          $l == :ja ? '各国・各地域の死亡数・死亡率と予測区間' : 'Deaths, mortality rates, and prediction intervals by country and area'
+        end
 print_header(title: title, iframe: false)
 
 def checked(condition)
@@ -2226,15 +2413,16 @@ puts <<~HTML
     <input type="hidden" name="l" value="#{$l}">
     <input id="train-to-hidden" type="hidden" name="train_to" value="#{default_cutoff}">
     <input id="start-year-hidden" type="hidden" name="start_year" value="#{default_start_year}">
+    <input id="dataset-hidden" type="hidden" name="dataset" value="#{mixed_japan_series ? 'vital' : selected_dataset}">
     <p>
       <button class="language-button" type="button" data-language="ja">日本語</button>
       <button class="language-button" type="button" data-language="en">English</button>
     </p>
-    <fieldset><legend>#{ $l == :ja ? '比較方法' : 'Comparison mode' }</legend>
+    <fieldset style="#{selected_dataset == 'vital' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '比較方法' : 'Comparison mode' }</legend>
       <label><input class="comparison-mode" type="radio" name="mode" value="country" #{checked(mode == 'country')}>#{ $l == :ja ? '複数国・共通条件' : 'Countries, common condition' }</label>
       <label><input class="comparison-mode" type="radio" name="mode" value="series" #{checked(mode == 'series')}>#{ $l == :ja ? '一国・複数系列' : 'One country, multiple series' }</label>
     </fieldset>
-    <fieldset><legend>#{ $l == :ja ? '集計期間' : 'Period' }</legend>
+    <fieldset style="#{selected_dataset == 'vital' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '集計期間' : 'Period' }</legend>
       <label><input class="period-option" type="radio" name="period" value="calendar" #{checked(selected_period == 'calendar')}>#{ $l == :ja ? '暦年' : 'Calendar year' }</label>
       <span>#{ $l == :ja ? 'インフルエンザ年（開始:' : 'Influenza year (start:' }</span>
       <label><input class="period-option" type="radio" name="period" value="flu27" #{checked(selected_period == 'flu27')}>#{ $l == :ja ? '第27週' : 'W27' }</label>
@@ -2243,9 +2431,18 @@ puts <<~HTML
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
 METRICS.each do |metric, names|
-  hidden = metric == 'std_deaths' || (selected_period != 'calendar' && !%w[deaths crude_rate asr].include?(metric))
+  hidden = metric == 'std_deaths' || (selected_period != 'calendar' && !%w[deaths crude_rate asr].include?(metric)) ||
+           (selected_dataset != 'vital' && !%w[deaths crude_rate asr].include?(metric))
   hidden_style = hidden ? ' style="display:none"' : ''
-  puts %(<label#{hidden_style}><input class="metric-option" type="radio" name="metric" value="#{metric}" #{checked(selected_metric == metric)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  label = if selected_dataset == 'cancer-incidence'
+            { 'deaths' => { ja: '罹患数', en: 'Incidence count' },
+              'crude_rate' => { ja: '粗罹患率', en: 'Crude incidence rate' },
+              'asr' => { ja: '年齢調整罹患率', en: 'Age-standardized incidence rate' } }.
+              fetch(metric, names).fetch($l)
+          else
+            names.fetch($l)
+          end
+  puts %(<label#{hidden_style}><input class="metric-option" type="radio" name="metric" value="#{metric}" #{checked(selected_metric == metric)}>#{CGI.escapeHTML(label)}</label>)
 end
 puts <<~HTML
     </fieldset><br>
@@ -2328,26 +2525,27 @@ show_cause_fieldset = if selected_metric == 'birth_rate'
                         selected_locations == ['JPN']
                       end
 puts <<~HTML
-    <fieldset id="cause-fieldset" style="#{show_cause_fieldset ? '' : 'display:none'}"><legend>#{ $l == :ja ? '死因・症例' : 'Cause of death' }</legend>
+    <fieldset id="cause-fieldset" style="#{show_cause_fieldset ? '' : 'display:none'}"><legend>#{ $l == :ja ? '死因・症例' : 'Causes and conditions' }</legend>
 HTML
+puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '厚生労働省：人口動態統計' : 'Ministry of Health, Labour and Welfare: Vital Statistics')}</strong></div>)
 japan_causes = if selected_period != 'calendar'
                  available_causes
-               elsif menu_catalog
-                 catalog_available_causes(menu_catalog, ['JPN'], selected_metric, selected_sex, selected_ages)
+               elsif vital_menu_catalog
+                 catalog_available_causes(vital_menu_catalog, ['JPN'], selected_metric, selected_sex, selected_ages)
                else
-                 annual_catalog.dig('JPN', :death_codes).to_a
+                 annual_catalog.dig('JPN', :dcodes).to_a
                end.select { |cause| cause == 'allcause' || cause.match?(/\A\d{5}\z/) }
 japan_causes.each do |cause|
   next unless cause == 'allcause'
   names = Death_codes.fetch(cause, { ja: cause, en: cause })
   type = mode == 'country' ? 'radio' : 'checkbox'
-  puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  puts %(<label><input class="cause-option" data-cause-scope="japan" data-dataset="vital" type="#{type}" name="dcodes" value="#{cause}" #{checked(selected_vital_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts %(<details open><summary>#{CGI.escapeHTML($l == :ja ? '出生関連指標' : 'Birth-related measures')}</summary><div class="mortyear-options">)
 SPECIAL_CAUSES.each do |cause, names|
   type = mode == 'country' ? 'radio' : 'checkbox'
   locations = annual_catalog.select { |loc, catalog| birth_cause_available?(loc, catalog, cause) }.keys
-  puts %(<label><input class="cause-option" data-cause-scope="birth" data-locations="#{locations.join(' ')}" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  puts %(<label><input class="cause-option" data-cause-scope="birth" data-dataset="vital" data-locations="#{locations.join(' ')}" type="#{type}" name="dcodes" value="#{cause}" #{checked(selected_vital_causes.include?(cause))}>#{CGI.escapeHTML(names.fetch($l))}</label>)
 end
 puts %(</div></details>)
 # 日本語: 上位分類recordがない場合も、同じ先頭2桁の死因を既知の分類名の下へ表示する。
@@ -2362,7 +2560,7 @@ numeric_cause_groups.sort.each do |prefix, grouped_causes|
   puts %(<details #{open ? 'open' : ''}><summary>)
   type = mode == 'country' ? 'radio' : 'checkbox'
   if parent_available
-    puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{parent}" #{checked(selected_causes.include?(parent))}>#{parent}: #{CGI.escapeHTML(names.fetch($l))}</label></summary>)
+    puts %(<label><input class="cause-option" data-cause-scope="japan" data-dataset="vital" type="#{type}" name="dcodes" value="#{parent}" #{checked(selected_vital_causes.include?(parent))}>#{parent}: #{CGI.escapeHTML(names.fetch($l))}</label></summary>)
   else
     puts %(#{prefix}: #{CGI.escapeHTML(names.fetch($l))}</summary>)
   end
@@ -2370,12 +2568,24 @@ numeric_cause_groups.sort.each do |prefix, grouped_causes|
     puts %(<div class="mortyear-options">)
     children.each do |cause|
       child_names = Death_codes.fetch(cause, { ja: cause, en: cause })
-      puts %(<label><input class="cause-option" data-cause-scope="japan" type="#{type}" name="death_codes" value="#{cause}" #{checked(selected_causes.include?(cause))}>#{cause}: #{CGI.escapeHTML(child_names.fetch($l))}</label>)
+      puts %(<label><input class="cause-option" data-cause-scope="japan" data-dataset="vital" type="#{type}" name="dcodes" value="#{cause}" #{checked(selected_vital_causes.include?(cause))}>#{cause}: #{CGI.escapeHTML(child_names.fetch($l))}</label>)
     end
     puts %(</div>)
   end
   puts %(</details>)
 end
+render_cancer_group = lambda do |dataset_key, heading|
+  scope = dataset_key
+  puts %(<details class="cancer-cause-group" open><summary>#{CGI.escapeHTML(heading)}</summary><div class="mortyear-options">)
+  CANCER_SITES.each do |code, names|
+    type = mode == 'country' ? 'radio' : 'checkbox'
+    active = selected_cancer_causes.include?(code)
+    puts %(<label><input class="cause-option cancer-site-option" data-cause-scope="#{scope}" data-dataset="#{dataset_key}" type="#{type}" name="dcodes" value="#{code}" #{checked(active)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+  end
+  puts %(</div></details>)
+end
+puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="include_incidence" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
+render_cancer_group.call('cancer-death', $l == :ja ? '癌部位' : 'Cancer sites')
 puts <<~HTML
     </fieldset><br>
     <button type="submit">#{ $l == :ja ? '読込み' : 'Submit' }</button>
@@ -2418,8 +2628,8 @@ puts <<~HTML
         // English: When all ages is selected, omit redundant individual age parameters.
         const allAges = document.querySelector('.age-special-option[value="age_all"]');
         if (allAges.checked) standardInputs().forEach(input => { input.disabled = true; });
-        // 日本語: 複数死因はcod.rbと同じく一つのdeath_codesへ~区切りで保存する。
-        // English: Store multiple causes in one tilde-delimited death_codes parameter, as cod.rb does.
+        // 日本語: 複数死因はcod.rbと同じく一つのdcodesへ~区切りで保存する。
+        // English: Store multiple causes in one tilde-delimited dcodes parameter, as cod.rb does.
         const params = new URLSearchParams(new FormData(event.currentTarget));
         // 日本語: 非表示の別期間用checkboxを除き、現在の期間に対応する年齢だけをURLへ保存する。
         // English: Save only ages from the controls for the active period, excluding hidden controls for the other period.
@@ -2429,9 +2639,9 @@ puts <<~HTML
         params.delete('age');
         params.delete('ages');
         if (ages.length) params.set('ages', compactAges(ages, period));
-        const causes = params.getAll('death_codes');
-        params.delete('death_codes');
-        if (causes.length) params.set('death_codes', causes.join('~'));
+        const causes = params.getAll('dcodes');
+        params.delete('dcodes');
+        if (causes.length) params.set('dcodes', causes.join('~'));
         const locations = params.getAll('c').map(value => value.toLowerCase());
         params.delete('c');
         if (locations.length) params.set('c', locations.join('~'));
@@ -2461,10 +2671,10 @@ puts <<~HTML
         const causes = Array.from(document.querySelectorAll('.cause-option'));
         if (selected === 'country') {
           setInputMode(locations, 'checkbox', 'c');
-          setInputMode(causes, 'radio', 'death_codes');
+          setInputMode(causes, 'radio', 'dcodes');
         } else {
           setInputMode(locations, 'radio', 'c');
-          setInputMode(causes, 'checkbox', 'death_codes');
+          setInputMode(causes, 'checkbox', 'dcodes');
         }
         document.querySelectorAll('.location-region-toggle').forEach(toggle => {
           toggle.style.display = selected === 'country' ? '' : 'none';
@@ -2517,15 +2727,17 @@ puts <<~HTML
           const input = document.querySelector(`.location-option[value="${location}"]`);
           return input && input.closest('label').dataset.metrics.split(' ').includes('birth_rate');
         });
-        const scope = calendarPeriod && selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate' ? 'japan' :
+        const japanContext = calendarPeriod && selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate';
+        const scope = japanContext ? 'japan' :
           metric === 'birth_rate' && (selectedLocations.length === 0 || birthLocations) ? 'birth' : null;
-        const hidden = scope === null;
+        const activeScopes = japanContext ? ['japan', 'cancer-death', 'cancer-incidence'] : (scope ? [scope] : []);
+        const hidden = activeScopes.length === 0;
         fieldset.style.display = hidden ? 'none' : '';
         causes.forEach(input => {
           const supportedLocations = (input.dataset.locations || '').split(' ').filter(Boolean);
           const supported = input.dataset.causeScope !== 'birth' ||
             selectedLocations.every(location => supportedLocations.includes(location));
-          const active = !hidden && input.dataset.causeScope === scope && supported;
+          const active = !hidden && activeScopes.includes(input.dataset.causeScope) && supported;
           input.disabled = !active;
           input.closest('label').style.display = active ? '' : 'none';
           if (!active) input.checked = false;
@@ -2538,7 +2750,9 @@ puts <<~HTML
           if (scope === 'birth' && document.querySelector('.comparison-mode:checked').value === 'series') {
             active.forEach(input => { input.checked = true; });
           } else {
-            const preferred = active.find(input => input.value === (scope === 'birth' ? 'infant' : 'allcause')) || active[0];
+            const preferredDataset = document.getElementById('dataset-hidden').value;
+            const preferred = active.find(input => input.dataset.dataset === preferredDataset &&
+              input.value === (scope === 'birth' ? 'infant' : (preferredDataset === 'vital' ? 'allcause' : 'c53'))) || active[0];
             preferred.checked = true;
           }
         }
@@ -2693,6 +2907,30 @@ puts <<~HTML
         syncCauseVisibility();
       }));
       document.querySelectorAll('.cause-option').forEach(input => input.addEventListener('change', () => {
+        if (input.checked && input.dataset.dataset) {
+          const seriesMode = document.querySelector('.comparison-mode[value="series"]')?.checked;
+          if (!seriesMode) {
+            document.getElementById('dataset-hidden').value = input.dataset.dataset;
+            document.querySelectorAll('.cause-option').forEach(other => {
+              if (other !== input && other.dataset.dataset !== input.dataset.dataset) other.checked = false;
+            });
+          }
+        }
+        if (input.classList.contains('cancer-site-option') && input.checked &&
+            !document.querySelector('.comparison-mode[value="series"]')?.checked) {
+          const hierarchy = #{JSON.generate(CANCER_SITE_CHILDREN)};
+          Object.entries(hierarchy).forEach(([parent, children]) => {
+            const parentInput = document.querySelector(`.cancer-site-option[data-dataset="${input.dataset.dataset}"][value="${parent}"]`);
+            if (input.value === parent) {
+              children.forEach(code => {
+                const child = document.querySelector(`.cancer-site-option[data-dataset="${input.dataset.dataset}"][value="${code}"]`);
+                if (child) child.checked = false;
+              });
+            } else if (children.includes(input.value) && parentInput) {
+              parentInput.checked = false;
+            }
+          });
+        }
         syncCauseVisibility(true);
         rememberLocations();
       }));
@@ -2757,7 +2995,31 @@ else
     sources[loc] |= urls
   end
   source_entries = []
-  if sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
+  if selected_dataset != 'vital'
+    method = if selected_dataset == 'cancer-incidence'
+               $l == :ja ? '国立がん研究センター公表のがん罹患数を使用しています。' :
+                 'Uses cancer incidence counts published by the National Cancer Center Japan.'
+             else
+               $l == :ja ? '国立がん研究センター公表のがん死亡数を使用しています。' :
+                 'Uses cancer mortality counts published by the National Cancer Center Japan.'
+             end
+    method += if selected_metric == 'asr'
+                $l == :ja ? ' 年齢階級別人口とWHO世界標準人口を用いる直接法で年齢調整しています。' :
+                  ' Rates are directly age-standardized using age-specific populations and the WHO world standard population.'
+              elsif selected_metric == 'crude_rate'
+                $l == :ja ? ' 人口を分母として粗率を計算しています。' :
+                  ' Crude rates use population denominators.'
+              else
+                ''
+              end
+    raw_urls = sources_by_location.fetch('JPN', [])
+    urls = raw_urls.select { |url| url.include?('ganjoho.jp') }
+    if selected_metric != 'deaths'
+      urls << ESTAT_POP_URL if raw_urls.any? { |url| url.include?('e-stat.go.jp') }
+      urls << WPP_URL if raw_urls.any? { |url| url.include?('population.un.org') }
+    end
+    source_entries << { loc: 'JPN', method: method, urls: urls }
+  elsif sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
     method = if jpn_2015_asr && selected_period != 'calendar' && $l == :ja
                'e-Statの月次死亡数・月次人口から作った週次推計値をインフルエンザ年へ再集計し、日本の2015年モデル人口で年齢調整しています。'
              elsif jpn_2015_asr && selected_period != 'calendar'
@@ -2799,13 +3061,29 @@ else
              end
     # 日本語: recordには年別fileの追跡URLを残すが、画面では安定した資料一覧へ集約する。
     # English: Retain per-year provenance in records, but show stable source listings on the page.
-    other_urls = sources_by_location['JPN'].reject { |url| url.include?('e-stat.go.jp') }
+    other_urls = sources_by_location['JPN'].reject do |url|
+      url.include?('e-stat.go.jp') || (mixed_japan_series && url.include?('ganjoho.jp'))
+    end
     death_urls = selected_period == 'calendar' ? [ESTAT_ANNUAL_DEATH_URL, ESTAT_DEATH_URL] : [ESTAT_DEATH_URL]
     stable_urls = death_urls
     stable_urls << ESTAT_POP_URL unless selected_metric == 'birth_rate'
     source_entries << { loc: 'JPN', method: method, urls: (stable_urls + other_urls).uniq }
   end
+  if mixed_japan_series && selected_cancer_causes.any?
+    cancer_method = if include_incidence
+                      $l == :ja ?
+                        '国立がん研究センター公表の癌死亡数と癌罹患数を使用しています。癌系列の年齢調整にはWHO世界標準人口を使います。' :
+                        'Uses cancer mortality and incidence counts published by the National Cancer Center Japan. Cancer series use the WHO world standard population.'
+                    else
+                      $l == :ja ?
+                        '国立がん研究センター公表の癌死亡数を使用しています。癌系列の年齢調整にはWHO世界標準人口を使います。' :
+                        'Uses cancer mortality counts published by the National Cancer Center Japan. Cancer series use the WHO world standard population.'
+                    end
+    cancer_urls = sources_by_location.fetch('JPN', []).select { |url| url.include?('ganjoho.jp') }
+    source_entries << { loc: 'JPN', method: cancer_method, urls: cancer_urls }
+  end
   sources_by_location.each do |loc, urls|
+    next if selected_dataset != 'vital' && loc == 'JPN'
     next if loc == 'JPN' && urls.any? { |url| url.include?('e-stat.go.jp') }
 
     method = if selected_period != 'calendar' && urls.include?(HMD_URL) && $l == :ja
@@ -2858,6 +3136,14 @@ else
     link_html = links.empty? ? '' : "<br>#{links}"
     "<li><strong>#{CGI.escapeHTML(location_label)}</strong>: #{CGI.escapeHTML(method)}#{link_html}</li>"
   end.join("\n")
+  asr_note_ja = mixed_japan_series && selected_cancer_causes.any? ?
+                  '人口動態統計には日本の2015年モデル人口、癌統計にはWHO世界標準人口を使います。' : selected_dataset == 'vital' ?
+                  '日本単独表示では日本の2015年モデル人口、複数国比較とその他の国・地域ではWHO世界標準人口を使います。' :
+                  'がん統計ではWHO世界標準人口を使います。'
+  asr_note_en = mixed_japan_series && selected_cancer_causes.any? ?
+                  'Vital Statistics use the Japan 2015 model population; cancer statistics use the WHO world standard population.' : selected_dataset == 'vital' ?
+                  'Japan-only views use the Japan 2015 model population; multi-country comparisons and other locations use the WHO world standard population.' :
+                  'Cancer statistics use the WHO world standard population.'
   method_notes = if $l == :ja
                    <<~HTML
                      <h3>用語と集計方法</h3>
@@ -2865,7 +3151,7 @@ else
                        <dt><strong>HMD</strong></dt><dd>Human Mortality Database（国際死亡データベース）。各国の死亡・人口データを共通形式で提供しています。<br><a href="#{HMD_HOME_URL}" target="_blank">#{HMD_HOME_URL}</a></dd>
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations。HMDが提供する週次死亡データです。この画面では年齢階級別の週次死亡数と死亡率を使用します。<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>国連人口部のWorld Population Prospects（世界人口推計）。各国の年次人口などを補う場合に使用します。<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
-                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate（年齢調整死亡率）。日本単独表示では日本の2015年モデル人口、複数国比較とその他の国・地域ではWHO世界標準人口を使います。選択年齢範囲内で標準人口weightを再正規化します。インフルエンザ年のASRはSTMF共通の粗い年齢階級による近似です。<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized rate（年齢調整率）。#{asr_note_ja}選択年齢範囲内で標準人口weightを再正規化します。インフルエンザ年のASRはSTMF共通の粗い年齢階級による近似です。<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
                        <dt><strong>インフルエンザ年の集計</strong></dt><dd>年境界をまたぐ週の死亡数は、各期間に含まれる日数に応じて配分します。週次死亡数と死亡率から得た人口を人口日として積算し、第27週または第36週から翌年の同じ開始週直前まで、全日がそろう期間だけを表示します。日本の週次値は実測週次値ではなく、e-Stat月次値から按分・平滑化した推計値です。</dd>
                      </dl>
                    HTML
@@ -2876,7 +3162,7 @@ else
                        <dt><strong>HMD</strong></dt><dd>Human Mortality Database, which provides harmonized mortality and population data for participating countries.<br><a href="#{HMD_HOME_URL}" target="_blank">#{HMD_HOME_URL}</a></dd>
                        <dt><strong>STMF</strong></dt><dd>Short-Term Mortality Fluctuations, the weekly mortality dataset provided by HMD. This page uses its age-specific weekly deaths and mortality rates.<br><a href="#{HMD_URL}" target="_blank">#{HMD_URL}</a></dd>
                        <dt><strong>UN WPP</strong></dt><dd>United Nations World Population Prospects, published by the UN Population Division. It supplies annual population data where needed.<br><a href="#{WPP_URL}" target="_blank">#{WPP_URL}</a></dd>
-                       <dt><strong>ASR</strong></dt><dd>Age-standardized mortality rate. Japan-only views use the Japan 2015 model population; multi-country comparisons and other locations use the WHO world standard population. Weights are renormalized within the selected age range. Influenza-year ASR is approximate because it uses broad common STMF age groups.<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
+                       <dt><strong>ASR</strong></dt><dd>Age-standardized rate. #{asr_note_en} Weights are renormalized within the selected age range. Influenza-year ASR is approximate because it uses broad common STMF age groups.<br><a href="#{WHO_STANDARD_URL}" target="_blank">#{WHO_STANDARD_URL}</a></dd>
                        <dt><strong>Influenza-year aggregation</strong></dt><dd>Deaths in a week crossing a year boundary are allocated in proportion to the number of days in each period. Population inferred from weekly deaths and rates is accumulated as population-days. Only complete periods from W27 or W36 to the day before the same starting week in the following year are shown. Japanese weekly values are estimates prorated and smoothed from monthly e-Stat data, not directly observed weekly counts.</dd>
                      </dl>
                    HTML

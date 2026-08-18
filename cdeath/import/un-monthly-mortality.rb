@@ -142,11 +142,11 @@ observations.each_value do |item|
   period = format('%04dm%02d', year, month)
   common = {
     loc: item[:code], area: item[:area], yearmonth: period,
-    category: 'death', death_code: 'allcause', death_cause: 'All causes', algo: '', type: TYPE,
+    category: 'death', dcode: 'allcause', death_cause: 'All causes', algo: '', type: TYPE,
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: 'both'
   }
   count_id = Mstats2026.record_id(loc: item[:code], period: period, category: 'death',
-                                  death_code: 'allcause', type: TYPE, sex: 'both')
+                                  dcode: 'allcause', type: TYPE, sex: 'both')
   rows[count_id] = common.merge(id: count_id, rate: '', src_url: [UN_URL], age_all: item[:deaths].round)
 
   population = populations[[item[:code], year]]
@@ -155,7 +155,7 @@ observations.each_value do |item|
   days = Date.new(year, month, -1).day
   crude = item[:deaths] * 365.2425 / days / population[:value] * 100_000
   crude_id = Mstats2026.record_id(loc: item[:code], period: period, category: 'death', rate: 'crude',
-                                  death_code: 'allcause', type: TYPE, sex: 'both')
+                                  dcode: 'allcause', type: TYPE, sex: 'both')
   rows[crude_id] = common.merge(id: crude_id, rate: 'crude', src_url: [UN_URL, WPP_URL], age_all: crude.round(2))
 end
 

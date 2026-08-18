@@ -710,7 +710,7 @@ print '        "values": '
 # ElasticSearch
 #
 
-death_codes = $causes.keys.map{|type| CauseCodes.fetch(type)}
+dcodes = $causes.keys.map{|type| CauseCodes.fetch(type)}
 source_age_fields = $ages.keys.map{|age| AgeFields.fetch(age, "age_#{age}")}
 
 data0 = elastic_search(
@@ -738,13 +738,13 @@ data0 = elastic_search(
     :must_not => [
         { 'term' => {'type' => 'unmonth'} },
     ],
-    :should => death_codes.map{|code| {'term' => {'death_code' => code}}},
-    :source => ['date', 'sex', 'death_code', 'type'] + source_age_fields,
+    :should => dcodes.map{|code| {'term' => {'dcode' => code}}},
+    :source => ['date', 'sex', 'dcode', 'type'] + source_age_fields,
 )
 
 # 日本語: 同じ月・死因の確定値と速報値が共存するときは確定値を使う。
 # English: Prefer confirmed records when confirmed and provisional monthly values coexist.
-data0 = data0.group_by { |datum| [datum[:date], datum[:sex], datum[:death_code]] }.
+data0 = data0.group_by { |datum| [datum[:date], datum[:sex], datum[:dcode]] }.
         values.map { |records| records.min_by { |datum| datum[:type].to_s == 'cfm' ? 0 : 1 } }
 
 date_covid19 = Date.parse('2020-01-01')
@@ -772,7 +772,7 @@ data0.each do |datum|
         end
     end
 
-    cause_type = CauseCodes.key(datum[:death_code])
+    cause_type = CauseCodes.key(datum[:dcode])
     next if ! cause_type
 
     data.push({'date' => date.to_s,

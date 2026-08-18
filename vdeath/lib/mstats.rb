@@ -8,7 +8,7 @@ require_relative 'debug'
 # 死亡・人口統計を期間、地域、年齢別に保持して変換するHash拡張。
 # Hash extension for transforming mortality and population statistics by period, area, and age.
 class Mstats < Hash
-    ID_FIELDS = [:loc_code, :period, :category, :rate, :death_code, :algo, :type, :sex].freeze
+    ID_FIELDS = [:loc_code, :period, :category, :rate, :dcode, :algo, :type, :sex].freeze
     @@init_flag = false
     @@today = nil
     @@today_y = nil
@@ -76,7 +76,7 @@ class Mstats < Hash
         end
         values = {
             loc_code: record[:loc_code], period: period, category: record[:category],
-            rate: record[:rate], death_code: record[:death_code], algo: record[:algo],
+            rate: record[:rate], dcode: record[:dcode], algo: record[:algo],
             type: record[:type], sex: record[:sex]
         }.merge(overrides)
         components = ID_FIELDS.map { |field| values[field].to_s }

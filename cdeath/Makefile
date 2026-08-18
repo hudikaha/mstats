@@ -50,8 +50,13 @@ EXDEATHS_CAUSE_ARCHIVE ?= $(EXDEATHS_DIR)/Observed.csv.zip
 EXDEATHS_CAUSE_DIR ?= $(EXDEATHS_DIR)/cause
 EXDEATHS_URL := https://exdeaths-japan.org/data/Observed.csv
 EXDEATHS_CAUSE_URL := https://exdeaths-japan.org/data/Observed.csv.zip
+NCC_SOURCE_DIR ?= $(ROOT)/../var/hpvvhv/handoff_data
+NCC_MORTALITY_SOURCE ?= $(NCC_SOURCE_DIR)/cancer_mortality(1958-2024).xls
+MCIJ_INCIDENCE_SOURCE ?= $(NCC_SOURCE_DIR)/cancer_incidence(1975-2015).xls
+NCR_INCIDENCE_SOURCE ?= $(NCC_SOURCE_DIR)/cancer_incidenceNCR(2016-2023).xls
 DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
+NCC_PYTHON_DIR ?= $(STATE_DIR)/ncc-python
 
 POP_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0
 DCAUSE_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0
@@ -63,10 +68,10 @@ YEARLY_INDEX ?= mstats20260816
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all location-config fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly check csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv \
-  yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv validate-csv upload-official \
+.PHONY: help all location-config fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly check csv rebuild-all-csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv \
+  yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv ncc-python ncc-cancer-sample-csv ncc-cancer-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed \
-  upload-exdeaths-sample upload-exdeaths upload-mstats-all check-latest-id-collisions reset-mstats-index check-mstats-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths cod codtr
+  upload-exdeaths-sample upload-exdeaths upload-ncc upload-mstats-all check-latest-id-collisions reset-mstats-index check-mstats-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-all cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -140,6 +145,9 @@ help:
 	@echo 'make confirmed-sample-csv 1999年だけで確定人口・年次死亡のfieldとIDを短縮検査'
 	@echo 'make mort-csv 最新の月次CSVからmort.rb用週次CSVを生成（投入しない）'
 	@echo 'make stmf-csv STMF pooled CSVをmstats2026週次CSVへ変換（投入しない）'
+	@echo 'make ncc-cancer-sample-csv NCC/MCIJ/NCRのC53短縮CSVを生成・検査（投入しない）'
+	@echo 'make ncc-cancer-csv NCC/MCIJ/NCRの全癌年次CSVを生成・検査（投入しない）'
+	@echo 'make rebuild-all-csv 全系列CSVを新しい名前とschemaで再生成し時間を計測'
 	@echo 'make fetch-exdeaths 超過死亡dashboardの全死因・死因別CSVを取得'
 	@echo 'make exdeaths-sample-csv 全国7系列の短縮検査CSVを生成（投入しない）'
 	@echo 'make exdeaths-csv 全国・47都道府県の7系列CSVを生成（投入しない）'
@@ -248,7 +256,7 @@ fetch-exdeaths:
 exdeaths-sample-csv:
 	@test -s "$(EXDEATHS_ALL)" || { echo '先に make fetch-exdeaths を実行してください。'; exit 1; }
 	@mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 out="$(DATA_DIR)/exdeaths-weekly-national-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; log="$(STATE_DIR)/exdeaths-sample.log"; \
+	 out="$(DATA_DIR)/exdeaths-weekly-national-$$stamp.csv"; tmp="$$out.tmp"; log="$(STATE_DIR)/exdeaths-sample.log"; \
 	 started=$$SECONDS; \
 	 if ! ruby "$(ROOT)/import/exdeaths-weekly.rb" --prefecture-ids 48 --through 2024-12-29 \
 	   "$(EXDEATHS_ALL)" "$(EXDEATHS_CAUSE_DIR)" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
@@ -258,7 +266,7 @@ exdeaths-sample-csv:
 exdeaths-csv:
 	@test -s "$(EXDEATHS_ALL)" || { echo '先に make fetch-exdeaths を実行してください。'; exit 1; }
 	@mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 out="$(DATA_DIR)/exdeaths-weekly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; log="$(STATE_DIR)/exdeaths.log"; \
+	 out="$(DATA_DIR)/exdeaths-weekly-$$stamp.csv"; tmp="$$out.tmp"; log="$(STATE_DIR)/exdeaths.log"; \
 	 started=$$SECONDS; \
 	 if ! ruby "$(ROOT)/import/exdeaths-weekly.rb" "$(EXDEATHS_ALL)" "$(EXDEATHS_CAUSE_DIR)" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; \
@@ -311,21 +319,21 @@ csv:
 	 cmp -s "$(STATE_DIR)/death.current" "$(STATE_DIR)/death.sources" || death_changed=1; \
 	 if (( pop_changed )); then \
 	    echo '[csv] 人口の日時付き累積CSVを生成します。'; \
-	    tmp="$(DATA_DIR)/.jp-pop-mstats2026-$$stamp.csv.tmp"; out="$(DATA_DIR)/jp-pop-mstats2026-$$stamp.csv"; \
+	    tmp="$(DATA_DIR)/.jp-pop-$$stamp.csv.tmp"; out="$(DATA_DIR)/jp-pop-$$stamp.csv"; \
 	    if ! ruby "$(ROOT)/import/jp-pop.rb" "$${pop_sources[@]}" > "$$tmp" 2> "$(STATE_DIR)/jp-pop.log"; then cat "$(STATE_DIR)/jp-pop.log"; exit 1; fi; \
 	    validate_csv pop "$$tmp"; mv "$$tmp" "$$out"; \
 	    echo "created $$out"; \
 	  fi; \
 	 if (( pop_changed || death_changed )); then \
-	    pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
+	    pop_files=("$(DATA_DIR)"/jp-pop-<->-<->.csv(Nom)); pop=$$pop_files[1]; \
 	    test -n "$$pop" || { echo '人口CSVを生成できませんでした。'; exit 1; }; \
-	    old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-mstats2026-*.csv(Nom)); old_pop=$$old_pop_files[1]; weekly_pop="$$pop"; \
+	    old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-<->-<->.csv(Nom)); old_pop=$$old_pop_files[1]; weekly_pop="$$pop"; \
 	    if [[ -n $$old_pop ]]; then weekly_pop="$(STATE_DIR)/jp-pop-history.csv"; \
 	      { head -1 "$$old_pop"; tail -n +2 "$$old_pop"; tail -n +2 "$$pop"; } > "$$weekly_pop"; fi; \
-	    cfm_monthly_files=("$(DATA_DIR)"/jp-dcause-cfm-mstats2026-*.csv(Nom)); cfm_monthly=$$cfm_monthly_files[1]; \
+	    cfm_monthly_files=("$(DATA_DIR)"/jp-dcause-cfm-<->-<->.csv(Nom)); cfm_monthly=$$cfm_monthly_files[1]; \
 	    weekly_priority=(); [[ -z $$cfm_monthly ]] || weekly_priority=(--preferred-monthly "$$cfm_monthly"); \
-	    monthly="$(DATA_DIR)/jp-dcause-mstats2026-$$stamp.csv"; \
-	    weekly="$(DATA_DIR)/jp-dcause-weekly-mstats2026-$$stamp.csv"; \
+	    monthly="$(DATA_DIR)/jp-dcause-$$stamp.csv"; \
+	    weekly="$(DATA_DIR)/jp-dcause-weekly-$$stamp.csv"; \
 	    echo '[csv] 原死因CSVを一度読み、月次・週次CSVを同時生成します。'; \
 	    if ! ruby "$(ROOT)/import/causejp.rb" --population "$$weekly_pop" --monthly-out "$$monthly" --weekly-out "$$weekly" \
 	      "$${weekly_priority[@]}" "$${death_sources[@]}" 2> "$(STATE_DIR)/causejp.log"; then cat "$(STATE_DIR)/causejp.log"; rm -f "$$monthly" "$$weekly"; exit 1; fi; \
@@ -350,15 +358,15 @@ schema-csv:
 	@pop_sources=("$(POP_ARCHIVE_DIR)"/*.csv(N)); death_sources=("$(DCAUSE_SOURCE_DIR)"/*.csv(N)); \
 	 (( $$#pop_sources && $$#death_sources )) || { echo '原CSVが不足しています。'; exit 1; }; \
 	 mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 pop="$(DATA_DIR)/jp-pop-mstats2026-$$stamp.csv"; \
-	 monthly="$(DATA_DIR)/jp-dcause-mstats2026-$$stamp.csv"; \
-	 weekly="$(DATA_DIR)/jp-dcause-weekly-mstats2026-$$stamp.csv"; \
-	 cfm_monthly_files=("$(DATA_DIR)"/jp-dcause-cfm-mstats2026-*.csv(Nom)); cfm_monthly=$$cfm_monthly_files[1]; \
+	 pop="$(DATA_DIR)/jp-pop-$$stamp.csv"; \
+	 monthly="$(DATA_DIR)/jp-dcause-$$stamp.csv"; \
+	 weekly="$(DATA_DIR)/jp-dcause-weekly-$$stamp.csv"; \
+	 cfm_monthly_files=("$(DATA_DIR)"/jp-dcause-cfm-<->-<->.csv(Nom)); cfm_monthly=$$cfm_monthly_files[1]; \
 	 weekly_priority=(); [[ -z $$cfm_monthly ]] || weekly_priority=(--preferred-monthly "$$cfm_monthly"); \
 	 echo '[schema-csv] 人口CSVを新しいdata形式で再生成します。'; \
 	 ruby "$(ROOT)/import/jp-pop.rb" "$${pop_sources[@]}" > "$$pop"; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$pop"; \
-	 old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-mstats2026-*.csv(Nom)); old_pop=$$old_pop_files[1]; weekly_pop="$$pop"; \
+	 old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-<->-<->.csv(Nom)); old_pop=$$old_pop_files[1]; weekly_pop="$$pop"; \
 	 if [[ -n $$old_pop ]]; then weekly_pop="$(STATE_DIR)/jp-pop-history.csv"; \
 	   { head -1 "$$old_pop"; tail -n +2 "$$old_pop"; tail -n +2 "$$pop"; } > "$$weekly_pop"; fi; \
 	 echo '[schema-csv] 月次死亡・週次派生CSVを新しいdata形式で再生成します。'; \
@@ -389,7 +397,7 @@ confirmed-csv:
 	 (( $$#cause_sources == 26 )) || { echo '確定死亡原CSVは1999〜2024年の26fileが必要です。'; exit 1; }; \
 	 (( $$#annual_sources == 10 )) || { echo '年次確定死亡原CSVは1999〜2008年の10fileが必要です。'; exit 1; }; \
 	 (( $$#pop_books == 11 )) || { echo '確定人口原bookは1999〜2009年の11fileが必要です。'; exit 1; }; \
-	 regular_pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); regular_pop=$$regular_pop_files[1]; \
+	 regular_pop_files=("$(DATA_DIR)"/jp-pop-<->-<->.csv(Nom)); regular_pop=$$regular_pop_files[1]; \
 	 test -n "$$regular_pop" || { echo '人口推計・月次公表表のCSVがありません。先に make schema-csv を実行してください。'; exit 1; }; \
 	 command -v soffice >/dev/null || { echo 'LibreOfficeのsofficeが必要です。'; exit 1; }; \
 	 mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; mkdir "$$tmp/books" "$$tmp/pop-csv"; \
@@ -402,9 +410,9 @@ confirmed-csv:
 	 converted_books=("$$tmp/pop-csv/"*.csv(N)); \
 	 (( $$#converted_books >= $$#pop_books )) || { echo "soffice created only $$#converted_books CSVs from $$#pop_books population books"; exit 1; }; \
 	 echo "[timing] population book conversion: $$((SECONDS - started))s"; \
-	 stamp=$$(date +%Y%m%d-%H%M%S); pop_old="$(DATA_DIR)/jp-pop-cfm-legacy-mstats2026-$$stamp.csv"; annual_raw="$(DATA_DIR)/jp-dcause-cfm-yearly-raw-mstats2026-$$stamp.csv"; \
-	 monthly="$(DATA_DIR)/jp-dcause-cfm-mstats2026-$$stamp.csv"; weekly="$(DATA_DIR)/jp-dcause-weekly-mstats2026-$$stamp.csv"; \
-	 yearly="$(DATA_DIR)/jp-yearly-cfm-mstats2026-$$stamp.csv"; combined="$$tmp/jp-pop-combined.csv"; oldest="$$tmp/jp-pop-oldest.csv"; \
+	 stamp=$$(date +%Y%m%d-%H%M%S); pop_old="$(DATA_DIR)/jp-pop-cfm-legacy-$$stamp.csv"; annual_raw="$(DATA_DIR)/jp-dcause-cfm-yearly-raw-$$stamp.csv"; \
+	 monthly="$(DATA_DIR)/jp-dcause-cfm-$$stamp.csv"; weekly="$(DATA_DIR)/jp-dcause-weekly-$$stamp.csv"; \
+	 yearly="$(DATA_DIR)/jp-yearly-cfm-$$stamp.csv"; combined="$$tmp/jp-pop-combined.csv"; oldest="$$tmp/jp-pop-oldest.csv"; \
 	 pop_all="$$tmp/jp-pop-cfm-legacy-all.csv"; \
 	 started=$$SECONDS; ruby "$(ROOT)/import/jp-pop-confirmed-legacy.rb" --oldest-output "$$oldest" \
 	   --all-output "$$pop_all" --exclude-ids "$$regular_pop" "$${converted_books[@]}" > "$$pop_old" || exit 1; \
@@ -414,7 +422,7 @@ confirmed-csv:
 	 started=$$SECONDS; ruby "$(ROOT)/import/jp-dcause-confirmed-yearly.rb" "$${annual_sources[@]}" > "$$annual_raw" || exit 1; \
 	 echo "[timing] annual death generation: $$((SECONDS - started))s"; \
 	 { head -1 "$$pop_all"; tail -n +2 "$$pop_all"; tail -n +2 "$$regular_pop"; } > "$$combined"; \
-	 regular_death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); regular_death=$$regular_death_files[1]; \
+	 regular_death_files=("$(DATA_DIR)"/jp-dcause-<->-<->.csv(Nom)); regular_death=$$regular_death_files[1]; \
 	 test -n "$$regular_death" || { echo '概数・速報月次死亡CSVがありません。先に make schema-csv を実行してください。'; exit 1; }; \
 	 started=$$SECONDS; ruby "$(ROOT)/import/jp-dcause-weekly.rb" --population "$$combined" \
 	   --preferred-monthly "$$monthly" "$$regular_death" > "$$weekly" || exit 1; \
@@ -434,14 +442,14 @@ confirmed-csv:
 	 echo '[confirmed-csv] uploadとElasticsearch投入は行っていません。'
 
 canonical-weekly-csv:
-	@old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-mstats2026-*.csv(Nom)); old_pop=$$old_pop_files[1]; \
-	 pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
-	 cfm_files=("$(DATA_DIR)"/jp-dcause-cfm-mstats2026-*.csv(Nom)); cfm=$$cfm_files[1]; \
-	 current_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); current=$$current_files[1]; \
+	@old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-<->-<->.csv(Nom)); old_pop=$$old_pop_files[1]; \
+	 pop_files=("$(DATA_DIR)"/jp-pop-<->-<->.csv(Nom)); pop=$$pop_files[1]; \
+	 cfm_files=("$(DATA_DIR)"/jp-dcause-cfm-<->-<->.csv(Nom)); cfm=$$cfm_files[1]; \
+	 current_files=("$(DATA_DIR)"/jp-dcause-<->-<->.csv(Nom)); current=$$current_files[1]; \
 	 test -n "$$old_pop" -a -n "$$pop" -a -n "$$cfm" -a -n "$$current" || { echo 'canonical週次生成用CSVが不足しています。'; exit 1; }; \
 	 work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; \
 	 { head -1 "$$old_pop"; tail -n +2 "$$old_pop"; tail -n +2 "$$pop"; } > "$$work/pop.csv"; \
-	 stamp=$$(date +%Y%m%d-%H%M%S); out="$(DATA_DIR)/jp-dcause-weekly-mstats2026-$$stamp.csv"; \
+	 stamp=$$(date +%Y%m%d-%H%M%S); out="$(DATA_DIR)/jp-dcause-weekly-$$stamp.csv"; \
 	 started=$$SECONDS; ruby "$(ROOT)/import/jp-dcause-weekly.rb" --population "$$work/pop.csv" \
 	   --preferred-monthly "$$cfm" "$$current" > "$$out"; \
 	 echo "[timing] canonical weekly generation: $$((SECONDS - started))s"; \
@@ -449,12 +457,12 @@ canonical-weekly-csv:
 	 echo "created $$out ($$(($$(wc -l < "$$out") - 1)) records)"
 
 mort-csv:
-	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
-	 death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); death=$$death_files[1]; \
+	@pop_files=("$(DATA_DIR)"/jp-pop-<->-<->.csv(Nom)); pop=$$pop_files[1]; \
+	 death_files=("$(DATA_DIR)"/jp-dcause-<->-<->.csv(Nom)); death=$$death_files[1]; \
 	 test -n "$$pop" -a -n "$$death" || { echo 'mstats2026月次CSVが不足しています。先に make csv を実行してください。'; exit 1; }; \
 	 mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 tmp="$(DATA_DIR)/.jp-dcause-weekly-mstats2026-$$stamp.csv.tmp"; \
-	 out="$(DATA_DIR)/jp-dcause-weekly-mstats2026-$$stamp.csv"; \
+	 tmp="$(DATA_DIR)/.jp-dcause-weekly-$$stamp.csv.tmp"; \
+	 out="$(DATA_DIR)/jp-dcause-weekly-$$stamp.csv"; \
 	 log="$(STATE_DIR)/jp-dcause-weekly.log"; \
 	 echo "[mort-csv] $${death:t}と$${pop:t}から週次CSVを生成します。"; \
 	 if ! ruby "$(ROOT)/import/jp-dcause-weekly.rb" --population "$$pop" "$$death" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
@@ -472,8 +480,8 @@ mort-csv:
 stmf-csv:
 	@source="$(STMF_SOURCE)"; test -s "$$source" || { echo 'STMF pooled CSVがありません: $(STMF_SOURCE)'; exit 1; }; \
 	 mkdir -p "$(DATA_DIR)" "$(STATE_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 tmp="$(DATA_DIR)/.stmf-weekly-mstats2026-$$stamp.csv.tmp"; \
-	 out="$(DATA_DIR)/stmf-weekly-mstats2026-$$stamp.csv"; \
+	 tmp="$(DATA_DIR)/.stmf-weekly-$$stamp.csv.tmp"; \
+	 out="$(DATA_DIR)/stmf-weekly-$$stamp.csv"; \
 	 log="$(STATE_DIR)/stmf-weekly.log"; \
 	 echo "[stmf-csv] $${source:t}を週次CSVへ変換します。"; \
 	 if ! ruby "$(ROOT)/import/stmf-weekly.rb" "$$source" > "$$tmp" 2> "$$log"; then cat "$$log"; rm -f "$$tmp"; exit 1; fi; \
@@ -489,14 +497,14 @@ stmf-csv:
 yearly-csv: jp-yearly-csv
 
 jp-yearly-csv:
-	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
-	 old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-mstats2026-*.csv(Nom)); old_pop=$$old_pop_files[1]; \
-	 death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); death=$$death_files[1]; \
+	@pop_files=("$(DATA_DIR)"/jp-pop-<->-<->.csv(Nom)); pop=$$pop_files[1]; \
+	 old_pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-<->-<->.csv(Nom)); old_pop=$$old_pop_files[1]; \
+	 death_files=("$(DATA_DIR)"/jp-dcause-<->-<->.csv(Nom)); death=$$death_files[1]; \
 	 test -n "$$pop" -a -n "$$old_pop" -a -n "$$death" || { echo '月次CSVが不足しています。先に make schema-csv confirmed-csv を実行してください。'; exit 1; }; \
 	 mkdir -p "$(DATA_DIR)"; work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; \
 	 { head -1 "$$old_pop"; tail -n +2 "$$old_pop"; tail -n +2 "$$pop"; } > "$$work/pop-history.csv"; \
 	 stamp=$$(date +%Y%m%d-%H%M%S); \
-	 out="$(DATA_DIR)/jp-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 out="$(DATA_DIR)/jp-yearly-$$stamp.csv"; tmp="$$out.tmp"; \
 	 ruby "$(ROOT)/import/jp-yearly.rb" "$$death" "$$work/pop-history.csv" > "$$tmp"; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; \
 	 mv "$$tmp" "$$out"; echo "created $$out"
@@ -504,7 +512,7 @@ jp-yearly-csv:
 us-yearly-csv:
 	@test -s "$(US_MORTYEAR_SOURCE)"
 	@mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 out="$(DATA_DIR)/us-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 out="$(DATA_DIR)/us-yearly-$$stamp.csv"; tmp="$$out.tmp"; \
 	 if ! ruby "$(ROOT)/import/us-infant-yearly.rb" "$(US_MORTYEAR_SOURCE)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"
@@ -515,7 +523,7 @@ oecd-infant-yearly-csv:
 	 header=$$(head -1 "$$tmp_source" | tr -d '\r'); \
 	 if test "$$header" != 'DATAFLOW,REF_AREA,FREQ,MEASURE,UNIT_MEASURE,AGE,SEX,SOCIO_ECON_STATUS,DEATH_CAUSE,CALC_METHODOLOGY,GESTATION_THRESHOLD,HEALTH_STATUS,DISEASE,CANCER_SITE,TIME_PERIOD,OBS_VALUE,DECIMALS,OBS_STATUS,OBS_STATUS2,OBS_STATUS3,UNIT_MULT'; then rm -f "$$tmp_source"; echo 'unexpected OECD CSV header'; exit 1; fi; \
 	 mv "$$tmp_source" "$(OECD_MIM_SOURCE)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 out="$(DATA_DIR)/oecd-infant-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 out="$(DATA_DIR)/oecd-infant-yearly-$$stamp.csv"; tmp="$$out.tmp"; \
 	 if ! ruby "$(ROOT)/import/oecd-infant-yearly.rb" "$(OECD_MIM_SOURCE)" "$(WPP_DEMOGRAPHIC)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"; \
@@ -525,7 +533,7 @@ jp-infant-yearly-csv:
 	@test -s "$(JP_INFANT_SOURCE)" || { echo "日本乳児死亡sourceがありません: $(JP_INFANT_SOURCE)"; exit 1; }
 	@test -s "$(JP_PERINATAL_SOURCE)" || { echo "日本周産期死亡sourceがありません: $(JP_PERINATAL_SOURCE)"; exit 1; }
 	@mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 out="$(DATA_DIR)/jp-infant-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 out="$(DATA_DIR)/jp-infant-yearly-$$stamp.csv"; tmp="$$out.tmp"; \
 	 if ! ruby "$(ROOT)/import/jp-infant-yearly.rb" "$(JP_INFANT_SOURCE)" "$(JP_PERINATAL_SOURCE)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"; \
@@ -538,7 +546,7 @@ wpp-yearly-csv:
 	   gzip -t "$$file"; \
 	 done; \
 	 mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); \
-	 out="$(DATA_DIR)/un-wpp-yearly-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 out="$(DATA_DIR)/un-wpp-yearly-$$stamp.csv"; tmp="$$out.tmp"; \
 	 if ! python3 "$(ROOT)/import/un-wpp-yearly.py" \
 	   "$(WPP_DEMOGRAPHIC)" "$(WPP_DEATH_HIST)" "$(WPP_DEATH_PROJ)" \
 	   "$(WPP_EXPOSURE_HIST)" "$(WPP_EXPOSURE_PROJ)" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
@@ -560,89 +568,141 @@ fetch-un-monthly:
 
 un-monthly-csv:
 	@test -s "$(UN_MONTHLY_SOURCE)" || { echo "UN monthly source is missing: $(UN_MONTHLY_SOURCE)"; exit 1; }
-	@wpp_files=("$(DATA_DIR)"/un-wpp-yearly-mstats2026-*.csv(Nom)); wpp=$$wpp_files[1]; \
+	@wpp_files=("$(DATA_DIR)"/un-wpp-yearly-<->-<->.csv(Nom)); wpp=$$wpp_files[1]; \
 	 test -n "$$wpp" || { echo 'WPP年次CSVがありません。'; exit 1; }; \
-	 stamp=$$(date +%Y%m%d-%H%M%S); out="$(DATA_DIR)/un-monthly-mortality-mstats2026-$$stamp.csv"; tmp="$$out.tmp"; \
+	 stamp=$$(date +%Y%m%d-%H%M%S); out="$(DATA_DIR)/un-monthly-mortality-$$stamp.csv"; tmp="$$out.tmp"; \
 	 if ! ruby "$(ROOT)/import/un-monthly-mortality.rb" "$(UN_MONTHLY_SOURCE)" "$$wpp" > "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 if ! ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp"; then rm -f "$$tmp"; exit 1; fi; \
 	 mv "$$tmp" "$$out"; echo "created $$out"; \
 	 echo '[un-monthly-csv] uploadとElasticsearch投入は行いません。'
+
+ncc-python:
+	@mkdir -p "$(NCC_PYTHON_DIR)"; \
+	 if ! PYTHONPATH="$(NCC_PYTHON_DIR)" python3 -c 'import xlrd, msoffcrypto' 2>/dev/null; then \
+	   python3 -m pip install --disable-pip-version-check --target "$(NCC_PYTHON_DIR)" xlrd msoffcrypto-tool; \
+	 fi
+
+ncc-cancer-sample-csv: ncc-python
+	@for file in "$(NCC_MORTALITY_SOURCE)" "$(MCIJ_INCIDENCE_SOURCE)" "$(NCR_INCIDENCE_SOURCE)"; do \
+	   test -s "$$file" || { echo "NCC cancer source is missing: $$file"; exit 1; }; \
+	 done; \
+	 work=$$(mktemp -d); trap 'rm -rf "$$work"' EXIT; started=$$SECONDS; \
+	 PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category death --type ncc --encrypted --years 2024 --codes c53 "$(NCC_MORTALITY_SOURCE)" > "$$work/ncc.csv"; \
+	 PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category incidence --type mcij --years 2015 --codes c53 "$(MCIJ_INCIDENCE_SOURCE)" > "$$work/mcij.csv"; \
+	 PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category incidence --type ncr --years 2016 --codes c53 "$(NCR_INCIDENCE_SOURCE)" > "$$work/ncr.csv"; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$work"/*.csv; \
+	 echo "[timing] NCC cancer sample CSV generation and validation: $$((SECONDS - started))s"
+
+ncc-cancer-csv: ncc-python
+	@for file in "$(NCC_MORTALITY_SOURCE)" "$(MCIJ_INCIDENCE_SOURCE)" "$(NCR_INCIDENCE_SOURCE)"; do \
+	   test -s "$$file" || { echo "NCC cancer source is missing: $$file"; exit 1; }; \
+	 done; \
+	 mkdir -p "$(DATA_DIR)"; stamp=$$(date +%Y%m%d-%H%M%S); overall=$$SECONDS; \
+	 ncc="$(DATA_DIR)/ncc-cancer-mortality-$$stamp.csv"; mcij="$(DATA_DIR)/mcij-cancer-incidence-$$stamp.csv"; ncr="$(DATA_DIR)/ncr-cancer-incidence-$$stamp.csv"; \
+	 started=$$SECONDS; PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category death --type ncc --encrypted "$(NCC_MORTALITY_SOURCE)" > "$$ncc"; echo "[timing] NCC mortality CSV generation: $$((SECONDS - started))s"; \
+	 started=$$SECONDS; PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category incidence --type mcij "$(MCIJ_INCIDENCE_SOURCE)" > "$$mcij"; echo "[timing] MCIJ incidence CSV generation: $$((SECONDS - started))s"; \
+	 started=$$SECONDS; PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category incidence --type ncr "$(NCR_INCIDENCE_SOURCE)" > "$$ncr"; echo "[timing] NCR incidence CSV generation: $$((SECONDS - started))s"; \
+	 started=$$SECONDS; ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$ncc" "$$mcij" "$$ncr"; echo "[timing] NCC cancer CSV validation: $$((SECONDS - started))s"; \
+	 for file in "$$ncc" "$$mcij" "$$ncr"; do echo "created $$file ($$(($$(wc -l < "$$file") - 1)) records)"; done; \
+	 echo "[timing] NCC cancer CSV total: $$((SECONDS - overall))s"; \
+	 echo '[ncc-cancer-csv] uploadとElasticsearch投入は行っていません。'
+
+rebuild-all-csv:
+	@started=$$SECONDS; \
+	 for target in schema-csv confirmed-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv stmf-csv wpp-yearly-csv oecd-infant-yearly-csv un-monthly-csv exdeaths-csv ncc-cancer-csv; do \
+	   echo "[rebuild-all-csv] $$target"; \
+	   $(MAKE) --no-print-directory "$$target" || exit 1; \
+	 done; \
+	 $(MAKE) --no-print-directory check-latest-id-collisions || exit 1; \
+	 echo "[timing] all CSV generation: $$((SECONDS - started))s"
 
 validate-csv:
 	@test -n "$(FILES)" || { echo 'FILES="CSV ..."を指定してください。'; exit 1; }
 	@ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url $(FILES)
 
 upload-official: upload
-	@jp_files=("$(DATA_DIR)"/jp-yearly-mstats2026-*.csv(Nom)); jp=$$jp_files[1]; \
-	 jp_infant_files=("$(DATA_DIR)"/jp-infant-yearly-mstats2026-*.csv(Nom)); jp_infant=$$jp_infant_files[1]; \
-	 us_files=("$(DATA_DIR)"/us-yearly-mstats2026-*.csv(Nom)); us=$$us_files[1]; \
+	@jp_files=("$(DATA_DIR)"/jp-yearly-<->-<->.csv(Nom)); jp=$$jp_files[1]; \
+	 jp_infant_files=("$(DATA_DIR)"/jp-infant-yearly-<->-<->.csv(Nom)); jp_infant=$$jp_infant_files[1]; \
+	 us_files=("$(DATA_DIR)"/us-yearly-<->-<->.csv(Nom)); us=$$us_files[1]; \
 	 test -n "$$jp" -a -n "$$jp_infant" -a -n "$$us" || { echo '日本年次・日本乳児年次・米国年次CSVのいずれかがありません。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$jp" "$$jp_infant" "$$us"; \
 	 echo '[upload-official] 最新の日本・米国年次CSVを$(SERVER)へ送ります。'; \
 	 scp "$$jp" "$$jp_infant" "$$us" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${jp:t} jp-yearly-mstats2026.csv && ln -sfn data/$${jp_infant:t} jp-infant-yearly-mstats2026.csv && ln -sfn data/$${us:t} us-yearly-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${jp:t} jp-yearly.csv && ln -sfn data/$${jp_infant:t} jp-infant-yearly.csv && ln -sfn data/$${us:t} us-yearly.csv"
 
 upload-hmd:
-	@files=("$(DATA_DIR)"/stmf-weekly-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	@files=("$(DATA_DIR)"/stmf-weekly-<->-<->.csv(Nom)); file=$$files[1]; \
 	 test -n "$$file" || { echo 'HMD週次CSVがありません。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
 	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} stmf-weekly-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} stmf-weekly.csv"
 
 upload-wpp:
-	@files=("$(DATA_DIR)"/un-wpp-yearly-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	@files=("$(DATA_DIR)"/un-wpp-yearly-<->-<->.csv(Nom)); file=$$files[1]; \
 	 test -n "$$file" || { echo 'WPP年次CSVがありません。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
 	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} un-wpp-yearly-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} un-wpp-yearly.csv"
 
 upload-oecd:
-	@files=("$(DATA_DIR)"/oecd-infant-yearly-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	@files=("$(DATA_DIR)"/oecd-infant-yearly-<->-<->.csv(Nom)); file=$$files[1]; \
 	 test -n "$$file" || { echo 'OECD乳児・周産期年次CSVがありません。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
 	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} oecd-infant-yearly-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} oecd-infant-yearly.csv"
 
 upload-un-monthly:
-	@files=("$(DATA_DIR)"/un-monthly-mortality-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	@files=("$(DATA_DIR)"/un-monthly-mortality-<->-<->.csv(Nom)); file=$$files[1]; \
 	 test -n "$$file" || { echo 'UN月次死亡CSVがありません。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
 	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} un-monthly-mortality-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} un-monthly-mortality.csv"
 
 upload-confirmed:
-	@pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
-	 monthly_files=("$(DATA_DIR)"/jp-dcause-cfm-mstats2026-*.csv(Nom)); monthly=$$monthly_files[1]; \
-	 yearly_files=("$(DATA_DIR)"/jp-yearly-cfm-mstats2026-*.csv(Nom)); yearly=$$yearly_files[1]; \
+	@pop_files=("$(DATA_DIR)"/jp-pop-cfm-legacy-<->-<->.csv(Nom)); pop=$$pop_files[1]; \
+	 monthly_files=("$(DATA_DIR)"/jp-dcause-cfm-<->-<->.csv(Nom)); monthly=$$monthly_files[1]; \
+	 yearly_files=("$(DATA_DIR)"/jp-yearly-cfm-<->-<->.csv(Nom)); yearly=$$yearly_files[1]; \
 	 test -n "$$pop" -a -n "$$monthly" -a -n "$$yearly" || { echo '日本確定数CSVが不足しています。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$pop" "$$monthly" "$$yearly"; \
 	 scp "$$pop" "$$monthly" "$$yearly" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${pop:t} jp-pop-cfm-legacy-mstats2026.csv && ln -sfn data/$${monthly:t} jp-dcause-cfm-mstats2026.csv && ln -sfn data/$${yearly:t} jp-yearly-cfm-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${pop:t} jp-pop-cfm-legacy.csv && ln -sfn data/$${monthly:t} jp-dcause-cfm.csv && ln -sfn data/$${yearly:t} jp-yearly-cfm.csv"
 
 upload-exdeaths-sample:
-	@files=("$(DATA_DIR)"/exdeaths-weekly-national-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	@files=("$(DATA_DIR)"/exdeaths-weekly-national-<->-<->.csv(Nom)); file=$$files[1]; \
 	 test -n "$$file" || { echo '全国短縮CSVがありません。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
 	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} exdeaths-weekly-national-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} exdeaths-weekly-national.csv"
 
 upload-exdeaths:
-	@files=("$(DATA_DIR)"/exdeaths-weekly-mstats2026-*.csv(Nom)); file=$$files[1]; \
+	@files=("$(DATA_DIR)"/exdeaths-weekly-<->-<->.csv(Nom)); file=$$files[1]; \
 	 test -n "$$file" || { echo '全地域CSVがありません。'; exit 1; }; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$file"; \
 	 scp "$$file" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
-	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} exdeaths-weekly-mstats2026.csv"
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${file:t} exdeaths-weekly.csv"
+
+upload-ncc:
+	@files=(); \
+	 for pattern in ncc-cancer-mortality mcij-cancer-incidence ncr-cancer-incidence; do \
+	   candidates=("$(DATA_DIR)/$${pattern}-"<->-<->.csv(Nom)); \
+	   (( $$#candidates )) || { echo "NCC cancer CSV is missing: $$pattern"; exit 1; }; \
+	   files+=("$${candidates[1]}"); \
+	 done; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$${files[@]}"; \
+	 scp "$${files[@]}" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${files[1]:t} ncc-cancer-mortality.csv && ln -sfn data/$${files[2]:t} mcij-cancer-incidence.csv && ln -sfn data/$${files[3]:t} ncr-cancer-incidence.csv"
 
 upload-yearly: upload-official upload-wpp
 
-upload-mstats-all: upload-official upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-exdeaths
+upload-mstats-all: upload-official upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-exdeaths upload-ncc
 
 check-latest-id-collisions:
-	@patterns=(jp-dcause-mstats2026 jp-pop-mstats2026 jp-dcause-weekly-mstats2026 jp-yearly-mstats2026 \
-	  jp-infant-yearly-mstats2026 us-yearly-mstats2026 jp-pop-cfm-legacy-mstats2026 jp-dcause-cfm-mstats2026 \
-	  jp-yearly-cfm-mstats2026 stmf-weekly-mstats2026 exdeaths-weekly-mstats2026 \
-	  un-wpp-yearly-mstats2026 oecd-infant-yearly-mstats2026 un-monthly-mortality-mstats2026); \
-	 files=(); for pattern in $$patterns; do candidates=("$(DATA_DIR)/$${pattern}-"*.csv(Nom)); \
+	@patterns=(jp-dcause jp-pop jp-dcause-weekly jp-yearly \
+	  jp-infant-yearly us-yearly jp-pop-cfm-legacy jp-dcause-cfm \
+	  jp-yearly-cfm stmf-weekly exdeaths-weekly \
+	  un-wpp-yearly oecd-infant-yearly un-monthly-mortality \
+	  ncc-cancer-mortality mcij-cancer-incidence ncr-cancer-incidence); \
+	 files=(); for pattern in $$patterns; do candidates=("$(DATA_DIR)/$${pattern}-"<->-<->.csv(Nom)); \
 	   (( $$#candidates )) || { echo "latest CSV is missing: $$pattern"; exit 1; }; files+=("$${candidates[1]}"); done; \
 	 duplicates=$$(for file in $$files; do tail -n +2 "$$file" | cut -d, -f1; done | LC_ALL=C sort | uniq -d | head -20); \
 	 [[ -z $$duplicates ]] || { echo "duplicate IDs across latest CSVs:"; print -r -- "$$duplicates"; exit 1; }; \
@@ -659,15 +719,16 @@ reset-mstats-index:
 check-mstats-index:
 	@ssh $(SERVER) 'index="$(YEARLY_INDEX)"; cred=/Users/magician/.config/mstats/espass.txt; user=$$(cut -d: -f1 "$$cred"); pass=$$(cut -d: -f2- "$$cred"); curl -fsS -u "$$user:$$pass" "http://127.0.0.1:9200/$$index/_count"; echo; curl -fsS -u "$$user:$$pass" "http://127.0.0.1:9200/$$index/_mapping/field/age_85plus,age_100plus,age_85over,age_100over"; echo'
 
-logstash-official: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-infant-yearly-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/us-yearly-mstats2026.csv
-logstash-hmd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/stmf-weekly-mstats2026.csv
-logstash-wpp: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-wpp-yearly-mstats2026.csv
-logstash-oecd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/oecd-infant-yearly-mstats2026.csv
-logstash-un-monthly: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-monthly-mortality-mstats2026.csv
-logstash-confirmed: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-cfm-legacy-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-cfm-mstats2026.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-cfm-mstats2026.csv
-logstash-exdeaths-sample: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly-national-mstats2026.csv
-logstash-exdeaths: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly-mstats2026.csv
-logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed logstash-exdeaths-sample logstash-exdeaths:
+logstash-official: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-infant-yearly.csv /Users/magician/$(SERVER_MSTATS_DIR)/us-yearly.csv
+logstash-hmd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/stmf-weekly.csv
+logstash-wpp: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-wpp-yearly.csv
+logstash-oecd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/oecd-infant-yearly.csv
+logstash-un-monthly: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/un-monthly-mortality.csv
+logstash-confirmed: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-cfm-legacy.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-cfm.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-cfm.csv
+logstash-exdeaths-sample: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly-national.csv
+logstash-exdeaths: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly.csv
+logstash-ncc: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/ncc-cancer-mortality.csv /Users/magician/$(SERVER_MSTATS_DIR)/mcij-cancer-incidence.csv /Users/magician/$(SERVER_MSTATS_DIR)/ncr-cancer-incidence.csv
+logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed logstash-exdeaths-sample logstash-exdeaths logstash-ncc:
 	@echo '[$@] $(YEARLY_INDEX)へ投入します。'; \
 	 for file in $(IMPORT_FILES); do \
 	   resolved=$$(ssh $(SERVER) "readlink -f '$$file'"); test -n "$$resolved" || { echo "cannot resolve $$file"; exit 1; }; \
@@ -677,18 +738,25 @@ logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly lo
 	   echo "[timing] $${file:t}: $$((SECONDS - started))s"; \
 	 done
 
+logstash-all:
+	@started=$$SECONDS; \
+	 for target in logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed logstash-exdeaths logstash-ncc; do \
+	   $(MAKE) --no-print-directory "$$target" YEARLY_INDEX="$(YEARLY_INDEX)"; \
+	 done; \
+	 echo "[timing] all Elasticsearch imports: $$((SECONDS - started))s"
+
 switch-mstats-alias:
 	@echo '[switch-mstats-alias] mstats aliasを$(YEARLY_INDEX)へatomicに切替えます。'; \
 	 ssh $(SERVER) "sh /Users/magician/$(SERVER_MSTATS_DIR)/switch-mstats-alias.sh $(YEARLY_INDEX)"
 
 upload:
-	@pop_files=("$(DATA_DIR)"/jp-pop-mstats2026-*.csv(Nom)); pop=$$pop_files[1]; \
-	 death_files=("$(DATA_DIR)"/jp-dcause-mstats2026-*.csv(Nom)); death=$$death_files[1]; \
-	 weekly_files=("$(DATA_DIR)"/jp-dcause-weekly-mstats2026-*.csv(Nom)); weekly=$$weekly_files[1]; \
+	@pop_files=("$(DATA_DIR)"/jp-pop-<->-<->.csv(Nom)); pop=$$pop_files[1]; \
+	 death_files=("$(DATA_DIR)"/jp-dcause-<->-<->.csv(Nom)); death=$$death_files[1]; \
+	 weekly_files=("$(DATA_DIR)"/jp-dcause-weekly-<->-<->.csv(Nom)); weekly=$$weekly_files[1]; \
 	 test -n "$$pop" -a -n "$$death" -a -n "$$weekly"; \
 	 mkdir -p "$(STATE_DIR)"; log="$(STATE_DIR)/upload.log"; \
 	 echo '[upload] 最新の人口・月次死因・週次死因CSVを$(SERVER)へ送ります。'; \
-	 if ! { scp "$$pop" "$$death" "$$weekly" $(SERVER):$(SERVER_MSTATS_DIR)/data/ && ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${death:t} jp-dcause-mstats2026.csv && ln -sfn data/$${weekly:t} jp-dcause-weekly-mstats2026.csv && ln -sfn data/$${pop:t} jp-pop-mstats2026.csv"; } > "$$log" 2>&1; then cat "$$log"; exit 1; fi
+	 if ! { scp "$$pop" "$$death" "$$weekly" $(SERVER):$(SERVER_MSTATS_DIR)/data/ && ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${death:t} jp-dcause.csv && ln -sfn data/$${weekly:t} jp-dcause-weekly.csv && ln -sfn data/$${pop:t} jp-pop.csv"; } > "$$log" 2>&1; then cat "$$log"; exit 1; fi
 
 logstash:
 	@mkdir -p "$(STATE_DIR)"; log="$(STATE_DIR)/logstash.log"; \

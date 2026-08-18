@@ -26,7 +26,7 @@
       "yearweek": { "type": "keyword" },
       "category": { "type": "keyword" },
       "rate": { "type": "keyword" },
-      "death_code": { "type": "keyword" },
+      "dcode": { "type": "keyword" },
       "death_cause": { "type": "keyword" },
       "algo": { "type": "keyword" },
       "type": { "type": "keyword" },

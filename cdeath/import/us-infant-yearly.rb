@@ -23,8 +23,8 @@ CSV.foreach(ARGV[0], headers: true) do |input|
                                 src_url: [vital_stats_url], age_all: births)
 
   death_id = Mstats2026.record_id(loc: 'usa', period: year, category: 'death',
-                                  death_code: 'allcause', type: 'cfm', sex: 'both')
-  rows[death_id] = common.merge(id: death_id, category: 'death', type: 'cfm', death_code: 'allcause',
+                                  dcode: 'allcause', type: 'cfm', sex: 'both')
+  rows[death_id] = common.merge(id: death_id, category: 'death', type: 'cfm', dcode: 'allcause',
                                 death_cause: 'All causes', src_url: [vital_stats_url], age_0: infant_deaths)
 
   # 日本語: permはICD死因ではなく、OECDの周産期死亡指標codeである。
@@ -33,8 +33,8 @@ CSV.foreach(ARGV[0], headers: true) do |input|
   next if perinatal.empty? || %w[NA .].include?(perinatal)
 
   perinatal_id = Mstats2026.record_id(loc: 'usa', period: year, category: 'death',
-                                      death_code: 'perm', type: 'recon', sex: 'both')
-  rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', death_code: 'perm',
+                                      dcode: 'perm', type: 'recon', sex: 'both')
+  rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', dcode: 'perm',
                                     death_cause: 'Perinatal mortality', type: 'recon',
                                     src_url: [perinatal_url], age_all: Integer(perinatal))
 end

@@ -88,7 +88,7 @@ end
 death_groups = Hash.new { |hash, key| hash[key] = [] }
 CSV.foreach(ARGV[0], headers: true) do |row|
   next unless row['category'] == 'death' && row['rate'].to_s.empty?
-  key = [row['loc'], row['area'], row['year'].to_i, row['death_code'],
+  key = [row['loc'], row['area'], row['year'].to_i, row['dcode'],
          row['death_cause'], row['algo'], row['type'], row['sex']]
   death_groups[key] << row
 end
@@ -154,8 +154,8 @@ death_groups.each do |(loc, area, year, code, cause, algo, type, sex), months|
   end
   src_url = months.flat_map { |row| urls(row['src_url'], Mstats2026::JPN_DEATH_URL) }.uniq
   id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
-                            death_code: code, algo: algo, type: type, sex: sex)
-  base = { id: id, loc: loc, area: area, category: 'death', death_code: code,
+                            dcode: code, algo: algo, type: type, sex: sex)
+  base = { id: id, loc: loc, area: area, category: 'death', dcode: code,
            death_cause: cause, algo: algo, type: type, src_url: src_url,
            date: "#{year}-01-01", year: year, sex: sex }
   rows[id] = base.merge(ages.transform_keys(&:to_sym))
@@ -168,7 +168,7 @@ death_groups.each do |(loc, area, year, code, cause, algo, type, sex), months|
     [field, count && denominator&.positive? ? clean_number(count * 100_000.0 / denominator) : nil]
   end
   rate_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'crude',
-                                 death_code: code, algo: algo, type: type, sex: sex)
+                                 dcode: code, algo: algo, type: type, sex: sex)
   pop_id = Mstats2026.record_id(loc: loc, period: year, category: 'pop', type: pop_type, sex: sex)
   rows[rate_id] = base.merge(id: rate_id, rate: 'crude',
                              src_url: (src_url + rows.fetch(pop_id)[:src_url]).uniq)
@@ -177,14 +177,14 @@ death_groups.each do |(loc, area, year, code, cause, algo, type, sex), months|
   asr_value = standardized_rate(ages, population, Mstats2026::WHO_WORLD_STANDARD)
   next unless asr_value
   asr_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'asr',
-                                death_code: code, algo: 'whostd', type: type, sex: sex)
+                                dcode: code, algo: 'whostd', type: type, sex: sex)
   rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: 'whostd',
                             src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(asr_value))
 
   jp2015_value = standardized_rate(ages, population, Mstats2026::JPN_2015_STANDARD)
   next unless jp2015_value
   jp2015_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'asr',
-                                   death_code: code, algo: 'jp2015std', type: type, sex: sex)
+                                   dcode: code, algo: 'jp2015std', type: type, sex: sex)
   rows[jp2015_id] = base.merge(id: jp2015_id, rate: 'asr', algo: 'jp2015std',
                                src_url: rows.fetch(rate_id)[:src_url], age_all: clean_number(jp2015_value))
 end
@@ -200,7 +200,7 @@ if annual_death_path
     loc = source['loc']
     area = source['area']
     year = source['year'].to_i
-    code = source['death_code']
+    code = source['dcode']
     cause = source['death_cause']
     algo = source['algo'].to_s
     type = source['type'].to_s
@@ -208,8 +208,8 @@ if annual_death_path
     ages = Mstats2026::AGE_FIELDS.to_h { |field| [field, number(source[field])] }
     src_url = urls(source['src_url'], Mstats2026::JPN_DEATH_URL)
     id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
-                              death_code: code, algo: algo, type: type, sex: sex)
-    base = { id: id, loc: loc, area: area, category: 'death', death_code: code,
+                              dcode: code, algo: algo, type: type, sex: sex)
+    base = { id: id, loc: loc, area: area, category: 'death', dcode: code,
              death_cause: cause, algo: algo, type: type, src_url: src_url,
              date: "#{year}-01-01", year: year, sex: sex }
     rows[id] = base.merge(ages.transform_keys(&:to_sym))
@@ -224,7 +224,7 @@ if annual_death_path
       [field, count && denominator&.positive? ? clean_number(count * 100_000.0 / denominator) : nil]
     end
     rate_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'crude',
-                                   death_code: code, algo: algo, type: type, sex: sex)
+                                   dcode: code, algo: algo, type: type, sex: sex)
     rows[rate_id] = base.merge(id: rate_id, rate: 'crude', src_url: rate_urls)
                          .merge(rates.transform_keys(&:to_sym))
 
@@ -233,7 +233,7 @@ if annual_death_path
       value = standardized_rate(ages, population, standard)
       next unless value
       asr_id = Mstats2026.record_id(loc: loc, period: year, category: 'death', rate: 'asr',
-                                    death_code: code, algo: standard_name, type: type, sex: sex)
+                                    dcode: code, algo: standard_name, type: type, sex: sex)
       rows[asr_id] = base.merge(id: asr_id, rate: 'asr', algo: standard_name,
                                 src_url: rate_urls, age_all: clean_number(value))
     end

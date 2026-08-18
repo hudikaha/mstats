@@ -72,10 +72,10 @@ end
 def record(year, month, code, cause, sex, ages)
   period = format('%04dm%02d', year, month)
   id = Mstats2026.record_id(loc: 'jpn', period: period, category: 'death',
-                            death_code: code, type: 'cfm', sex: sex)
+                            dcode: code, type: 'cfm', sex: sex)
   [id, {
     id: id, loc: 'jpn', area: 'Japan', yearmonth: period, category: 'death',
-    death_code: code, death_cause: cause, type: 'cfm', src_url: [source_url(year)],
+    dcode: code, death_cause: cause, type: 'cfm', src_url: [source_url(year)],
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: sex
   }.merge(ages.transform_keys(&:to_sym))]
 end
@@ -184,7 +184,7 @@ ARGV.sort.each do |path|
   overlap = all_rows.keys & rows.keys
   abort "duplicate IDs across files: #{overlap.first}" unless overlap.empty?
   all_rows.merge!(rows)
-  causes = rows.values.map { |row| row[:death_code] }.uniq.length
+  causes = rows.values.map { |row| row[:dcode] }.uniq.length
   periods = rows.values.map { |row| row[:yearmonth] }.uniq.length
   expected = causes * periods * 3
   abort "incomplete death cube #{year}: rows=#{rows.length} expected=#{expected}" unless rows.length == expected

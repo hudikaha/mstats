@@ -20,9 +20,9 @@
 | `date` | date | 月次は月初、週次は対象週の基準日 |
 | `yearmonth` / `yearweek` | keyword | `2009m01` / `2009w02`形式の期間code |
 | `year`, `month`, `week` | integer | 暦年、月、週番号。該当しない単位は存在しない |
-| `category` | keyword | `death`（死亡）または`pop`（人口） |
-| `death_code` | keyword | 死因code。全死因は`allcause` |
-| `death_cause` | keyword | 死因名 |
+| `category` | keyword | `death`（死亡）、`incidence`（罹患）、`pop`（人口）など |
+| `dcode` | keyword | category内の疾病・死因・指標code。全死因は`allcause` |
+| `death_cause` | keyword | 疾病・死因・指標名 |
 | `sex` | keyword | `male`、`female`、`both`など |
 | `rate` | keyword | 空欄は件数、`crude`は粗死亡率、`asr`は直接法による年齢調整死亡率 |
 | `algo` | keyword | 比較・派生系列の計算法。元の値では空欄 |
@@ -54,8 +54,8 @@ IDは地域、期間、category、rate、死因、algo、type、性別の正確�
 
 年次recordは`year`を持ち、`yearmonth`と`yearweek`を持ちません。米国年次dataでは、
 出生数を`category=birth`の`age_all`、乳児死亡数を全死因
-（`death_code=allcause`）死亡recordの`age_0`へ格納します。OECDの周産期死亡指標は
-`death_code=perm`を使い、公表された丸め済み率と利用可能な出生分母から逆算した近似件数を
+（`dcode=allcause`）死亡recordの`age_0`へ格納します。OECDの周産期死亡指標は
+`dcode=perm`を使い、公表された丸め済み率と利用可能な出生分母から逆算した近似件数を
 `age_all`へ格納して、`type=recon`とします。`perm`はOECDの指標codeであり、
 ICD死因codeではありません。
 
@@ -65,13 +65,23 @@ OECDの欠測年は補間しません。丸め済み率と
 WPP推計出生数を組み合わせるため、各国公式死亡数による系列より精度が劣ります。
 
 日本の周産期死亡では、分母となる出産数（出生数＋妊娠満22週以後の死産数）を
-`category=delivery`の`age_all`へ格納します。`death_code=perm`の公式死亡数はこの分母を使い、
+`category=delivery`の`age_all`へ格納します。`dcode=perm`の公式死亡数はこの分母を使い、
 `type=recon`の近似系列は出生数を分母に使います。
+
+国立がん研究センターが公開する年次がん統計は、死亡を`category=death,type=ncc`、
+地域がん登録全国推計による罹患を`category=incidence,type=mcij`、全国がん登録による罹患を
+`category=incidence,type=ncr`として格納します。`dcode`には`c53`（子宮頸部）、
+`c53-c55`（子宮）、`allcancer`（全部位）など、同じcategory内で部位を識別するcodeを使います。
+上皮内がんを含む重複系列は収録しません。
+
+年齢調整では、各年の原資料で利用できる最細年齢階級を使います。MCIJの`85+`と、
+全国がん登録の`85-89`、`90-94`、`95-99`、`100+`を年別に扱い、粗い階級しかない年は
+死亡数または罹患数・人口・標準人口weightを同じ階級へ集約します。
 
 UN World Population Prospects 2024の年次recordは1950～2100年を収録し、由来と状態を
 `type=unwpp2024est`、`unwpp2024prj`、`unwpp2024expest`、`unwpp2024expprj`で区別します。
 最初の2系列の人口は7月1日人口、`exp`系列は死亡率の分母に使う年間population exposureです。
-全死因死亡数は`death_code=allcause`、`rate=crude`は人口10万人当たりです。`rate=asr`はWHO世界標準人口
+全死因死亡数は`dcode=allcause`、`rate=crude`は人口10万人当たりです。`rate=asr`はWHO世界標準人口
 （2000～2025年世界平均）への直接法による年齢調整死亡率を`age_all`へ格納し、
 `algo=whostd`で区別します。WPPの値は国連推計・予測であり、各国が報告した
 人口動態登録死亡数ではありません。

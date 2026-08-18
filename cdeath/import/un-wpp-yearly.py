@@ -39,7 +39,7 @@ AGE_FIELDS = [
     "age_05_14", "age_15_29", "age_30_49", "age_50_64",
 ]
 FIELDS = [
-    "id", "loc", "area", "areaj", "category", "rate", "death_code",
+    "id", "loc", "area", "areaj", "category", "rate", "dcode",
     "death_cause", "algo", "type", "src_url", "date", "year", "sex",
 ] + AGE_FIELDS
 
@@ -124,7 +124,7 @@ def base(loc, area, areaj, year, sex, category, kind, rate="", code="",
         "id": record_id(loc, year, category, rate, code, algo, kind, sex),
         "loc": loc, "area": area, "areaj": areaj,
         "category": category,
-        "rate": rate, "death_code": code,
+        "rate": rate, "dcode": code,
         "death_cause": "All causes" if code == "allcause" else "",
         "algo": algo, "type": kind, "src_url": json.dumps(src_urls or [WPP_URL]),
         "date": f"{year:04d}-01-01", "year": year, "sex": sex,

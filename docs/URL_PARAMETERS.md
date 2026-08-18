@@ -17,15 +17,16 @@ multi-value cause and age parameters.
 
 ## Causes
 
-Use one `death_codes` parameter and join multiple codes with `~`.
+Use one `dcodes` parameter and join multiple codes with `~`.
 
 ```text
-death_codes=infant~perm
-death_codes=04000~05000~06000
+dcodes=infant~perm
+dcodes=04000~05000~06000
 ```
 
-`mortyear.rb` also accepts older URLs containing repeated `death_codes`
-parameters, but rewrites a submitted selection in the form above.
+`mortyear.rb` also accepts the former `death_codes` name and repeated
+parameters, but rewrites a submitted selection as one `dcodes` parameter in the
+form above.
 
 ## Ages
 

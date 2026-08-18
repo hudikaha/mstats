@@ -107,12 +107,12 @@ CAUSES.each_key do |name|
       warn "Omit negative derived COVID-19 value: #{loc} #{period} #{value}"
       next
     end
-    death_code, death_cause = CAUSES.fetch(name)
+    dcode, death_cause = CAUSES.fetch(name)
     id = Mstats2026.record_id(loc: loc, period: period, category: 'death',
-                              death_code: death_code, type: 'stmf', sex: 'both')
+                              dcode: dcode, type: 'stmf', sex: 'both')
     rows[id] = {
       id: id, loc: loc, area: area,
-      yearweek: period, category: 'death', rate: '', death_code: death_code,
+      yearweek: period, category: 'death', rate: '', dcode: dcode,
       death_cause: death_cause, algo: '', type: 'stmf',
       src_url: name == 'allcause' ? [ALL_CAUSE_SOURCE_URL] :
         (name == 'covid19' ? [ALL_CAUSE_SOURCE_URL, CAUSE_SOURCE_URL] : [CAUSE_SOURCE_URL]),

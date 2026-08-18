@@ -104,7 +104,7 @@ source_rows.each do |source|
 
   ['', 'crude'].each_with_index do |rate, column_index|
     id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
-                              category: 'death', rate: rate, death_code: 'allcause',
+                              category: 'death', rate: rate, dcode: 'allcause',
                               type: 'stmf', sex: sex)
     row = {
       id: id,
@@ -113,7 +113,7 @@ source_rows.each do |source|
       yearweek: format('%04dw%02d', year, week),
       category: 'death',
       rate: rate,
-      death_code: 'allcause',
+      dcode: 'allcause',
       death_cause: 'All causes',
       algo: '',
       type: 'stmf',
@@ -131,15 +131,15 @@ source_rows.each do |source|
   end
 
   crude_id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
-                                   category: 'death', rate: 'crude', death_code: 'allcause',
+                                   category: 'death', rate: 'crude', dcode: 'allcause',
                                    type: 'stmf', sex: sex)
   crude = rows.fetch(crude_id)
   next unless STMF_ASR_WEIGHTS.keys.all? { |age| crude[age] }
 
   asr_id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
-                                category: 'death', rate: 'asr', death_code: 'allcause',
+                                category: 'death', rate: 'asr', dcode: 'allcause',
                                 algo: 'whostd', type: 'stmf', sex: sex)
-  asr = crude.slice(:loc, :area, :yearweek, :category, :death_code, :death_cause,
+  asr = crude.slice(:loc, :area, :yearweek, :category, :dcode, :death_cause,
                     :src_url, :date, :year, :week, :sex).merge(
                       id: asr_id, rate: 'asr', algo: 'whostd', type: 'stmf'
                     )

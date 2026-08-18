@@ -22,9 +22,9 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `date` | date | First day of a month or the reference date for a week |
 | `yearmonth` / `yearweek` | keyword | Period code such as `2009m01` / `2009w02` |
 | `year`, `month`, `week` | integer | Calendar year, month, or week number; units that do not apply are absent |
-| `category` | keyword | `death` or `pop` |
-| `death_code` | keyword | Cause-of-death code; `allcause` means all causes |
-| `death_cause` | keyword | Cause-of-death name |
+| `category` | keyword | `death`, `incidence`, `pop`, and related statistical categories |
+| `dcode` | keyword | Disease, cause, or indicator code within a category; `allcause` means all causes |
+| `death_cause` | keyword | Disease, cause, or indicator name |
 | `sex` | keyword | `male`, `female`, `both`, and related source categories |
 | `rate` | keyword | Empty for counts, `crude` for crude rates, and `asr` for directly age-standardized rates |
 | `algo` | keyword | Method for a comparative or derived series; empty for source values |
@@ -66,8 +66,8 @@ and display, but it cannot be used as a search condition or aggregation field.
 
 Annual records contain `year` but neither `yearmonth` nor `yearweek`. U.S. annual
 birth records store births in `category=birth`, `age_all`. Infant deaths are the
-`age_0` value of the all-cause (`death_code=allcause`) death record. The OECD
-perinatal-mortality indicator uses `death_code=perm`; its `age_all` value is an
+`age_0` value of the all-cause (`dcode=allcause`) death record. The OECD
+perinatal-mortality indicator uses `dcode=perm`; its `age_all` value is an
 approximate event count reconstructed from the published rounded rate and the
 available birth denominator, and is marked `type=recon`. `perm` is an
 OECD indicator code, not an ICD cause code.
@@ -80,15 +80,29 @@ interpolated. Because rounded rates are combined with WPP-estimated births,
 these series are less precise than series based on national official counts.
 
 For Japanese perinatal mortality, deliveries (births plus fetal deaths at 22 completed
-weeks or later) are stored in `category=delivery`, `age_all`. Official `death_code=perm`
+weeks or later) are stored in `category=delivery`, `age_all`. Official `dcode=perm`
 counts use this denominator, while approximate `type=recon` series use births.
+
+Annual cancer statistics published by the National Cancer Center Japan use
+`category=death,type=ncc` for mortality, `category=incidence,type=mcij` for
+regional-registry national incidence estimates, and `category=incidence,type=ncr`
+for National Cancer Registry incidence. `dcode` identifies the site within the
+category, for example `c53` for cervix uteri, `c53-c55` for uterus, and
+`allcancer` for all sites. Duplicate variants that include carcinoma in situ are
+not imported.
+
+Age standardization uses the finest age bands available in each source year.
+MCIJ's `85+` band and the National Cancer Registry's `85-89`, `90-94`, `95-99`,
+and `100+` bands are handled by year. Where only a coarse oldest-age band is
+available, counts, population, and standard-population weights are aggregated
+to that same band.
 
 UN World Population Prospects 2024 annual records cover 1950–2100 and identify
 their source and status in `type`: `unwpp2024est`, `unwpp2024prj`,
 `unwpp2024expest`, or `unwpp2024expprj`. The first two population series are
 1 July population; the `exp` variants contain annual population
 exposure and age groups used as mortality-rate denominators. All-cause death
-counts use `death_code=allcause`; `rate=crude` is per 100,000 population.
+counts use `dcode=allcause`; `rate=crude` is per 100,000 population.
 `rate=asr` uses direct standardization to the WHO world standard population
 (world average for 2000–2025), is stored in `age_all`, and uses
 `algo=whostd`. These WPP values are UN estimates and

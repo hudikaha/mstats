@@ -132,7 +132,7 @@ legacy_query = {
   'bool' => {
     'should' => [
       { 'terms' => { 'rate' => %w[amr adj] } },
-      { 'terms' => { 'death_code' => %w[00000 INFANT PERM] } },
+      { 'terms' => { 'dcode' => %w[00000 INFANT PERM] } },
       { 'terms' => { 'type' => %w[conf confirmed reconst unwpp2024proj unwpp2024expproj] } }
     ],
     'minimum_should_match' => 1

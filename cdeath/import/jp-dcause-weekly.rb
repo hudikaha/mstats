@@ -156,7 +156,7 @@ def monthly_series(deaths, populations)
     end
 
     crude_id = Mstats2026.record_id(loc: source[:loc], period: source[:yearmonth],
-                                    category: 'death', rate: 'crude', death_code: source[:death_code],
+                                    category: 'death', rate: 'crude', dcode: source[:dcode],
                                     type: 'stmfrecon', sex: source[:sex])
     crude = raw.dup
     crude[:id] = crude_id
@@ -200,9 +200,9 @@ def monthly_series(deaths, populations)
       next unless weighted
 
       asr_id = Mstats2026.record_id(loc: source[:loc], period: source[:yearmonth],
-                                    category: 'death', rate: 'asr', death_code: source[:death_code],
+                                    category: 'death', rate: 'asr', dcode: source[:dcode],
                                     algo: algo, type: 'stmfrecon', sex: source[:sex])
-      asr = crude.slice(:loc, :area, :yearmonth, :category, :death_code, :death_cause,
+      asr = crude.slice(:loc, :area, :yearmonth, :category, :dcode, :death_cause,
                         :type, :src_url, :date, :year, :month, :sex).merge(
                           id: asr_id, rate: 'asr', algo: algo,
                           age_all: (weighted / groups.values.sum).round(2)
@@ -334,7 +334,7 @@ end
 def build_weekly(deaths, populations)
   monthly = monthly_series(deaths, populations)
   monthly.values.group_by do |row|
-    [row[:loc], row[:rate], row[:death_code], row[:algo], row[:type], row[:sex]]
+    [row[:loc], row[:rate], row[:dcode], row[:algo], row[:type], row[:sex]]
   end.each_with_object({}) do |(_key, series), rows|
     rows.merge!(weekly_series(series.to_h { |row| [row[:id], row] }))
   end

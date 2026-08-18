@@ -72,16 +72,18 @@ Consts = {
     'ages'  => { hash: Ages,   defaults: ['age_all'],    selected: 'checked', keys: [] },
     'sexes' => { hash: Sexes,  defaults: ['both'],       selected: 'checked', keys: [] },
     'c'     => { hash: Locs,   defaults: ['JPN','SWE','ENG'], selected: 'checked', keys: [] },
-    'death_codes' => { hash: Death_codes, defaults: ['allcause'], selected: 'selected',keys: []},
+    'dcodes' => { hash: Death_codes, defaults: ['allcause'], selected: 'selected',keys: []},
 }
 
 Consts.each do |k, v|
 
     # 選択されたものだけチェック
-    keys = $cgi[k].split(/,|~|、/)
+    raw = $cgi[k]
+    raw = $cgi['death_codes'] if k == 'dcodes' && raw.empty?
+    keys = raw.split(/,|~|、/)
     keys.map! { |key| key.sub(/over\z/, 'plus') } if k == 'ages'
     keys = keys.map(&:upcase) if k == 'c'
-    keys = keys.map{|key| %w[all 00000].include?(key.downcase) ? 'allcause' : key.downcase} if k == 'death_codes'
+    keys = keys.map{|key| %w[all 00000].include?(key.downcase) ? 'allcause' : key.downcase} if k == 'dcodes'
     keys = keys.map{|key| key.sub(/^death_amr/, 'death_crude')} if k == 'types'
     keys.each do |key|
         v[:hash][key][:sel] = v[:selected] if v[:hash][key]
@@ -120,7 +122,7 @@ $types = Consts['types'][:keys]
 $ages  = Consts['ages'][:keys]
 $sexes = Consts['sexes'][:keys]
 $locs  = Consts['c'][:keys]
-$death_codes = Consts['death_codes'][:keys]
+$dcodes = Consts['dcodes'][:keys]
 
 #Log.debug PP.pp(Cmpto, '')
 #Log.debug PP.pp($cmpto, '')
@@ -194,7 +196,7 @@ if IFrame['false'][:sel]
                            checkbox => checkbox.value);
     var sexes = Array.from(document.querySelectorAll('input[name="sexes"]:checked'),
                            checkbox => checkbox.value);
-    var death_codes = Array.from(document.querySelectorAll('select[name="death_codes"] option:checked'),
+    var dcodes = Array.from(document.querySelectorAll('select[name="dcodes"] option:checked'),
                            option => option.value);
     var c =     Array.from(document.querySelectorAll('input[name="c"]:checked'),
                            checkbox => checkbox.value.toLowerCase());
@@ -205,7 +207,7 @@ if IFrame['false'][:sel]
         + '&types=' + types.join('~')
         + '&ages=' + ages.join('~')
         + '&sexes=' + sexes.join('~')
-        + '&death_codes=' + death_codes
+        + '&dcodes=' + dcodes
         + '&c=' + c.join('~')
     ;
     window.location.href = queryString;
@@ -267,7 +269,7 @@ EOS
       (#{{ja: "日本独自オプション: ", en: "Japan-specific options: "}[$l]}
 EOS
     print <<EOS
-      <select name="death_codes">
+      <select name="dcodes">
 EOS
     Death_codes.each do |k, v|
         print <<EOS
@@ -398,7 +400,7 @@ $must = [
     {'exists' => {'field' => 'yearweek'}},
     {'terms' => {'loc' => $locs.map(&:downcase)}},
     {'terms' => {'sex' => $sexes}},
-    {'terms' => {'death_code' => $death_codes}},
+    {'terms' => {'dcode' => $dcodes}},
     {'bool' => {'should' => $rate_should, 'minimum_should_match' => 1}}
 ]
 
@@ -407,7 +409,7 @@ data0 = elastic_search(
     :must_not => [],
     :filter => $must,
     :should => [],
-    :source => [ 'id', 'loc', 'yearweek', 'category', 'rate', 'death_code',
+    :source => [ 'id', 'loc', 'yearweek', 'category', 'rate', 'dcode',
                  'algo', 'type', 'date', 'year', 'week', 'sex', 'age_all' ] + $ages,
     #:debug => 'SHOWONLY_QUERY',
 )
@@ -630,11 +632,11 @@ $types.each do |type|
                 end
 
                 # Title (Death cause)
-                if $death_codes[0] != nil && Death_codes[$death_codes[0]]
+                if $dcodes[0] != nil && Death_codes[$dcodes[0]]
                     if title =~ /\).*$/
-                        title.sub!(/\).*$/, ", #{Death_codes[$death_codes[0]][$l]})")
+                        title.sub!(/\).*$/, ", #{Death_codes[$dcodes[0]][$l]})")
                     else
-                        title += " (#{Death_codes[$death_codes[0]][$l]})"
+                        title += " (#{Death_codes[$dcodes[0]][$l]})"
                     end
                 end
 
@@ -652,7 +654,7 @@ $types.each do |type|
 
                         pop = Pops["#{loc}_#{datum[:year]}"]
                         if pop &&
-                           age == 'age_all' && sex == 'both' #&& $death_codes[0] == '00000'
+                           age == 'age_all' && sex == 'both' #&& $dcodes[0] == '00000'
                             total = ((cumuldiff * pop / 100000)/1000).round * 1000
                             total_str = add_commas(total)
                             if $l == :ja
