@@ -26,6 +26,7 @@ CZECH_INPUT := $(CZECH_SRC_DIR)/Otevrena-data-NR-26-30-COVID-19-prehled-populace
 CZECH_HEADER := ./headers/czech-2024-01.csv
 CZECH_NAME := cze_Czech-Republic
 CZECH_PY := $(OUT_DIR)/$(CZECH_NAME)_PY.csv
+PUBLIC_PY_FILES := $(CZECH_PY) $(addprefix $(OUT_DIR)/,$(addsuffix _PY.csv,$(FULL_NAMES)))
 CZECH_AFTERDOSE := $(OUT_DIR)/$(CZECH_NAME)_PY-WKD.csv
 CZECH_CUMD := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK.csv
 CZECH_RISK := $(OUT_DIR)/$(CZECH_NAME)_CUMD-WK-G.csv
@@ -59,7 +60,7 @@ KCOR_FILES := $(CUMD_FILES)
 
 .PHONY: all data-all cze cze-all cze-py cze-afterdose cze-kcor cze-gamma \
   cumd cumd-backup cumd-check cumd-compare cze-cumd-direct publish-cumd \
-  indiv-check indiv indivdth publish-kkcor generated-check upload-index-inputs \
+  indiv-check public-py-check indiv indivdth publish-kkcor generated-check upload-index-inputs \
   import-new-indices import-indiv-indices check-new-indices switch-index-aliases $(CITIES) $(addsuffix -cumd-direct,$(CITIES))
 all: $(CITIES)
 data-all: cze-all $(CITIES)
@@ -120,6 +121,17 @@ indiv-check:
 	@for f in $(INDIV_FILES); do head -1 "$$f" | grep -q 'vbirthday' || { echo "missing vbirthday: $$f"; exit 1; }; done
 	@wc -l $(INDIV_FILES)
 
+# 日本語: 公開する国・自治体別PYだけを検査し、ORG・WKD系列を混入させない。
+# English: Validate only public country/municipality PY files; exclude ORG and WKD series.
+public-py-check:
+	@test $(words $(PUBLIC_PY_FILES)) -eq 8
+	@for f in $(PUBLIC_PY_FILES); do \
+	  test -s "$$f" || { echo "Missing: $$f"; exit 1; }; \
+	  test "$$(head -1 "$$f")" = 'id,loc,area,areaj,step,period,age,dose,lives,persondays,deaths,lb0,ub0,rr0,lbm,ubm,mortality' || \
+	    { echo "Unexpected header: $$f"; exit 1; }; \
+	done
+	@wc -l $(PUBLIC_PY_FILES)
+
 # 日本語: 実行時に index を置換して公開 alias はサーバ側で indiv に向ける。
 # English: Replace the versioned index at import time; the server publishes it through alias indiv.
 indiv: indiv-check
@@ -131,12 +143,15 @@ indiv-logstash-input:
 	@echo "Logstash input directory: $(INDIV_PUBLIC_DIR)"
 	@echo "Logstash config: $(INDIV_LOGSTASH_CONF)"
 
-# 日本語: 生成物を圧縮し、公開ディレクトリへ差分転送する。ElasticSearch投入はサーバ側Logstashで行う。
-# English: Compress generated files and transfer only changed files; server-side Logstash imports them.
-publish-kkcor: indiv-check
-	@mkdir -p /tmp/mstats-kkcor-upload
-	@for f in $(INDIV_FILES) $(INDIVDTH_FILE); do xz -c "$$f" > "/tmp/mstats-kkcor-upload/$$(basename "$$f").xz"; done
-	scp -p /tmp/mstats-kkcor-upload/*.xz $(KKCOR_HOST):$(KKCOR_DIR)/
+# 日本語: 公開用の国・自治体別PYと匿名個票を専用一時directoryで圧縮して転送する。
+# English: Compress and publish country/municipality PY files and anonymized records from a dedicated temporary directory.
+publish-kkcor: indiv-check public-py-check
+	@upload_dir=$$(mktemp -d /tmp/mstats-kkcor-upload.XXXXXX); \
+	trap 'rm -r -- "$$upload_dir"' EXIT; \
+	for f in $(PUBLIC_PY_FILES) $(INDIV_FILES) $(INDIVDTH_FILE); do \
+	  xz -c "$$f" > "$$upload_dir/$$(basename "$$f").xz"; \
+	done; \
+	scp -p "$$upload_dir"/*.xz "$(KKCOR_HOST):$(KKCOR_DIR)/"
 
 # 日本語: 現在のCUMD-WKを比較用directoryへ一度だけ退避する。
 # English: Preserve the current CUMD-WK files once in a comparison directory.

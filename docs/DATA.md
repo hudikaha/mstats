@@ -143,7 +143,7 @@ therefore has no `pop` field.
 
 The web application queries `/elastic/kcor/_search` for the selected cutoff.
 
-## vdeath / PY (no public PY CSV; displayed through Elasticsearch)
+## vdeath / PY (public country/municipality CSVs: `*_PY.csv.xz` in the [kkcor directory](https://fujikawa.org/pub/kkcor/))
 
 One `PY` record represents person-time and deaths for a municipality, aggregation
 period, age group, and dose count. It is the basic format used by `vdeath`.

@@ -121,7 +121,7 @@ UN World Population Prospects 2024の年次recordは1950～2100年を収録し�
 
 Web applicationは`/elastic/kcor/_search`を検索し、選択したcutoffのrecordを取得します。
 
-## vdeath / PY（PY公開CSVなし。表示はElasticsearch）
+## vdeath / PY（国・自治体別の公開CSV: [kkcor公開ディレクトリ](https://fujikawa.org/pub/kkcor/) の `*_PY.csv.xz`）
 
 `PY`の1 recordは、自治体・集計期間・年齢階級・接種回数の組合せにおけるperson-timeと死亡を
 表します。`vdeath`の表示に用いる基本形式です。
