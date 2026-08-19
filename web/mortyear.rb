@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require 'cgi'
+require 'csv'
 require 'date'
 require 'digest'
 require 'fileutils'
@@ -214,13 +215,16 @@ CACHE_MAX_BYTES = 1024 * 1024 * 1024
 CACHE_MAX_AGE = 30 * 24 * 60 * 60
 DEFAULT_CACHE_DIR = '/var/cache/medicalfacts/mortyear'
 
-opts = { index: 'mstats', debug: false, fixture: nil, summary: false,
+opts = { index: 'mstats', debug: false, fixture: nil, catalog_csv: [], summary: false,
          process_cache_jobs: nil, verify_cache: false, rebuild_catalog: false,
          cache_dir: DEFAULT_CACHE_DIR }
 OptionParser.new do |parser|
   parser.on('--index INDEX') { |value| opts[:index] = value }
   parser.on('--debug') { opts[:debug] = true }
   parser.on('--fixture FILE') { |value| opts[:fixture] = value }
+  parser.on('--catalog-csv FILE', 'Read a CSV file when rebuilding the catalog; repeatable') do |value|
+    opts[:catalog_csv] << File.expand_path(value)
+  end
   parser.on('--summary') { opts[:summary] = true }
   parser.on('--process-cache-jobs N', 'Maximum jobs or all') do |value|
     opts[:process_cache_jobs] = value == 'all' ? :all : Integer(value, 10).then do |number|
@@ -1247,8 +1251,10 @@ def stratified_asr_rows(records, locations, sex, causes, standard_groups: nil,
     values = parts.map { |field| row[field.to_sym] }
     next values.sum(&:to_f) if values.all? { |part| !part.nil? }
 
-    # 日本語: 集約fieldが保存されない古い人口recordは、全年齢から下位階級を引いて復元する。
-    # English: Recover an unstored old aggregate by subtracting younger bands from all ages.
+    # 日本語: 85歳以上だけは、詳細階級または全年齢との差から既存recordとの互換値を作る。
+    # English: For 85-plus only, retain compatibility by using detailed bands or subtraction from all ages.
+    next nil if age == 'age_75plus'
+
     younger = lower.map { |field| row[field.to_sym] }
     row[:age_all] && younger.all? { |part| !part.nil? } ? row[:age_all].to_f - younger.sum(&:to_f) : nil
   end
@@ -1676,12 +1682,15 @@ def verify_mortyear_cache
   errors.empty?
 end
 
-def mortyear_catalog_file
-  File.join(cache_root, 'catalog.json')
+def mortyear_catalog_file(index = nil)
+  # 正式aliasと並行検査用の物理indexでcatalogを分離する。
+  # Keep the formal alias catalog separate from physical-index test catalogs.
+  filename = index && index.to_s != 'mstats' ? "catalog-#{index.to_s.gsub(/[^a-zA-Z0-9.-]/, '_')}.json" : 'catalog.json'
+  File.join(cache_root, filename)
 end
 
 def load_mortyear_catalog(index)
-  document = JSON.parse(File.read(mortyear_catalog_file), symbolize_names: true)
+  document = JSON.parse(File.read(mortyear_catalog_file(index)), symbolize_names: true)
   return unless document[:schema] == 1 && document[:index].to_s == index.to_s
 
   document.fetch(:locations).to_h { |code, entry| [code.to_s.upcase, entry] }
@@ -1787,9 +1796,34 @@ end
 
 # 日本語: 国ごとに最終表示系列を作り、menu判定用catalogをatomicに更新する。
 # English: Build final display series per location and atomically update the menu catalog.
-def rebuild_mortyear_catalog(index)
-  base = available_annual_catalog(index: index, fixture: nil)
-  weekly_rates = available_location_rates(index: index, fixture: nil)
+def load_mortyear_catalog_csv(paths)
+  fields = (%w[loc area areaj yearweek category rate dcode algo type src_url date year week sex] +
+            AGES.keys + STMF_AGES).uniq
+  rows = []
+  paths.each do |path|
+    CSV.foreach(path, headers: true) do |source|
+      weekly = !source['yearweek'].to_s.empty?
+      next if !source['yearmonth'].to_s.empty?
+      next if weekly && !(source['category'] == 'death' && source['dcode'] == 'allcause' && ['', 'crude'].include?(source['rate'].to_s))
+      next if !weekly && !%w[death pop birth delivery].include?(source['category'])
+      next if !weekly && source['category'] == 'death' && !source['rate'].to_s.empty?
+
+      row = fields.to_h do |field|
+        value = source[field]
+        [field.to_sym, value.nil? || value.empty? ? nil : value]
+      end
+      row[:year] = row[:year].to_i if row[:year]
+      row[:week] = row[:week].to_i if row[:week]
+      rows << row
+    end
+  end
+  rows
+end
+
+def rebuild_mortyear_catalog(index, fixture: nil)
+  base = available_annual_catalog(index: index, fixture: fixture)
+  weekly_rates = available_location_rates(index: index, fixture: fixture&.select { |row| row[:yearweek] })
+  fixture_by_loc = fixture&.group_by { |row| row[:loc].to_s.upcase }
   stmf_weights = stmf_standard_weights(WHO_WORLD_STANDARD.map { |age, weight| [[age], weight] })
   {
     'ENG' => { area: 'England and Wales', areaj: 'イングランド・ウェールズ（英国）' },
@@ -1802,21 +1836,29 @@ def rebuild_mortyear_catalog(index)
   total = base.length
   next_report = 10
   base.keys.sort.each_with_index do |loc, position|
-    records = elastic_search(
-      index: index, size: 100_000,
-      filter: [{ 'term' => { 'loc' => loc.downcase } }],
-      must_not: [{ 'exists' => { 'field' => 'yearmonth' } }, { 'exists' => { 'field' => 'yearweek' } }],
-      source: fields
-    )
+    records = if fixture_by_loc
+                fixture_by_loc.fetch(loc, []).reject { |row| row[:yearweek] }
+              else
+                elastic_search(
+                  index: index, size: 100_000,
+                  filter: [{ 'term' => { 'loc' => loc.downcase } }],
+                  must_not: [{ 'exists' => { 'field' => 'yearmonth' } }, { 'exists' => { 'field' => 'yearweek' } }],
+                  source: fields
+                )
+              end
     series = catalog_location_series(records, loc)
     if weekly_rates.fetch(loc, []).include?('') && weekly_rates.fetch(loc, []).include?('crude')
-      weekly = elastic_search(
-        index: index, size: 100_000,
-        filter: [{ 'term' => { 'loc' => loc.downcase } },
-                 { 'term' => { 'category' => 'death' } }, { 'term' => { 'dcode' => 'allcause' } },
-                 { 'exists' => { 'field' => 'yearweek' } }],
-        source: %w[loc yearweek category rate dcode date year week sex src_url] + STMF_AGES
-      )
+      weekly = if fixture_by_loc
+                 fixture_by_loc.fetch(loc, []).select { |row| row[:yearweek] }
+               else
+                 elastic_search(
+                   index: index, size: 100_000,
+                   filter: [{ 'term' => { 'loc' => loc.downcase } },
+                            { 'term' => { 'category' => 'death' } }, { 'term' => { 'dcode' => 'allcause' } },
+                            { 'exists' => { 'field' => 'yearweek' } }],
+                   source: %w[loc yearweek category rate dcode date year week sex src_url] + STMF_AGES
+                 )
+               end
       weekly.group_by { |row| row[:sex].to_s }.each do |sex, sex_rows|
         counts = sex_rows.select { |row| row[:rate].to_s.empty? }
         rates = sex_rows.select { |row| row[:rate].to_s == 'crude' }
@@ -1846,7 +1888,7 @@ def rebuild_mortyear_catalog(index)
              min_training_years: MIN_TRAINING_YEARS, min_evaluation_years: 2 },
     locations: locations
   }
-  path = mortyear_catalog_file
+  path = mortyear_catalog_file(index)
   FileUtils.mkdir_p(File.dirname(path), mode: 0o755)
   tmp = "#{path}.#{Process.pid}.tmp"
   File.write(tmp, JSON.generate(document) + "\n")
@@ -1871,7 +1913,8 @@ end
 exit(verify_mortyear_cache ? 0 : 1) if opts[:verify_cache]
 
 if opts[:rebuild_catalog]
-  rebuild_mortyear_catalog(opts[:index])
+  fixture = opts[:catalog_csv].empty? ? nil : load_mortyear_catalog_csv(opts[:catalog_csv])
+  rebuild_mortyear_catalog(opts[:index], fixture: fixture)
   exit
 end
 
@@ -2642,7 +2685,16 @@ puts <<~HTML
         const causes = params.getAll('dcodes');
         params.delete('dcodes');
         if (causes.length) params.set('dcodes', causes.join('~'));
-        const locations = params.getAll('c').map(value => value.toLowerCase());
+        // 日本語: 期間を切り替えたsubmitでは旧期間のlocation codeがformに残るため、
+        // 暦年はGBR、インフルエンザ年はENGへcanonical化する。
+        // English: On period changes the form still contains the previous period's location
+        // code, so canonicalize it to GBR for calendar years and ENG for influenza years.
+        const locations = params.getAll('c').map(value => {
+          const upper = value.toUpperCase();
+          if (period === 'calendar' && ['ENG', 'SCO'].includes(upper)) return 'gbr';
+          if (period !== 'calendar' && upper === 'GBR') return 'eng';
+          return value.toLowerCase();
+        });
         params.delete('c');
         if (locations.length) params.set('c', locations.join('~'));
         // 日本語: 男女計は既定値なのでcanonical URLでは省略する。

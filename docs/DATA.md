@@ -31,12 +31,17 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `type` | keyword | Minimal series identifier, such as `cfm`, `est`, `stmf`, or `recon` |
 | `src_url` | keyword array, not indexed | One or more URLs identifying the source data used for the record |
 | `age_all` | scaled_float | Value for all ages |
-| `age_*` | scaled_float | Age-group value such as `age_00_04`, `age_80_84`, or `age_100plus` |
+| `age_*` | scaled_float | Age-group value such as `age_00_04`, `age_75plus`, `age_80_84`, or `age_100plus` |
 
 `age_*` fields use `scaled_float` with a scaling factor of 100. Integer monthly
 counts and populations can therefore share fields with adjusted weekly values
 that have two decimal places. An empty value means that the source does not
 provide that group; it does not mean zero.
+
+`age_75plus`, `age_85plus`, and `age_100plus` mean ages 75 and older, 85 and
+older, and 100 and older. A published open-ended group is used directly; when
+only detailed non-overlapping groups are available, they are summed. Human-facing
+labels are `75+`, `85+`, and `100+`.
 
 IDs join exactly eight components—location, period, category, rate, cause,
 algorithm, type, and sex—with `_`. Underscores are not allowed inside a component;

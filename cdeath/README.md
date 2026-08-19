@@ -97,9 +97,9 @@ with annual births from UN WPP 2024 and does not import the resulting CSV.
 The Makefile keeps the rebuild courses separate: `upload-official` /
 `logstash-official`, `upload-hmd` / `logstash-hmd`, and `upload-wpp` /
 `logstash-wpp`. Every Logstash target requires an explicit physical destination,
-whose default is `YEARLY_INDEX=mstats20260814`. After validation, switch the
+whose default is the current dated physical index. After validation, switch the
 public logical name atomically with
-`make switch-mstats-alias YEARLY_INDEX=mstats20260814`. `mortyear.rb` reads
+`make switch-mstats-alias YEARLY_INDEX=mstats20260819`. `mortyear.rb` reads
 annual records from Elasticsearch and does not read a Web-local CSV.
 
 Monthly and weekly cause-of-death CSVs in one pass:
@@ -137,8 +137,8 @@ ln -sfn data/jp-dcause-mstats2026-YYYYMMDD-HHMM.csv jp-dcause-mstats2026.csv
 ln -sfn data/jp-pop-mstats2026-YYYYMMDD-HHMM.csv jp-pop-mstats2026.csv
 ```
 
-The current physical index is `mstats20260814`. It uses the mapping in
-`config/elasticsearch/mstats20260813-mapping.json`; every `age_*` field uses
+The current physical index is `mstats20260819`. It uses the mapping in
+`config/elasticsearch/mstats2026.json`; every `age_*` field uses
 `scaled_float` with a scaling factor of 100. Monthly integers and weekly values
 rounded to two decimal places can therefore share the same fields. The mapping
 keeps dynamic fields enabled and applies the numeric rule through an
@@ -148,7 +148,7 @@ The private server configuration `~/mstats/mstats2026.conf` has four inputs for
 monthly population, monthly causes, weekly Japanese causes, and weekly STMF
 data. Credentials are read from the private credential file when Make invokes
 Logstash. The public logical name `mstats` is an alias
-for `mstats20260814`.
+for `mstats20260819`.
 
 The server has `/Users -> /home`, so `mstats2026.conf` follows the existing
 fixed-path convention and reads `/Users/magician/mstats/*.csv`. Import through

@@ -66,7 +66,7 @@ The output begins as follows:
 
 ```yaml
 ---
-_index: mstats20260816
+_index: mstats20260819
 _type: _doc
 _id: jpn_2009w02_death__allcause__stmfrecon_both
 _version: 1

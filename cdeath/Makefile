@@ -56,6 +56,7 @@ MCIJ_INCIDENCE_SOURCE ?= $(NCC_SOURCE_DIR)/cancer_incidence(1975-2015).xls
 NCR_INCIDENCE_SOURCE ?= $(NCC_SOURCE_DIR)/cancer_incidenceNCR(2016-2023).xls
 DATA_DIR ?= $(ROOT)/out
 STATE_DIR ?= $(ROOT)/tmp/make
+CATALOG_DIR ?= $(STATE_DIR)/catalog
 NCC_PYTHON_DIR ?= $(STATE_DIR)/ncc-python
 
 POP_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0
@@ -64,14 +65,15 @@ DCAUSE_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&
 SERVER ?= fujikawa.org
 SERVER_MSTATS_DIR ?= mstats
 SERVER_WEB_DIR ?= fujikawa/covid19
-YEARLY_INDEX ?= mstats20260816
+YEARLY_INDEX ?= mstats20260819
+SOURCE_INDEX ?= mstats20260818
 LOGSTASH ?= /usr/share/logstash/bin/logstash
 CODEX ?= codex
 
-.PHONY: help all location-config fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly check csv rebuild-all-csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv \
+.PHONY: help all location-config fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly check csv rebuild-all-csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv japan-mortality-csv \
   yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv ncc-python ncc-cancer-sample-csv ncc-cancer-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed \
-  upload-exdeaths-sample upload-exdeaths upload-ncc upload-mstats-all check-latest-id-collisions reset-mstats-index check-mstats-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-all cod codtr
+  upload-exdeaths-sample upload-exdeaths upload-ncc upload-japan-mortality upload-mstats-all check-latest-id-collisions mortyear-catalog-csv reset-mstats-index clone-mstats-index check-mstats-index delete-ncc-index-records replace-ncc-index delete-japan-mortality-index-records replace-japan-mortality-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-japan-monthly logstash-japan-weekly logstash-japan-yearly logstash-japan-mortality logstash-all cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -175,7 +177,11 @@ help:
 	@echo 'make logstash-exdeaths YEARLY_INDEX=mstats20260816 全国・47都道府県の7系列を指定indexへ投入'
 	@echo 'make upload-mstats-all 全系列の最新CSVをserverへ送りsymlinkを更新'
 	@echo 'make check-latest-id-collisions 各系列の最新版1本ずつについて横断ID重複を検査'
+	@echo 'make mortyear-catalog-csv YEARLY_INDEX=mstats20260819 最新CSVからmortyear catalogを生成'
 	@echo 'make reset-mstats-index YEARLY_INDEX=mstats20260816 指定物理indexだけを削除・新規作成'
+	@echo 'make clone-mstats-index SOURCE_INDEX=mstats20260818 YEARLY_INDEX=mstats20260819 mapping作成後に全recordを複製'
+	@echo 'make replace-ncc-index YEARLY_INDEX=mstats20260819 NCC CSVを生成・検査・転送後、指定物理indexの旧NCC系列を削除して再投入'
+	@echo 'make replace-japan-mortality-index YEARLY_INDEX=mstats20260819 日本の人口・死亡CSVを生成・検査・転送後、CSV記載IDを削除して再投入'
 	@echo 'make check-mstats-index YEARLY_INDEX=mstats20260816 mappingと件数を表示'
 	@echo 'make switch-mstats-alias YEARLY_INDEX=mstats20260816 mstats aliasをatomicに切替え'
 	@echo 'make validate-csv FILES="..." 投入前に期間・ID・値・出典を検査'
@@ -375,6 +381,8 @@ schema-csv:
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$monthly" "$$weekly"; \
 	echo "created $$pop"; echo "created $$monthly"; echo "created $$weekly"
 
+japan-mortality-csv: schema-csv confirmed-csv jp-yearly-csv
+
 confirmed-sample-csv:
 	@annual="$(DCAUSE_CFM_YEARLY_DIR)/1999.csv"; book="$(POP_CFM_LEGACY_DIR)/1999.xls"; \
 	 test -s "$$annual" -a -s "$$book" || { echo '1999年の短縮検査sourceが不足しています。'; exit 1; }; \
@@ -389,7 +397,7 @@ confirmed-sample-csv:
 	 ruby "$(ROOT)/import/jp-pop-confirmed-legacy.rb" --sample --oldest-output "$$tmp/oldest.csv" "$${csv_files[@]}" > "$$tmp/pop.csv"; \
 	 ruby "$(ROOT)/import/jp-dcause-confirmed-yearly.rb" "$$annual" > "$$tmp/death.csv"; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$tmp/pop.csv" "$$tmp/death.csv"; \
-	 ruby -rcsv -e 'ARGV.first(2).each { |path| rows = CSV.read(path, headers: true); abort "old over field: #$${path}" if rows.headers.any? { |h| h&.end_with?("over") }; abort "age_75plus leaked into shared schema" if rows.headers.include?("age_75plus"); abort "age_100plus missing: #$${path}" if File.basename(path) == "death.csv" && rows.none? { |r| !r["age_100plus"].to_s.empty? } }; oldest = CSV.read(ARGV[2], headers: true); abort "ASR sidecar missing age_75plus" unless oldest.headers == %w[yearmonth sex age_75plus] && oldest.any?; puts "confirmed sample validation=ok"' "$$tmp/pop.csv" "$$tmp/death.csv" "$$tmp/oldest.csv"
+	 ruby -rcsv -e 'ARGV.first(2).each { |path| rows = CSV.read(path, headers: true); abort "old over field: #$${path}" if rows.headers.any? { |h| h&.end_with?("over") }; abort "age_75plus missing from shared schema" unless rows.headers.include?("age_75plus"); abort "age_75plus has no values: #$${path}" unless rows.any? { |r| !r["age_75plus"].to_s.empty? }; abort "age_100plus missing: #$${path}" if File.basename(path) == "death.csv" && rows.none? { |r| !r["age_100plus"].to_s.empty? } }; oldest = CSV.read(ARGV[2], headers: true); abort "ASR sidecar missing age_75plus" unless oldest.headers == %w[yearmonth sex age_75plus] && oldest.any?; puts "confirmed sample validation=ok"' "$$tmp/pop.csv" "$$tmp/death.csv" "$$tmp/oldest.csv"
 
 confirmed-csv:
 	@cause_sources=("$(DCAUSE_CFM_DIR)"/<->.csv(N)); annual_sources=("$(DCAUSE_CFM_YEARLY_DIR)"/<->.csv(N)); pop_books=("$(POP_CFM_LEGACY_DIR)"/<->.xls(N)); \
@@ -591,6 +599,7 @@ ncc-cancer-sample-csv: ncc-python
 	 PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category incidence --type mcij --years 2015 --codes c53 "$(MCIJ_INCIDENCE_SOURCE)" > "$$work/mcij.csv"; \
 	 PYTHONPATH="$(NCC_PYTHON_DIR)" python3 "$(ROOT)/import/ncc-cancer-yearly.py" --category incidence --type ncr --years 2016 --codes c53 "$(NCR_INCIDENCE_SOURCE)" > "$$work/ncr.csv"; \
 	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$$work"/*.csv; \
+	 ruby -rcsv -e 'ARGV.each { |path| rows = CSV.read(path, headers: true).select { |row| row["rate"].to_s.empty? }; abort "age_75plus missing: #$${path}" if rows.empty? || rows.any? { |row| row["age_75plus"].to_s.empty? } }; puts "NCC age_75plus sample validation=ok"' "$$work"/*.csv; \
 	 echo "[timing] NCC cancer sample CSV generation and validation: $$((SECONDS - started))s"
 
 ncc-cancer-csv: ncc-python
@@ -667,6 +676,17 @@ upload-confirmed:
 	 scp "$$pop" "$$monthly" "$$yearly" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
 	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${pop:t} jp-pop-cfm-legacy.csv && ln -sfn data/$${monthly:t} jp-dcause-cfm.csv && ln -sfn data/$${yearly:t} jp-yearly-cfm.csv"
 
+upload-japan-mortality:
+	@files=(); \
+	 for pattern in jp-pop jp-dcause jp-dcause-weekly jp-yearly jp-pop-cfm-legacy jp-dcause-cfm jp-yearly-cfm; do \
+	   candidates=("$(DATA_DIR)/$${pattern}-"<->-<->.csv(Nom)); \
+	   (( $$#candidates )) || { echo "日本人口・死亡CSVがありません: $$pattern"; exit 1; }; \
+	   files+=("$${candidates[1]}"); \
+	 done; \
+	 ruby "$(ROOT)/bin/validate-mstats-csv.rb" --require-src-url "$${files[@]}"; \
+	 scp "$${files[@]}" $(SERVER):$(SERVER_MSTATS_DIR)/data/; \
+	 ssh $(SERVER) "cd $(SERVER_MSTATS_DIR) && ln -sfn data/$${files[1]:t} jp-pop.csv && ln -sfn data/$${files[2]:t} jp-dcause.csv && ln -sfn data/$${files[3]:t} jp-dcause-weekly.csv && ln -sfn data/$${files[4]:t} jp-yearly.csv && ln -sfn data/$${files[5]:t} jp-pop-cfm-legacy.csv && ln -sfn data/$${files[6]:t} jp-dcause-cfm.csv && ln -sfn data/$${files[7]:t} jp-yearly-cfm.csv"
+
 upload-exdeaths-sample:
 	@files=("$(DATA_DIR)"/exdeaths-weekly-national-<->-<->.csv(Nom)); file=$$files[1]; \
 	 test -n "$$file" || { echo '全国短縮CSVがありません。'; exit 1; }; \
@@ -708,6 +728,17 @@ check-latest-id-collisions:
 	 [[ -z $$duplicates ]] || { echo "duplicate IDs across latest CSVs:"; print -r -- "$$duplicates"; exit 1; }; \
 	 echo "latest CSV cross-validation=ok files=$$#files"
 
+mortyear-catalog-csv:
+	@patterns=(jp-yearly jp-infant-yearly us-yearly jp-yearly-cfm \
+	  jp-dcause-weekly stmf-weekly exdeaths-weekly \
+	  un-wpp-yearly oecd-infant-yearly); \
+	 files=(); for pattern in $$patterns; do candidates=("$(DATA_DIR)/$${pattern}-"<->-<->.csv(Nom)); \
+	   (( $$#candidates )) || { echo "latest CSV is missing: $$pattern"; exit 1; }; files+=("$${candidates[1]}"); done; \
+	 started=$$SECONDS; args=(); for file in $$files; do args+=(--catalog-csv "$$file"); done; \
+	 mkdir -p "$(CATALOG_DIR)"; \
+	 REQUEST_METHOD=GET ruby "$(ROOT)/../web/mortyear2.rb" --index "$(YEARLY_INDEX)" --cache-dir "$(CATALOG_DIR)" --rebuild-catalog "$${args[@]}"; \
+	 echo "[timing] mortyear catalog from CSV: $$((SECONDS - started))s files=$$#files"
+
 reset-mstats-index:
 	@[[ "$(YEARLY_INDEX)" == mstats<-> ]] || { echo 'YEARLY_INDEXはmstatsに年月日等を続けた物理index名に限定します。'; exit 1; }; \
 	 started=$$SECONDS; mapping="$(ROOT)/config/elasticsearch/mstats2026.json"; \
@@ -716,8 +747,34 @@ reset-mstats-index:
 	 ssh $(SERVER) 'index="$(YEARLY_INDEX)"; cred=/Users/magician/.config/mstats/espass.txt; user=$$(cut -d: -f1 "$$cred"); pass=$$(cut -d: -f2- "$$cred"); curl -fsS -u "$$user:$$pass" -X DELETE "http://127.0.0.1:9200/$$index" >/dev/null 2>&1 || true; curl -fsS -u "$$user:$$pass" -H "Content-Type: application/json" -X PUT "http://127.0.0.1:9200/$$index" --data-binary @/Users/magician/$(SERVER_MSTATS_DIR)/mstats-index-mapping.json'; \
 	 echo; echo "[timing] index delete/create: $$((SECONDS - started))s"
 
+clone-mstats-index: reset-mstats-index
+	@[[ "$(SOURCE_INDEX)" == mstats<-> && "$(YEARLY_INDEX)" == mstats<-> && "$(SOURCE_INDEX)" != "$(YEARLY_INDEX)" ]] || { echo 'SOURCE_INDEXとYEARLY_INDEXには異なる物理index名を指定してください。'; exit 1; }; \
+	 started=$$SECONDS; \
+	 ssh $(SERVER) 'src="$(SOURCE_INDEX)"; dst="$(YEARLY_INDEX)"; cred=/Users/magician/.config/mstats/espass.txt; user=$$(cut -d: -f1 "$$cred"); pass=$$(cut -d: -f2- "$$cred"); curl -fsS -u "$$user:$$pass" -H "Content-Type: application/json" -X POST "http://127.0.0.1:9200/_reindex?wait_for_completion=true&refresh=true" -d "{\"source\":{\"index\":\"$$src\"},\"dest\":{\"index\":\"$$dst\",\"op_type\":\"create\"}}"'; \
+	 echo; echo "[timing] index clone: $$((SECONDS - started))s"
+
 check-mstats-index:
-	@ssh $(SERVER) 'index="$(YEARLY_INDEX)"; cred=/Users/magician/.config/mstats/espass.txt; user=$$(cut -d: -f1 "$$cred"); pass=$$(cut -d: -f2- "$$cred"); curl -fsS -u "$$user:$$pass" "http://127.0.0.1:9200/$$index/_count"; echo; curl -fsS -u "$$user:$$pass" "http://127.0.0.1:9200/$$index/_mapping/field/age_85plus,age_100plus,age_85over,age_100over"; echo'
+	@ssh $(SERVER) 'index="$(YEARLY_INDEX)"; cred=/Users/magician/.config/mstats/espass.txt; user=$$(cut -d: -f1 "$$cred"); pass=$$(cut -d: -f2- "$$cred"); curl -fsS -u "$$user:$$pass" "http://127.0.0.1:9200/$$index/_count"; echo; curl -fsS -u "$$user:$$pass" "http://127.0.0.1:9200/$$index/_mapping/field/age_75plus,age_85plus,age_100plus,age_85over,age_100over"; echo'
+
+delete-ncc-index-records:
+	@[[ "$(YEARLY_INDEX)" == mstats<-> ]] || { echo 'YEARLY_INDEXにはmstats aliasではなく日付付き物理indexを指定してください。'; exit 1; }; \
+	 ssh $(SERVER) 'index="$(YEARLY_INDEX)"; cred=/Users/magician/.config/mstats/espass.txt; user=$$(cut -d: -f1 "$$cred"); pass=$$(cut -d: -f2- "$$cred"); body="{\"query\":{\"terms\":{\"type\":[\"ncc\",\"mcij\",\"ncr\"]}}}"; echo "[delete-ncc-index-records] before"; curl -fsS -u "$$user:$$pass" -H "Content-Type: application/json" "http://127.0.0.1:9200/$$index/_count" -d "$$body"; echo; curl -fsS -u "$$user:$$pass" -H "Content-Type: application/json" -X POST "http://127.0.0.1:9200/$$index/_delete_by_query?conflicts=proceed&refresh=true&wait_for_completion=true" -d "$$body"; echo; echo "[delete-ncc-index-records] after"; curl -fsS -u "$$user:$$pass" -H "Content-Type: application/json" "http://127.0.0.1:9200/$$index/_count" -d "$$body"; echo'
+
+replace-ncc-index: ncc-cancer-csv upload-ncc
+	@$(MAKE) --no-print-directory delete-ncc-index-records YEARLY_INDEX="$(YEARLY_INDEX)" || exit 1; \
+	 $(MAKE) --no-print-directory logstash-ncc YEARLY_INDEX="$(YEARLY_INDEX)" || exit 1; \
+	 echo '[replace-ncc-index] NCC系列の削除・再投入が完了しました。'
+
+delete-japan-mortality-index-records:
+	@[[ "$(YEARLY_INDEX)" == mstats<-> ]] || { echo 'YEARLY_INDEXにはmstats aliasではなく日付付き物理indexを指定してください。'; exit 1; }; \
+	 script="$(ROOT)/bin/delete-mstats-csv-records.rb"; \
+	 ruby -c "$$script"; scp "$$script" $(SERVER):$(SERVER_MSTATS_DIR)/delete-mstats-csv-records.rb; \
+	 ssh $(SERVER) 'cred=/Users/magician/.config/mstats/espass.txt; export MSTATS_ES_USER=$$(cut -d: -f1 "$$cred"); export ES_PASSWORD=$$(cut -d: -f2- "$$cred"); ruby /Users/magician/$(SERVER_MSTATS_DIR)/delete-mstats-csv-records.rb --index "$(YEARLY_INDEX)" /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-cfm-legacy.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-cfm.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly-cfm.csv'
+
+replace-japan-mortality-index: japan-mortality-csv upload-japan-mortality
+	@$(MAKE) --no-print-directory delete-japan-mortality-index-records YEARLY_INDEX="$(YEARLY_INDEX)" || exit 1; \
+	 $(MAKE) --no-print-directory logstash-japan-mortality YEARLY_INDEX="$(YEARLY_INDEX)" || exit 1; \
+	 echo '[replace-japan-mortality-index] 日本人口・死亡系列の削除・再投入が完了しました。'
 
 logstash-official: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-pop.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-infant-yearly.csv /Users/magician/$(SERVER_MSTATS_DIR)/us-yearly.csv
 logstash-hmd: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/stmf-weekly.csv
@@ -728,7 +785,11 @@ logstash-confirmed: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-pop-cfm
 logstash-exdeaths-sample: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly-national.csv
 logstash-exdeaths: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/exdeaths-weekly.csv
 logstash-ncc: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/ncc-cancer-mortality.csv /Users/magician/$(SERVER_MSTATS_DIR)/mcij-cancer-incidence.csv /Users/magician/$(SERVER_MSTATS_DIR)/ncr-cancer-incidence.csv
-logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed logstash-exdeaths-sample logstash-exdeaths logstash-ncc:
+logstash-japan-monthly: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-pop.csv /Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause.csv
+logstash-japan-weekly: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-dcause-weekly.csv
+logstash-japan-yearly: IMPORT_FILES=/Users/magician/$(SERVER_MSTATS_DIR)/jp-yearly.csv
+logstash-japan-mortality: logstash-japan-monthly logstash-japan-weekly logstash-japan-yearly logstash-confirmed
+logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-japan-monthly logstash-japan-weekly logstash-japan-yearly:
 	@echo '[$@] $(YEARLY_INDEX)へ投入します。'; \
 	 for file in $(IMPORT_FILES); do \
 	   resolved=$$(ssh $(SERVER) "readlink -f '$$file'"); test -n "$$resolved" || { echo "cannot resolve $$file"; exit 1; }; \

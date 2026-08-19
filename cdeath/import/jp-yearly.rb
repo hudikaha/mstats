@@ -120,6 +120,8 @@ pop_groups.each do |(loc, area, year, type, sex), months|
     end.compact
     [field, weighted.length == 12 ? clean_number(weighted.sum / days) : nil]
   end
+  # 日本語: 75歳以上が原表にある場合は、その正確な値を年平均して保存する。
+  # English: Preserve the exact annual average when the source provides a 75-plus total.
   id = Mstats2026.record_id(loc: loc, period: year, category: 'pop', type: type, sex: sex)
   src_url = months.flat_map { |row| urls(row['src_url'], Mstats2026::JPN_POP_URL) }.uniq
   rows[id] = { id: id, loc: loc, area: area, category: 'pop', type: type,
@@ -140,7 +142,12 @@ if oldest_pop_path
     weighted = values.sum { |month, value| value * Date.new(year, month, -1).day }
     %w[cfm est cfmjpns estjpns].each do |type|
       population = annual_pop[['jpn', year, type, sex]]
-      population['age_75plus'] = weighted / days if population
+      next unless population
+
+      value = weighted / days
+      population['age_75plus'] = value
+      pop_id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'pop', type: type, sex: sex)
+      rows[pop_id][:age_75plus] = clean_number(value) if rows[pop_id]
     end
   end
 end
@@ -151,6 +158,10 @@ death_groups.each do |(loc, area, year, code, cause, algo, type, sex), months|
   ages = Mstats2026::AGE_FIELDS.to_h do |field|
     values = months.map { |row| number(row[field]) }
     [field, values.all? ? clean_number(values.sum) : nil]
+  end
+  if ages['age_75plus'].nil?
+    older = %w[age_75_79 age_80_84 age_85_89 age_90_94 age_95_99 age_100plus].map { |age| ages[age] }
+    ages['age_75plus'] = older.sum if older.all?
   end
   src_url = months.flat_map { |row| urls(row['src_url'], Mstats2026::JPN_DEATH_URL) }.uniq
   id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
@@ -206,6 +217,10 @@ if annual_death_path
     type = source['type'].to_s
     sex = source['sex']
     ages = Mstats2026::AGE_FIELDS.to_h { |field| [field, number(source[field])] }
+    if ages['age_75plus'].nil?
+      older = %w[age_75_79 age_80_84 age_85_89 age_90_94 age_95_99 age_100plus].map { |age| ages[age] }
+      ages['age_75plus'] = older.sum if older.all?
+    end
     src_url = urls(source['src_url'], Mstats2026::JPN_DEATH_URL)
     id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
                               dcode: code, algo: algo, type: type, sex: sex)

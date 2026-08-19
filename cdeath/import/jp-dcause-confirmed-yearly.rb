@@ -94,6 +94,10 @@ def parse(path)
     next unless sex
 
     values = ages.zip(row.drop(2)).filter_map { |age, value| [age, number(value)] if age }.to_h
+    if values['age_75plus'].nil?
+      older = %w[age_75_79 age_80_84 age_85_89 age_90_94 age_95_99 age_100plus].map { |age| values[age] }
+      values['age_75plus'] = older.sum if older.all?
+    end
     id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'death',
                               dcode: previous_code, type: 'cfm', sex: sex)
     raise "duplicate ID: #{id}" if rows.key?(id)

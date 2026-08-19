@@ -29,11 +29,15 @@
 | `type` | keyword | 必要最小限の系列識別子。`cfm`、`est`、`stmf`、`recon`など |
 | `src_url` | keyword配列、非index | そのrecordの作成に使った元dataを示す1個以上のURL |
 | `age_all` | scaled_float | 全年齢の値 |
-| `age_*` | scaled_float | `age_00_04`、`age_80_84`、`age_100plus`などの年齢階級値 |
+| `age_*` | scaled_float | `age_00_04`、`age_75plus`、`age_80_84`、`age_100plus`などの年齢階級値 |
 
 `age_*`は小数第2位まで保持できる`scaled_float`（scaling factor 100）です。そのため整数の
 月次死亡数・人口と、小数を含む週次補正値を同じfieldで扱えます。空欄は0ではなく、元資料に
 その区分がないことを表します。
+
+`age_75plus`、`age_85plus`、`age_100plus`は、それぞれ75歳以上、85歳以上、100歳以上を
+表します。元資料に上限なし階級がある場合はその値を使い、詳細な重複しない階級だけがある場合は
+合計して作成します。人向け表示は`75+`、`85+`、`100+`です。
 
 IDは地域、期間、category、rate、死因、algo、type、性別の正確に8要素を`_`で連結します。
 要素内のunderscoreは禁止し、空要素も空の位置として残します。

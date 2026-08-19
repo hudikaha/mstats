@@ -1,0 +1,37 @@
+[
+  {"id":"MY01","page":"mortyear2.rb","summary":"日本女性ASRで人口動態全死因、癌死亡4系列、癌罹患4系列を同時表示","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcause%7Eallcancer%7Ec53-c55%7Ec54%7Ec53&include_incidence=1&c=jpn","expect":["全死因（人口10万人あたり、2015年人口モデル）","全部位の癌","子宮癌","子宮体癌","子宮頸癌","年齢調整罹患率"]},
+  {"id":"MY02","page":"mortyear2.rb","summary":"日本の全年齢死亡数と確定・概数接続","url":"mortyear2.rb?l=ja&train_to=2019&start_year=1999&mode=series&period=calendar&metric=deaths&sex=both&ages=all&dcodes=allcause&c=jpn","expect":["日本","死亡数","全死因"]},
+  {"id":"MY03","page":"mortyear2.rb","summary":"日本女性20-24歳の粗死亡率と年齢URL復元","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=female&ages=20-24&dcodes=allcause&c=jpn","expect":["女性","粗死亡率"],"checked":{"age":["age_20_24"]}},
+  {"id":"MY04","page":"mortyear2.rb","summary":"日本男性全年齢ASRと2015年人口モデル","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=male&ages=all&dcodes=allcause&c=jpn","expect":["男性","年齢調整死亡率","2015年人口モデル"]},
+  {"id":"MY05","page":"mortyear2.rb","summary":"複数国の暦年ASRと国別panel","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=asr&sex=both&ages=all&c=jpn%7Edeu%7Efra%7Egbr%7Eusa","expect":["日本","ドイツ","フランス","英国","米国"]},
+  {"id":"MY06","page":"mortyear2.rb","summary":"複数国0歳人口当たり死亡率","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=crude_rate&sex=both&ages=0&c=jpn%7Edeu%7Efra%7Egbr%7Eusa","expect":["0歳","粗死亡率","日本","米国"]},
+  {"id":"MY07","page":"mortyear2.rb","summary":"各国公式値が乏しい国のWPP全死因系列","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=crude_rate&sex=both&ages=all&c=afg%7Ebra%7Eind%7Enga","expect":["アフガニスタン","ブラジル","インド","ナイジェリア"]},
+  {"id":"MY08","page":"mortyear2.rb","summary":"第27週開始インフルエンザ年ASRとSTMF地域変換","url":"mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu27&metric=asr&sex=both&ages=all&c=jpn%7Eswe%7Eeng%7Eusa","expect":["第27週","日本","スウェーデン","米国"],"checked":{"c":["JPN","SWE","ENG","USA"]}},
+  {"id":"MY09","page":"mortyear2.rb","summary":"第36週開始インフルエンザ年ASR","url":"mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu36&metric=asr&sex=both&ages=all&c=jpn%7Eswe%7Eeng%7Eusa","expect":["第36週","スウェーデン"],"checked":{"c":["JPN","SWE","ENG","USA"]}},
+  {"id":"MY10","page":"mortyear2.rb","summary":"インフルエンザ年65-74歳粗死亡率","url":"mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu27&metric=crude_rate&sex=both&ages=65-74&c=jpn%7Eswe%7Eeng%7Eusa","expect":["粗死亡率","第27週"],"checked":{"age":["age_65_74"],"c":["JPN","SWE","ENG","USA"]}},
+  {"id":"MY11","page":"mortyear2.rb","summary":"日本・米国の乳児死亡率と出生分母","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=birth_rate&dcodes=infant&c=jpn%7Eusa","expect":["乳児死亡率","出生1,000人当たり","日本","米国"]},
+  {"id":"MY12","page":"mortyear2.rb","summary":"米国単独の乳児・周産期死亡率複数系列","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=birth_rate&dcodes=infant%7Eperm&c=usa","expect":["乳児死亡率","周産期死亡率","米国"]},
+  {"id":"MY13","page":"mortyear2.rb","summary":"日本・米国の周産期死亡率と国絞込み","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=birth_rate&dcodes=perm&c=jpn%7Eusa","expect":["周産期死亡率","日本","米国"]},
+  {"id":"MY14","page":"mortyear2.rb","summary":"癌死亡4部位だけを表示","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcancer%7Ec53-c55%7Ec54%7Ec53&c=jpn","expect":["全部位の癌","子宮癌","子宮体癌","子宮頸癌"]},
+  {"id":"MY15","page":"mortyear2.rb","summary":"癌死亡と罹患の追加・解除操作用","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcancer%7Ec53-c55%7Ec54%7Ec53&include_incidence=1&c=jpn","expect":["年齢調整死亡率","年齢調整罹患率"]},
+  {"id":"MY16","page":"mortyear2.rb","summary":"男性の全部位癌死亡・罹患","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=male&ages=all&dcodes=allcancer&include_incidence=1&c=jpn","expect":["男性","全部位の癌","罹患率"]},
+  {"id":"MY17","page":"mortyear2.rb","summary":"女性子宮頸癌の粗死亡率と粗罹患率","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=female&ages=all&dcodes=c53&include_incidence=1&c=jpn","expect":["子宮頸癌","粗死亡率","粗罹患率"]},
+  {"id":"MY18","page":"mortyear2.rb","summary":"75歳以上の詳細年齢範囲とplus field","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=both&ages=75-100plus&dcodes=allcause&c=jpn","expect":["粗死亡率","全死因"],"checked":{"age":["age_75_79","age_80_84","age_85_89","age_90_94","age_95_99","age_100plus"]}},
+  {"id":"MY19","page":"mortyear2.rb","summary":"Poisson近似区間","url":"mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=both&ages=all&dcodes=allcause&chart_model=poisson&interval=analytic&c=jpn","expect":["ポアソン","全死因"]},
+  {"id":"MY20","page":"mortyear2.rb","summary":"英語・準Poisson・canonical小文字URL","url":"mortyear2.rb?l=en&train_to=2019&start_year=2000&mode=country&period=calendar&metric=asr&sex=both&ages=all&chart_model=quasi_poisson&c=jpn%7Eswe%7Eusa","expect":["Quasi-Poisson","Japan","Sweden","United States"]},
+
+  {"id":"MO01","page":"mort2.rb","summary":"年代別死亡統計の標準表示","url":"mort2.rb?l=ja","expect":["年代別","vega"]},
+  {"id":"MO02","page":"mort2.rb","summary":"日本・全死因・女性・75-84歳","url":"mort2.rb?l=ja&c=jpn&dcodes=allcause&sexes=female&ages=age_75_84","expect":["女性","75-84"],"checked":{"age":["age_75_84"]}},
+  {"id":"MO03","page":"mort2.rb","summary":"複数地域選択と系列分離","url":"mort2.rb?l=ja&c=jpn&c=swe&dcodes=allcause&age=all","expect":["日本","スウェーデン"]},
+  {"id":"MO04","page":"mort2.rb","summary":"年代別死亡統計の英語表示","url":"mort2.rb?l=en&c=jpn&dcodes=allcause&age=all","expect":["Japan","Mortality"]},
+
+  {"id":"CO01","page":"cod2.rb","summary":"日本月次死因ページの標準表示","url":"cod2.rb?l=ja","expect":["日本","死因","vega"]},
+  {"id":"CO02","page":"cod2.rb","summary":"主要10死因の2020年差・複数panel","url":"cod2.rb?l=ja&years=2021-2025&ages=all&sex=both&graph_type=yearly_diff_2020&top=dai10&columns=3&death_codes=04000%7E05000%7E06000%7E09000%7E10000%7E11000%7E14000%7E18000%7E20000%7E22000&scale=individual&adjustment=none&regression=2020","expect":["2020","大分類上位10","死因"]},
+  {"id":"CO03","page":"cod2.rb","summary":"0-4歳だけの死因表示と年齢復元","url":"cod2.rb?l=ja&years=2024&ages=00_04&sex=both&graph_type=monthly&top=dai10&scale=individual","expect":["0-4歳","2024"],"checked":{"age":["00_04"]}},
+  {"id":"CO04","page":"cod2.rb","summary":"人口当たり・2015年標準人口換算","url":"cod2.rb?l=ja&year=2024&age=all&sex=both&graph_type=monthly&top=dai10&per_capita=true&adjustment=jp2015std","expect":["人口","2015"]},
+  {"id":"CO05","page":"cod2.rb","summary":"日本月次死因ページの英語表示","url":"cod2.rb?l=en&year=2024&age=all&sex=both&graph_type=monthly&top=dai10","expect":["Japan","Deaths"]},
+
+  {"id":"CT01","page":"codtr2.rb","summary":"主要死因長期推移の標準表示","url":"codtr2.rb?l=ja","expect":["死因","推移","vega"]},
+  {"id":"CT02","page":"codtr2.rb","summary":"女性・0-4歳の主要死因推移","url":"codtr2.rb?l=ja&sex=f&00_04=true","expect":["女性","0-4"],"checked":{"00_04":["true"]}},
+  {"id":"CT03","page":"codtr2.rb","summary":"主要死因長期推移の英語表示","url":"codtr2.rb?l=en&sex=both&all=on","expect":["Deaths","Japan"]}
+]
