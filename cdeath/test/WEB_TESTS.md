@@ -2,6 +2,8 @@
 
 `mstats`の物理index切替前後に、保守対象Web pageの入力復元、系列、描画を確認する。
 実行条件の正本は`web-tests.json`とし、この文書は検査意図と手動操作を一覧にする。
+人が読むURLでは、複数値の区切り`~`を`%7E`へ変換せず、そのまま記載する。
+shellやtest runnerがURLを渡す段階では、各環境に必要なquoting・escapingを別途行う。
 
 ## 検査設計の意図
 
@@ -82,35 +84,35 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 
 | ID | 検査概要 | URL | 操作 |
 |---|---|---|---|
-| MY01 | 日本女性ASR。人口動態全死因、癌死亡4系列、癌罹患4系列の同時表示 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcause%7Eallcancer%7Ec53-c55%7Ec54%7Ec53&include_incidence=1&c=jpn) | tooltipを確認。「罹患も表示」を解除し9系列から5系列になることを確認 |
+| MY01 | 日本女性ASR。人口動態全死因、癌死亡4系列、癌罹患4系列の同時表示 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcause~allcancer~c53-c55~c54~c53&include_incidence=1&c=jpn) | tooltipを確認。「罹患も表示」を解除し9系列から5系列になることを確認 |
 | MY02 | 日本全年齢死亡数。確定値と概数の接続 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=1999&mode=series&period=calendar&metric=deaths&sex=both&ages=all&dcodes=allcause&c=jpn) | 開く |
 | MY03 | 日本女性20–24歳。年齢URL復元 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=female&ages=20-24&dcodes=allcause&c=jpn) | 再読込み後も20–24歳の選択が残ることを確認 |
 | MY04 | 日本男性全年齢ASR。2015年人口モデル | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=male&ages=all&dcodes=allcause&c=jpn) | 開く |
-| MY05 | 複数国の暦年ASRと国別panel | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=asr&sex=both&ages=all&c=jpn%7Edeu%7Efra%7Egbr%7Eusa) | 国を一つ解除・再選択しpanelとURLが連動することを確認 |
-| MY06 | 複数国の0歳人口当たり死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=crude_rate&sex=both&ages=0&c=jpn%7Edeu%7Efra%7Egbr%7Eusa) | 開く |
-| MY07 | 各国公式値が乏しい地域のWPP系列 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=crude_rate&sex=both&ages=all&c=afg%7Ebra%7Eind%7Enga) | 開く |
-| MY08 | 第27週開始インフルエンザ年ASR。ENGを含むSTMF地域 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu27&metric=asr&sex=both&ages=all&c=jpn%7Eswe%7Eeng%7Eusa) | 暦年へ切替え、ENG/GBR変換と学習終了年を確認 |
-| MY09 | 第36週開始インフルエンザ年ASR | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu36&metric=asr&sex=both&ages=all&c=jpn%7Eswe%7Eeng%7Eusa) | 開く |
-| MY10 | インフルエンザ年65–74歳粗死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu27&metric=crude_rate&sex=both&ages=65-74&c=jpn%7Eswe%7Eeng%7Eusa) | 週次・月次表示を切替え、再読込み後も状態が一致することを確認 |
-| MY11 | 日本・米国の乳児死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=birth_rate&dcodes=infant&c=jpn%7Eusa) | 年齢menuが消え、出生関連症例と対応国だけになることを確認 |
-| MY12 | 米国の乳児・周産期死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=birth_rate&dcodes=infant%7Eperm&c=usa) | 乳児・周産期の二系列を確認 |
-| MY13 | 日本・米国の周産期死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=birth_rate&dcodes=perm&c=jpn%7Eusa) | 対応しない国が選択肢から除かれることを確認 |
-| MY14 | 癌死亡4部位 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcancer%7Ec53-c55%7Ec54%7Ec53&c=jpn) | 開く |
-| MY15 | 癌死亡・罹患の追加と解除 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcancer%7Ec53-c55%7Ec54%7Ec53&include_incidence=1&c=jpn) | 「罹患も表示」を切替える |
+| MY05 | 複数国の暦年ASRと国別panel | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=asr&sex=both&ages=all&c=jpn~deu~fra~gbr~usa) | 国を一つ解除・再選択しpanelとURLが連動することを確認 |
+| MY06 | 複数国の0歳人口当たり死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=crude_rate&sex=both&ages=0&c=jpn~deu~fra~gbr~usa) | 開く |
+| MY07 | 各国公式値が乏しい地域のWPP系列 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=crude_rate&sex=both&ages=all&c=afg~bra~ind~nga) | 開く |
+| MY08 | 第27週開始インフルエンザ年ASR。ENGを含むSTMF地域 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu27&metric=asr&sex=both&ages=all&c=jpn~swe~eng~usa) | 暦年へ切替え、ENG/GBR変換と学習終了年を確認 |
+| MY09 | 第36週開始インフルエンザ年ASR | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu36&metric=asr&sex=both&ages=all&c=jpn~swe~eng~usa) | 開く |
+| MY10 | インフルエンザ年65–74歳粗死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2018&start_year=2000&mode=country&period=flu27&metric=crude_rate&sex=both&ages=65-74&c=jpn~swe~eng~usa) | 週次・月次表示を切替え、再読込み後も状態が一致することを確認 |
+| MY11 | 日本・米国の乳児死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=birth_rate&dcodes=infant&c=jpn~usa) | 年齢menuが消え、出生関連症例と対応国だけになることを確認 |
+| MY12 | 米国の乳児・周産期死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=birth_rate&dcodes=infant~perm&c=usa) | 乳児・周産期の二系列を確認 |
+| MY13 | 日本・米国の周産期死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=country&period=calendar&metric=birth_rate&dcodes=perm&c=jpn~usa) | 対応しない国が選択肢から除かれることを確認 |
+| MY14 | 癌死亡4部位 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcancer~c53-c55~c54~c53&c=jpn) | 開く |
+| MY15 | 癌死亡・罹患の追加と解除 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&ages=all&dcodes=allcancer~c53-c55~c54~c53&include_incidence=1&c=jpn) | 「罹患も表示」を切替える |
 | MY16 | 男性の全部位癌死亡・罹患 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=male&ages=all&dcodes=allcancer&include_incidence=1&c=jpn) | 開く |
 | MY17 | 女性子宮頸癌の粗死亡率・粗罹患率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=female&ages=all&dcodes=c53&include_incidence=1&c=jpn) | 開く |
 | MY18 | 75歳以上の詳細年齢範囲と`age_75plus` | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=both&ages=75-100plus&dcodes=allcause&c=jpn) | slider・checkbox・URLが75歳以上を復元することを確認 |
 | MY19 | Poisson近似区間 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=both&ages=all&dcodes=allcause&chart_model=poisson&interval=analytic&c=jpn) | 準PoissonとPoissonを切替え、帯色とsimulation controlを確認 |
-| MY20 | 英語、準Poisson、canonical小文字URL | [開く](https://medicalfacts.info/mortyear2.rb?l=en&train_to=2019&start_year=2000&mode=country&period=calendar&metric=asr&sex=both&ages=all&chart_model=quasi_poisson&c=jpn%7Eswe%7Eusa) | 日本語へ切替えてURLと表示を確認 |
-| MY21 | 死亡数・男女 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 性特有癌の全体表示への補完と罹患接続を確認 |
-| MY22 | 死亡数・男性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&sex=male&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 前立腺癌を表示し、子宮頸癌を表示しないことを確認 |
-| MY23 | 死亡数・女性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&sex=female&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 子宮頸癌を表示し、前立腺癌を表示しないことを確認 |
-| MY24 | 粗死亡率・男女 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 性特有癌の全体表示への補完と粗罹患率を確認 |
-| MY25 | 粗死亡率・男性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=male&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 男性人口を分母とする率と非該当系列の除外を確認 |
-| MY26 | 粗死亡率・女性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=female&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 女性人口を分母とする率と非該当系列の除外を確認 |
-| MY27 | 年齢調整死亡率・男女 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 性特有癌の全体表示への補完と年齢調整罹患率を確認 |
-| MY28 | 年齢調整死亡率・男性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=male&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 男性ASRと非該当系列の除外を確認 |
-| MY29 | 年齢調整死亡率・女性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53%7Ec61&c=jpn) | 女性ASRと非該当系列の除外を確認 |
+| MY20 | 英語、準Poisson、canonical小文字URL | [開く](https://medicalfacts.info/mortyear2.rb?l=en&train_to=2019&start_year=2000&mode=country&period=calendar&metric=asr&sex=both&ages=all&chart_model=quasi_poisson&c=jpn~swe~usa) | 日本語へ切替えてURLと表示を確認 |
+| MY21 | 死亡数・男女 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 性特有癌の全体表示への補完と罹患接続を確認 |
+| MY22 | 死亡数・男性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&sex=male&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 前立腺癌を表示し、子宮頸癌を表示しないことを確認 |
+| MY23 | 死亡数・女性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&sex=female&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 子宮頸癌を表示し、前立腺癌を表示しないことを確認 |
+| MY24 | 粗死亡率・男女 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 性特有癌の全体表示への補完と粗罹患率を確認 |
+| MY25 | 粗死亡率・男性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=male&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 男性人口を分母とする率と非該当系列の除外を確認 |
+| MY26 | 粗死亡率・女性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=female&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 女性人口を分母とする率と非該当系列の除外を確認 |
+| MY27 | 年齢調整死亡率・男女 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 性特有癌の全体表示への補完と年齢調整罹患率を確認 |
+| MY28 | 年齢調整死亡率・男性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=male&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 男性ASRと非該当系列の除外を確認 |
+| MY29 | 年齢調整死亡率・女性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 女性ASRと非該当系列の除外を確認 |
 
 ## mort2.rb
 
@@ -118,7 +120,7 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 |---|---|---|---|
 | MO01 | 年代別死亡統計の標準表示 | [開く](https://medicalfacts.info/mort2.rb?l=ja) | 開く |
 | MO02 | 日本、全死因、女性、75–84歳 | [開く](https://medicalfacts.info/mort2.rb?l=ja&c=jpn&dcodes=allcause&sexes=female&ages=age_75_84) | 選択状態を確認 |
-| MO03 | 複数地域選択と系列分離 | [開く](https://medicalfacts.info/mort2.rb?l=ja&c=jpn%7Eswe&dcodes=allcause&ages=age_all) | 地域を解除・再選択 |
+| MO03 | 複数地域選択と系列分離 | [開く](https://medicalfacts.info/mort2.rb?l=ja&c=jpn~swe&dcodes=allcause&ages=age_all) | 地域を解除・再選択 |
 | MO04 | 英語表示 | [開く](https://medicalfacts.info/mort2.rb?l=en&c=jpn&dcodes=allcause&ages=age_all) | 開く |
 
 ## cod2.rb
@@ -126,7 +128,7 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 | ID | 検査概要 | URL | 操作 |
 |---|---|---|---|
 | CO01 | 日本月次死因pageの標準表示 | [開く](https://medicalfacts.info/cod2.rb?l=ja) | 開く |
-| CO02 | 大分類上位10死因、2020年差、複数panel | [開く](https://medicalfacts.info/cod2.rb?l=ja&years=2021-2025&ages=all&sex=both&graph_type=yearly_diff_2020&top=dai10&columns=3&death_codes=04000%7E05000%7E06000%7E09000%7E10000%7E11000%7E14000%7E18000%7E20000%7E22000&scale=individual&adjustment=none&regression=2020) | 開く |
+| CO02 | 大分類上位10死因、2020年差、複数panel | [開く](https://medicalfacts.info/cod2.rb?l=ja&years=2021-2025&ages=all&sex=both&graph_type=yearly_diff_2020&top=dai10&columns=3&death_codes=04000~05000~06000~09000~10000~11000~14000~18000~20000~22000&scale=individual&adjustment=none&regression=2020) | 開く |
 | CO03 | 0–4歳だけの死因表示と年齢復元 | [開く](https://medicalfacts.info/cod2.rb?l=ja&years=2024&ages=00_04&sex=both&graph_type=monthly&top=dai10&scale=individual) | 再読込み後も0–4歳だけが選択されることを確認 |
 | CO04 | 人口当たり、2015年標準人口換算 | [開く](https://medicalfacts.info/cod2.rb?l=ja&years=2024&ages=all&sex=both&graph_type=monthly&top=dai10&per_capita=true&adjustment=jp2015std) | 開く |
 | CO05 | 英語表示 | [開く](https://medicalfacts.info/cod2.rb?l=en&years=2024&ages=all&sex=both&graph_type=monthly&top=dai10) | 開く |
