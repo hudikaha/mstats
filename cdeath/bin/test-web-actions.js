@@ -130,9 +130,12 @@ const tests = [
     let client;
     try {
       const item = sourceCases.get(test.id);
-      client = await connect(new URL(item.url, base).href);
+      client = await connect('about:blank');
       await client.send('Page.enable');
       await client.send('Runtime.enable');
+      await client.send('Security.enable');
+      await client.send('Security.setIgnoreCertificateErrors', {ignore: true});
+      await client.send('Page.navigate', {url: new URL(item.url, base).href});
       await waitForGraph(client.send);
       if (!test.noAction) await evaluate(client.send, test.action);
       else if (test.action) await evaluate(client.send, test.action);

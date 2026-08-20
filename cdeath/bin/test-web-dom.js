@@ -99,10 +99,13 @@ async function waitForGraph(send, timeoutMs = 30000) {
     let state = {graphs: 0, loading: true, text: ''};
     let client;
     try {
-      client = await connect(new URL(item.url, base).href);
+      client = await connect('about:blank');
       await client.send('Page.enable');
       await client.send('Runtime.enable');
+      await client.send('Security.enable');
+      await client.send('Security.setIgnoreCertificateErrors', {ignore: true});
       await client.send('Page.setLifecycleEventsEnabled', {enabled: true});
+      await client.send('Page.navigate', {url: new URL(item.url, base).href});
       state = await waitForGraph(client.send);
       if (!state.graphs) errors.push('rendered graph missing');
       if (state.loading) errors.push('loading indicator remains');

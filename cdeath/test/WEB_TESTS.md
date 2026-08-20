@@ -7,8 +7,8 @@
 
 | 層 | 対象 | 判定 |
 |---|---:|---|
-| HTTP・HTML | 32 URL | HTTP成功、完全なHTML、Vega data、期待文字列 |
-| 描画後DOM | 32 URL | loading終了、Vega描画、選択control、期待表示 |
+| HTTP・HTML | 38 URL | HTTP成功、完全なHTML、Vega data、期待文字列 |
+| 描画後DOM | 38 URL | loading終了、Vega描画、選択control、期待表示 |
 | 操作 | 下表で操作を指定した代表例 | URL更新、control連動、再描画、再読込み復元 |
 | 目視 | 代表8 URL | screenshotで線、帯、panel、軸、余白、文字切れを確認 |
 
@@ -36,6 +36,12 @@
 | MY18 | 75歳以上の詳細年齢範囲と`age_75plus` | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=both&ages=75-100plus&dcodes=allcause&c=jpn) | slider・checkbox・URLが75歳以上を復元することを確認 |
 | MY19 | Poisson近似区間 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=both&ages=all&dcodes=allcause&chart_model=poisson&interval=analytic&c=jpn) | 準PoissonとPoissonを切替え、帯色とsimulation controlを確認 |
 | MY20 | 英語、準Poisson、canonical小文字URL | [開く](https://medicalfacts.info/mortyear2.rb?l=en&train_to=2019&start_year=2000&mode=country&period=calendar&metric=asr&sex=both&ages=all&chart_model=quasi_poisson&c=jpn%7Eswe%7Eusa) | 日本語へ切替えてURLと表示を確認 |
+| MY21 | 男女計の全死因・癌死亡と性特有癌、MCIJ・NCR罹患の接続 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&include_incidence=1&ages=all&dcodes=allcause%7Eallcancer%7Ec53-c55%7Ec53%7Ec54&c=jpn) | 子宮系死亡が表示され、罹患が2015年以前と2016年以後で連続することを確認 |
+| MY22 | 女性のみの子宮頸癌死亡数 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&sex=female&ages=all&dcodes=c53&c=jpn) | 女性系列の1958～2024年を確認 |
+| MY23 | 男性のみの全部位癌・前立腺癌死亡数 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&sex=male&ages=all&dcodes=allcancer%7Ec61&c=jpn) | 男性系列を確認 |
+| MY24 | 男女表示の子宮頸癌死亡数を女性系列から全体表示へ補完 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=deaths&ages=all&dcodes=c53&c=jpn) | 性別をタイトルへ追加せず、MY22と2023年死亡数が等しいことを確認 |
+| MY25 | 女性人口を分母とする子宮頸癌粗死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&sex=female&ages=all&dcodes=c53&c=jpn) | 2023年粗死亡率を取得 |
+| MY26 | 男女計人口を分母とする子宮頸癌粗死亡率 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=crude_rate&ages=all&dcodes=c53&c=jpn) | MY25と死亡数は同じだが粗死亡率が異なることを確認 |
 
 ## mort2.rb
 

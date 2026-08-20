@@ -28,6 +28,7 @@ cases.select! { |item| options[:ids].include?(item.fetch('id')) } if options[:id
 failures = []
 suite_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 elapsed_by_case = []
+observed_by_case = {}
 
 cases.each_with_index do |item, index|
   uri = URI.join(options[:base], item.fetch('url'))
@@ -45,6 +46,18 @@ cases.each_with_index do |item, index|
     errors << 'gateway/error page' if body.match?(/Bad Gateway|Internal Server Error|Application error/i)
     errors << 'Vega data missing' unless body.match?(/vegaEmbed|vega-lite|vlSpec/i)
     item.fetch('expect', []).each { |text| errors << "missing #{text.inspect}" unless body.include?(text) }
+    item.fetch('series_years', {}).each do |series, required_years|
+      years = body.scan(/"series":"#{Regexp.escape(series)}".{0,500}?"year":(\d{4})/).flatten.map(&:to_i).uniq
+      errors << "series missing #{series.inspect}" if years.empty?
+      required_years.each do |year|
+        errors << "missing #{series} year=#{year}" unless years.include?(year)
+      end
+    end
+    observed_by_case[item.fetch('id')] = item.fetch('observed_at', {}).to_h do |series, year|
+      match = body.match(/"series":"#{Regexp.escape(series)}".{0,500}?"year":#{year}.{0,300}?"observed":(-?\d+(?:\.\d+)?)/)
+      errors << "missing observed #{series} year=#{year}" unless match
+      [series, match && match[1].to_f]
+    end
   rescue StandardError => e
     errors << "#{e.class}: #{e.message}"
   end
@@ -54,6 +67,21 @@ cases.each_with_index do |item, index|
   puts format('%02d/%02d %-4s %-4s %7d bytes %6.2fs %s', index + 1, cases.length,
               item.fetch('id'), status, body.bytesize, elapsed, item.fetch('summary'))
   failures << [item.fetch('id'), errors] unless errors.empty?
+end
+
+cases.each do |item|
+  item.fetch('compare', []).each do |comparison|
+    series = comparison.fetch('series')
+    left = observed_by_case.dig(item.fetch('id'), series)
+    right = observed_by_case.dig(comparison.fetch('id'), series)
+    unless left && right
+      failures << [item.fetch('id'), ["comparison value missing: #{comparison.fetch('id')} #{series}"]]
+      next
+    end
+    relation = comparison.fetch('relation')
+    valid = relation == 'equal' ? left == right : left != right
+    failures << [item.fetch('id'), ["comparison #{relation} failed: #{left} vs #{right}"]] unless valid
+  end
 end
 
 suite_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - suite_started
