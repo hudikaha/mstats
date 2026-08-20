@@ -2255,7 +2255,17 @@ panel_label = lambda do |loc, cause, dataset|
              $l == :ja ? '（人）' : '(persons)'
            end
          end
-  [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
+  label = [parts.join(' '), unit].compact.join($l == :ja ? '' : ' ')
+  # 日本語: 男女表示で性特有癌を補完した率は、反対の性を含む母数であることを明示する。
+  # English: State when a supplemented sex-specific cancer rate uses a denominator that includes the other sex.
+  denominator_note = if selected_sex == 'both' && %w[crude_rate asr].include?(selected_metric)
+                       if FEMALE_SPECIFIC_CANCER_SITES.include?(cause)
+                         $l == :ja ? '※母数は男性人口を含む' : 'Note: denominator includes males'
+                       elsif MALE_SPECIFIC_CANCER_SITES.include?(cause)
+                         $l == :ja ? '※母数は女性人口を含む' : 'Note: denominator includes females'
+                       end
+                     end
+  [label, denominator_note].compact.join(' ')
 end
 
 series_datasets = [['vital', selected_vital_causes], ['cancer-death', selected_cancer_causes]]

@@ -46,12 +46,16 @@ cases.each_with_index do |item, index|
     errors << 'gateway/error page' if body.match?(/Bad Gateway|Internal Server Error|Application error/i)
     errors << 'Vega data missing' unless body.match?(/vegaEmbed|vega-lite|vlSpec/i)
     item.fetch('expect', []).each { |text| errors << "missing #{text.inspect}" unless body.include?(text) }
+    item.fetch('reject', []).each { |text| errors << "unexpected #{text.inspect}" if body.include?(text) }
     item.fetch('series_years', {}).each do |series, required_years|
       years = body.scan(/"series":"#{Regexp.escape(series)}".{0,500}?"year":(\d{4})/).flatten.map(&:to_i).uniq
       errors << "series missing #{series.inspect}" if years.empty?
       required_years.each do |year|
         errors << "missing #{series} year=#{year}" unless years.include?(year)
       end
+    end
+    item.fetch('series_absent', []).each do |series|
+      errors << "unexpected series #{series.inspect}" if body.include?(%Q{"series":"#{series}"})
     end
     observed_by_case[item.fetch('id')] = item.fetch('observed_at', {}).to_h do |series, year|
       match = body.match(/"series":"#{Regexp.escape(series)}".{0,500}?"year":#{year}.{0,300}?"observed":(-?\d+(?:\.\d+)?)/)
