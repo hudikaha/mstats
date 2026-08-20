@@ -2502,6 +2502,11 @@ puts <<~HTML
       <span>#{ $l == :ja ? 'インフルエンザ年（開始:' : 'Influenza year (start:' }</span>
       <label><input class="period-option" type="radio" name="period" value="flu27" #{checked(selected_period == 'flu27')}>#{ $l == :ja ? '第27週' : 'W27' }</label>
       <label><input class="period-option" type="radio" name="period" value="flu36" #{checked(selected_period == 'flu36')}>#{ $l == :ja ? '第36週）' : 'W36)' }</label>
+      #{detail_series.any? ? %(<label><input id="weekly-view-checkbox" type="checkbox">#{ if monthly_supplement_enabled
+             $l == :ja ? '週次・月次表示' : 'Weekly/monthly view'
+           else
+             $l == :ja ? '週次表示' : 'Weekly view'
+           end }</label>) : ''}
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
@@ -3319,15 +3324,6 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
-      #{detail_series.any? ? %(
-      &nbsp;
-      <label><input id="weekly-view-checkbox" type="checkbox">
-        #{ if monthly_supplement_enabled
-             $l == :ja ? '週次・月次表示' : 'Weekly/monthly view'
-           else
-             $l == :ja ? '週次表示' : 'Weekly view'
-           end }
-      </label>) : ''}
       &nbsp;
       <span>#{ $l == :ja ? 'モデル' : 'Model' }:</span>
       <label><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
