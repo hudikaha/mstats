@@ -45,6 +45,30 @@ cases.each_with_index do |item, index|
     errors << "short HTML #{body.bytesize}" if body.bytesize < 20_000
     errors << 'gateway/error page' if body.match?(/Bad Gateway|Internal Server Error|Application error/i)
     errors << 'Vega data missing' unless body.match?(/vegaEmbed|vega-lite|vlSpec/i)
+    if item.fetch('nonempty_vega', false) && !body.match?(/"values"\s*:\s*\[\s*\{/m)
+      errors << 'Vega values empty'
+    end
+    item.fetch('vega_algos', []).each do |algo|
+      errors << "Vega algo missing #{algo.inspect}" unless body.include?(%Q{"algo": "#{algo}"})
+    end
+    if item.key?('vega_start_year')
+      start_year = body[/"name": "Start_year",\s*"value": (\d+)/m, 1]&.to_i
+      errors << "Start_year #{start_year.inspect}, expected #{item.fetch('vega_start_year')}" unless start_year == item.fetch('vega_start_year')
+    end
+    unless item.fetch('vega_coverage', {}).empty?
+      match = body.match(/"values":\s*(\[.*?\])\s*\n\s*},\s*\n\s*"params"/m)
+      values = match ? JSON.parse(match[1]) : []
+      item.fetch('vega_coverage').each do |loc, expected|
+        years = values.select { |row| row['loc_code'] == loc }.filter_map do |row|
+          row['date'].to_s[/\A(\d{4})-/, 1]&.to_i
+        end
+        errors << "coverage missing #{loc}" if years.empty?
+        errors << "#{loc} first year #{years.min.inspect}, expected #{expected.fetch('first_year')}" unless years.min == expected.fetch('first_year')
+        if years.max.to_i < expected.fetch('last_year_at_least')
+          errors << "#{loc} last year #{years.max.inspect}, expected at least #{expected.fetch('last_year_at_least')}"
+        end
+      end
+    end
     item.fetch('expect', []).each { |text| errors << "missing #{text.inspect}" unless body.include?(text) }
     item.fetch('reject', []).each { |text| errors << "unexpected #{text.inspect}" if body.include?(text) }
     item.fetch('series_years', {}).each do |series, required_years|

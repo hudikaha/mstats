@@ -40,7 +40,7 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 | 開発名 → 正式名 | ID | 主に検査するもの |
 |---|---|---|
 | `mortyear2.rb` → `mortyear.rb` | MY01–MY29 | 年次・週次・月次、各国比較、出生関連、癌死亡・罹患、回帰区間、URL/GUI復元 |
-| `mort2.rb` → `mort.rb` | MO01–MO04 | STMF長期系列、地域・性別・年齢・死因によるID検索と系列分離 |
+| `mort2.rb` → `mort.rb` | MO01–MO07 | STMF長期系列、日本・海外の超過死亡、地域・性別・年齢・死因によるID検索と系列分離 |
 | `cod2.rb` → `cod.rb` | CO01–CO05 | 日本月次死因、年齢field、人口当たり、2015年標準人口換算、複数panel |
 | `codtr2.rb` → `codtr.rb` | CT01–CT03 | 日本死因長期推移、性別・年齢選択、入力復元 |
 
@@ -55,7 +55,7 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 | MY14–MY17 | 癌menuと「罹患も表示」の手動操作を少数系列で確認する |
 | MY18–MY20 | `age_75plus`、Poisson表示、英語/canonical URLを確認する |
 | MY21–MY29 | 癌統合表示を指標3種類×性別3種類で系統的に確認する |
-| MO01–MO04 | `mort`固有のID組立て、複数地域、年齢・性別、日英表示を確認する |
+| MO01–MO07 | 日本・海外の観測値と超過死亡3指標、複数地域、年齢・性別・死因、日英表示を確認する |
 | CO01–CO05 | `cod`固有の月次集計、年齢URL復元、人口・標準人口計算を確認する |
 | CT01–CT03 | `codtr`固有の長期系列と、性別・年齢checkboxの復元を確認する |
 
@@ -75,8 +75,8 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 
 | 層 | 対象 | 判定 |
 |---|---:|---|
-| HTTP・HTML | 41 URL | HTTP成功、完全なHTML、Vega data、期待文字列 |
-| 描画後DOM | 41 URL | loading終了、Vega描画、選択control、期待表示 |
+| HTTP・HTML | 44 URL | HTTP成功、完全なHTML、Vega data、期待文字列 |
+| 描画後DOM | 44 URL | loading終了、Vega描画、選択control、期待表示 |
 | 操作 | 下表で操作を指定した代表例 | URL更新、control連動、再描画、再読込み復元 |
 | 目視 | 代表8 URL | screenshotで線、帯、panel、軸、余白、文字切れを確認 |
 
@@ -118,10 +118,21 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 
 | ID | 検査概要 | URL | 操作 |
 |---|---|---|---|
-| MO01 | 年代別死亡統計の標準表示 | [開く](https://medicalfacts.info/mort2.rb?l=ja) | 開く |
-| MO02 | 日本、全死因、女性、75–84歳 | [開く](https://medicalfacts.info/mort2.rb?l=ja&c=jpn&dcodes=allcause&sexes=female&ages=age_75_84) | 選択状態を確認 |
-| MO03 | 複数地域選択と系列分離 | [開く](https://medicalfacts.info/mort2.rb?l=ja&c=jpn~swe&dcodes=allcause&ages=age_all) | 地域を解除・再選択 |
-| MO04 | 英語表示 | [開く](https://medicalfacts.info/mort2.rb?l=en&c=jpn&dcodes=allcause&ages=age_all) | 開く |
+| MO01 | 日本・海外の観測年間死亡率 | [開く](https://medicalfacts.info/mort2.rb?l=ja&types=death_crude&cmpys=5&cmpto=2019&ages=age_all&sexes=both&c=jpn~swe~eng&dcodes=allcause) | 超過計算前の基礎系列と3地域の分離を確認 |
+| MO02 | 日本・海外の年間死亡率の差 | [開く](https://medicalfacts.info/mort2.rb?l=ja&types=death_crude_diff&cmpys=5&cmpto=2019&ages=age_all&sexes=both&c=jpn~swe~eng&dcodes=allcause) | crude rateからの差分計算を確認。空のVega valuesは不合格とする |
+| MO03 | 日本・海外の超過死亡率 | [開く](https://medicalfacts.info/mort2.rb?l=ja&types=death_crude_excess&cmpys=5&cmpto=2019&ages=age_all&sexes=both&c=jpn~swe~eng&dcodes=allcause) | crude rateからの超過計算を確認 |
+| MO04 | 日本・海外の累積超過死亡率 | [開く](https://medicalfacts.info/mort2.rb?l=ja&types=death_crude_cumuldiff&cmpys=5&cmpto=2019&ages=age_all&sexes=both&c=jpn~swe~eng&dcodes=allcause) | 累積計算と3地域の系列分離を確認 |
+| MO05 | 日本・海外の女性65–74歳超過死亡率 | [開く](https://medicalfacts.info/mort2.rb?l=ja&types=death_crude_excess&cmpys=5&cmpto=2019&ages=age_65_74&sexes=female&c=jpn~swe~eng&dcodes=allcause) | 性別・年齢fieldとURL復元を確認 |
+| MO06 | 日本女性・卵巣癌の超過死亡率 | [開く](https://medicalfacts.info/mort2.rb?l=ja&types=death_crude_excess&cmpys=5&cmpto=2019&ages=age_all&sexes=female&c=jpn&dcodes=02114) | 日本の死因別record、性別、ID組立てを確認 |
+| MO07 | 日本・海外の超過死亡率、英語 | [開く](https://medicalfacts.info/mort2.rb?l=en&types=death_crude_excess&cmpys=5&cmpto=2019&ages=age_all&sexes=both&c=jpn~swe~eng&dcodes=allcause) | 英語titleと地域名を確認 |
+
+MO系列ではHTMLとmenu文字列だけでなく、Vega `values`に1 record以上あることを必須とする。
+既定表示開始は比較基準2015–2019年の先頭である2015年とし、元dataの開始年は日本1999年、
+スウェーデン2000年、イングランド2010年、最終年は少なくとも2025年まであることを確認する。
+検査設計時に、GUI掲載の`types=death__diff`（週間死亡数の差）はVega `values`が空になることを確認した。
+さらに、観測record自体は存在するが、`diff5to2019`、`excess5to2019`、`cumuldiff`のalgo recordが
+Vega `values`へ入らず、対応するderived graphが空になることを確認した。表示処理の未解決事項として残す。
+GUI非掲載の`death__excess`は検査対象外とする。
 
 ## cod2.rb
 
@@ -143,8 +154,8 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 
 ## 計測記録
 
-以下は32 URLだった時点の移行実測であり、現在の41 URLの所要時間ではない。
-現行系列を次のindex移行で一括実行したときに、41 URLの実測へ更新する。
+以下は32 URLだった時点の移行実測であり、現在の44 URLの所要時間ではない。
+現行系列を次のindex移行で一括実行したときに、44 URLの実測へ更新する。
 
 - HTTP・HTML 32件: 170.79秒、平均5.34秒、最長MY04 10.88秒。
 - 描画後DOM 32件: 166.90秒、平均5.22秒、最長MY05 10.49秒。
@@ -155,6 +166,8 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 - 正式名・alias切替前の描画後DOM 32件: 144.42秒、平均4.51秒、全件合格。
 - alias切替後のHTTP・HTML 32件: 137.69秒、平均4.30秒、全件合格。
 - alias切替後の代表DOM 8件: 39.57秒、平均4.95秒、全件合格。
+- 2026-08-20 公開`mort.rb`の強化後MO01–MO07: 19.73秒、平均2.82秒、最長MO05 3.87秒。
+  観測値MO01は合格、derived algoを要求するMO02–MO07は6件不合格。
 
 正式名は`ruby cdeath/bin/test-web.rb --formal`および
 `node cdeath/bin/test-web-dom.js --formal`で、同じ検査定義を使う。
