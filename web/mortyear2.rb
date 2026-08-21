@@ -3606,6 +3606,11 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
+      #{weekly_excess_enabled ? %(
+      &nbsp;
+      <label><input id="excess-cumulative-checkbox" type="checkbox">
+        #{ $l == :ja ? '2020年から累計表示' : 'Cumulative from 2020' }
+      </label>) : ''}
       #{detail_series.any? && selected_period != 'weekly' ? %(
       &nbsp;
       <label><input id="weekly-view-checkbox" type="checkbox">
@@ -3643,6 +3648,7 @@ else
       const periodYearLabel = year => String(year);
       const modelDefault = #{JSON.generate(default_model)};
       const intervalModeDefault = #{JSON.generate(interval_mode)};
+      const excessRateWeekFactor = #{selected_metric == 'deaths' ? '1' : (7.0 / DAYS_PER_YEAR).to_s};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const startWeek = #{start_week};
@@ -3667,6 +3673,11 @@ else
         {field:"upper", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '上限' : 'Upper')}},
         {field:"excess_lower", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_lower_title)}},
         {field:"excess_upper", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_upper_title)}}
+      ];
+      const excessTooltip = [
+        {field:"date", type:"temporal", title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},
+        {field:"display_excess_lower", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_lower_title)}},
+        {field:"display_excess_upper", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_upper_title)}}
       ];
       const annualTransforms = [
         {filter: "!primary_weekly"},
@@ -3713,15 +3724,20 @@ else
         transform:[
           {filter:`datum.series == '${key}'`},
           {filter:"isValid(datum.excess_upper)"},
+          {calculate:"year(toDate(datum.date)) >= 2020 ? datum.excess_lower * excess_rate_week_factor : 0",as:"excess_lower_increment"},
+          {calculate:"year(toDate(datum.date)) >= 2020 ? datum.excess_upper * excess_rate_week_factor : 0",as:"excess_upper_increment"},
+          {window:[{op:"sum",field:"excess_lower_increment",as:"cumulative_excess_lower"},{op:"sum",field:"excess_upper_increment",as:"cumulative_excess_upper"}],sort:[{field:"date",order:"ascending"}],frame:[null,0]},
+          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= 2020 ? datum.cumulative_excess_lower : null) : datum.excess_lower",as:"display_excess_lower"},
+          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= 2020 ? datum.cumulative_excess_upper : null) : datum.excess_upper",as:"display_excess_upper"},
           {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
         ],
         encoding:{
           x:{field:"date",type:"temporal",scale:{domainMin:{expr:"toDate(display_start_date)"},domainMax:{expr:"now()"},nice:false},axis:{labelExpr:"datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')",labelOverlap:false,labelSeparation:6},title:#{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer:[
-          {mark:{type:"bar",color:"#e7a0a5",clip:true},encoding:{y:{field:"excess_upper",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
-          {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
-          {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"excess_upper",type:"quantitative"},tooltip:weeklyTooltip}}
+          {mark:{type:"bar",color:"#e7a0a5",clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+          {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+          {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative"},tooltip:excessTooltip}}
         ]
       }));
       const chartSpecs = [];
@@ -3740,6 +3756,8 @@ else
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
           {name:"zero_base", value:false},
+          {name:"excess_cumulative", value:false},
+          {name:"excess_rate_week_factor", value:excessRateWeekFactor},
           {name:"primary_weekly", value:#{selected_period == 'weekly' ? 'true' : 'false'}},
           {name:"view_mode", value:#{JSON.generate(selected_period == 'weekly' ? 'weekly' : 'annual')}},
           {name:"detail_series", value:detailSeries}
@@ -3756,6 +3774,7 @@ else
         const output = document.getElementById("train-to-output");
         const modelOptions = Array.from(document.querySelectorAll(".model-option"));
         const zeroBase = document.getElementById("zero-base-checkbox");
+        const excessCumulative = document.getElementById("excess-cumulative-checkbox");
         const simulationControl = document.getElementById("simulation-interval-control");
         const simulationInterval = document.getElementById("simulation-interval-checkbox");
         const weeklyView = document.getElementById("weekly-view-checkbox");
@@ -3799,6 +3818,14 @@ else
         zeroBase.addEventListener("change", () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
         });
+        if (excessCumulative) {
+          const syncExcessMode = () => {
+            result.view.signal("excess_cumulative", excessCumulative.checked).runAsync();
+          };
+          excessCumulative.addEventListener("change", syncExcessMode);
+          window.addEventListener("pageshow", syncExcessMode);
+          syncExcessMode();
+        }
         simulationInterval.addEventListener("change", () => {
           const value = simulationInterval.checked ? "auto" : "analytic";
           result.view.signal("interval_mode", value).runAsync();
