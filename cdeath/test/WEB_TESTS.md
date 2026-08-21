@@ -39,7 +39,7 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 
 | 開発名 → 正式名 | ID | 主に検査するもの |
 |---|---|---|
-| `mortyear2.rb` → `mortyear.rb` | MY01–MY29 | 年次・週次・月次、各国比較、出生関連、癌死亡・罹患、回帰区間、URL/GUI復元 |
+| `mortyear2.rb` → `mortyear.rb` | MY01–MY30 | 年次・週次・月次、各国比較、出生関連、癌死亡・罹患、回帰区間、URL/GUI復元 |
 | `mort2.rb` → `mort.rb` | MO01–MO07 | STMF長期系列、日本・海外の超過死亡、地域・性別・年齢・死因によるID検索と系列分離 |
 | `cod2.rb` → `cod.rb` | CO01–CO05 | 日本月次死因、年齢field、人口当たり、2015年標準人口換算、複数panel |
 | `codtr2.rb` → `codtr.rb` | CT01–CT03 | 日本死因長期推移、性別・年齢選択、入力復元 |
@@ -55,6 +55,7 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 | MY14–MY17 | 癌menuと「罹患も表示」の手動操作を少数系列で確認する |
 | MY18–MY20 | `age_75plus`、Poisson表示、英語/canonical URLを確認する |
 | MY21–MY29 | 癌統合表示を指標3種類×性別3種類で系統的に確認する |
+| MY30 | Farrington型の固定基準2種・移動基準と、観測・超過推移・累積の3段表示を確認する |
 | MO01–MO07 | 日本・海外の観測値と超過死亡3指標、複数地域、年齢・性別・死因、日英表示を確認する |
 | CO01–CO05 | `cod`固有の月次集計、年齢URL復元、人口・標準人口計算を確認する |
 | CT01–CT03 | `codtr`固有の長期系列と、性別・年齢checkboxの復元を確認する |
@@ -75,8 +76,8 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 
 | 層 | 対象 | 判定 |
 |---|---:|---|
-| HTTP・HTML | 44 URL | HTTP成功、完全なHTML、Vega data、期待文字列 |
-| 描画後DOM | 44 URL | loading終了、Vega描画、選択control、期待表示 |
+| HTTP・HTML | 45 URL | HTTP成功、完全なHTML、Vega data、期待文字列 |
+| 描画後DOM | 45 URL | loading終了、Vega描画、選択control、期待表示 |
 | 操作 | 下表で操作を指定した代表例 | URL更新、control連動、再描画、再読込み復元 |
 | 目視 | 代表8 URL | screenshotで線、帯、panel、軸、余白、文字切れを確認 |
 
@@ -113,6 +114,7 @@ index移行で起きやすいfield名、ID、`type`、`dcode`、`sex`、年齢fi
 | MY27 | 年齢調整死亡率・男女 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 性特有癌の全体表示への補完と年齢調整罹患率を確認 |
 | MY28 | 年齢調整死亡率・男性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=male&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 男性ASRと非該当系列の除外を確認 |
 | MY29 | 年齢調整死亡率・女性 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&train_to=2019&start_year=2000&mode=series&period=calendar&metric=asr&sex=female&include_incidence=1&ages=all&dcodes=allcause~allcancer~c53~c61&c=jpn) | 女性ASRと非該当系列の除外を確認 |
+| MY30 | 日本Farrington型の3基準と各系列3段表示 | [開く](https://medicalfacts.info/mortyear2.rb?l=ja&start_year=2009&mode=series&period=weekly&metric=crude_rate&ages=all&dcodes=allcause&c=jpn&weekly_method=farrington&weekly_baseline=fixed_2015_2019~fixed_2016_2020~rolling) | 3基準が選択され、各基準に観測・超過推移・累積の3段が描かれることを確認 |
 
 ## mort2.rb
 

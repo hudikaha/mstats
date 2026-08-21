@@ -258,7 +258,7 @@ $mortyear_category = CANCER_DATASETS.fetch(selected_dataset).fetch(:category)
 $mortyear_types = CANCER_DATASETS.fetch(selected_dataset).fetch(:types)
 requested_locations = cgi.params.fetch('c', []).flat_map { |value| value.split(/[~,]/) }.
                       map(&:upcase).uniq
-selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
+selected_period = %w[calendar flu27 flu36 weekly].include?(cgi['period']) ? cgi['period'] : 'calendar'
 if selected_dataset != 'vital'
   selected_period = 'calendar'
   mode = 'series'
@@ -301,6 +301,17 @@ selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric ==
 selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
+weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.split(/[~,]/) } &
+                 %w[five_year farrington euromomo]
+weekly_baselines = cgi.params.fetch('weekly_baseline', []).flat_map { |value| value.split(/[~,]/) }.
+                   map { |value| value == 'fixed' ? 'fixed_2015_2019' : value } &
+                   %w[fixed_2015_2019 fixed_2016_2020 rolling]
+weekly_methods = ['five_year'] if weekly_methods.empty?
+weekly_baselines = ['fixed_2015_2019'] if weekly_baselines.empty?
+weekly_methods = [weekly_methods.first] if mode == 'country'
+weekly_baselines = [weekly_baselines.first] if mode == 'country'
+weekly_method = weekly_methods.first
+weekly_baseline = weekly_baselines.first
 $mortyear_period = selected_period
 $mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
 # 日本語: 暦年の英国とSTMF週次の英国地域を期間切替時に相互変換する。
@@ -319,6 +330,8 @@ selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_
 selected_ages &= STMF_AGES if selected_period != 'calendar'
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_ages = ['age_all'] if selected_period != 'calendar' && selected_ages.include?('age_all')
+selected_ages = ['age_all'] if selected_period != 'calendar' && selected_metric == 'asr'
+selected_ages = [selected_ages.first] if selected_period != 'calendar' && mode == 'country'
 requested_dcodes = cgi.params.fetch('dcodes', [])
 requested_dcodes = cgi.params.fetch('death_codes', []) if requested_dcodes.empty?
 requested_causes = requested_dcodes.flat_map { |value| value.split(/[~,]/) }.
@@ -1033,9 +1046,7 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
 
     observed = if metric == 'asr'
                  next unless selected_asr_ages.all? { |age| rate[age.to_sym]&.to_f&.positive? }
-                 selected_asr_ages.sum do |age|
-                   rate[age.to_sym].to_f * weights.fetch(age).to_f / weight_total
-                 end
+                 selected_asr_ages.sum { |age| rate[age.to_sym].to_f * weights.fetch(age).to_f / weight_total }
                else
                  values = ages.map { |age| count[age.to_sym] }
                  rate_values = ages.map { |age| rate[age.to_sym] }
@@ -1046,9 +1057,228 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
                  end
                  deaths * DAYS_PER_YEAR * 100_000 / (7 * population)
                end
+    strata = if metric == 'asr'
+               selected_asr_ages.map do |age|
+                 deaths = count[age.to_sym].to_f
+                 age_rate = rate[age.to_sym].to_f
+                 population = deaths * DAYS_PER_YEAR * 100_000 / (7 * age_rate)
+                 { age: age, deaths: deaths, population: population,
+                   weight: weights.fetch(age).to_f / weight_total }
+               end
+             else
+               values = ages.map { |age| count[age.to_sym].to_f }
+               rate_values = ages.map { |age| rate[age.to_sym].to_f }
+               population = ages.each_index.sum do |index|
+                 values[index] * DAYS_PER_YEAR * 100_000 / (7 * rate_values[index])
+               end
+               [{ age: 'combined', deaths: values.sum, population: population, weight: 1.0 }]
+             end
     { loc: count[:loc].to_s.upcase, dcode: count[:dcode],
-      date: count[:date], observed: observed }
+      date: count[:date], observed: observed, model_strata: strata,
+      src_url: (Array(count[:src_url]) + Array(rate[:src_url])).compact.uniq }
   end.sort_by { |row| [row[:loc], row[:date].to_s] }
+end
+
+# 日本語: 週次主表示では死亡数を率へ変換せず、その週の選択年齢死亡数として返す。
+# English: For the primary weekly view, return selected-age weekly death counts without rate conversion.
+def weekly_display_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
+  return weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: asr_weights) unless metric == 'deaths'
+
+  count_rows.filter_map do |count|
+    values = ages.map { |age| count[age.to_sym] }
+    next if values.any?(&:nil?)
+
+    deaths = values.sum(&:to_f)
+    { loc: count[:loc].to_s.upcase, dcode: count[:dcode], date: count[:date],
+      observed: deaths, model_strata: [{ age: 'combined', deaths: deaths, population: 1.0, weight: 1.0 }],
+      src_url: Array(count[:src_url]).compact.uniq }
+  end.sort_by { |row| [row[:loc], row[:date].to_s] }
+end
+
+# 日本語: offset付きPoisson回帰をIRLSで当て、予測分散に過分散と係数推定誤差を含める。
+# English: Fit an offset Poisson GLM by IRLS and include overdispersion and coefficient uncertainty in predictions.
+def fit_weekly_poisson(samples, robust: false)
+  return nil if samples.length < 4
+
+  active = samples
+  fit = nil
+  (robust ? 2 : 1).times do
+    p = active.first[:features].length
+    beta = Vector.elements(Array.new(p, 0.0))
+    40.times do
+      xtwx = Matrix.zero(p)
+      xtwz = Vector.elements(Array.new(p, 0.0))
+      active.each do |sample|
+        x = Vector.elements(sample[:features])
+        offset = Math.log([sample[:exposure].to_f, 1e-12].max)
+        eta = [[offset + x.inner_product(beta), 20.0].min, -20.0].max
+        mu = Math.exp(eta)
+        z = eta + (sample[:deaths].to_f - mu) / mu
+        xtwx += x.to_matrix * x.to_matrix.transpose * mu
+        xtwz += x * (mu * (z - offset))
+      end
+      updated = xtwx.inverse * xtwz
+      break beta = updated if (updated - beta).magnitude < 1e-8
+      beta = updated
+    rescue ExceptionForMatrix::ErrNotRegular, ExceptionForMatrix::ErrDimensionMismatch
+      return nil
+    end
+    mus = active.map do |sample|
+      Math.exp(Math.log([sample[:exposure].to_f, 1e-12].max) +
+               Vector.elements(sample[:features]).inner_product(beta))
+    end
+    pearson = active.each_index.sum do |index|
+      (active[index][:deaths].to_f - mus[index])**2 / [mus[index], 1e-12].max
+    end
+    phi = [pearson / [active.length - p, 1].max, 1.0].max
+    xtwx = Matrix.zero(p)
+    active.each_with_index do |sample, index|
+      x = Vector.elements(sample[:features])
+      xtwx += x.to_matrix * x.to_matrix.transpose * mus[index]
+    end
+    covariance = xtwx.inverse * phi
+    fit = { beta: beta, covariance: covariance, dispersion: phi }
+    break unless robust
+
+    filtered = active.each_with_index.filter_map do |sample, index|
+      residual = (sample[:deaths].to_f - mus[index]) / Math.sqrt([phi * mus[index], 1e-12].max)
+      sample if residual.abs <= 2.58
+    end
+    break if filtered.length < [p + 2, 4].max || filtered.length == active.length
+    active = filtered
+  rescue ExceptionForMatrix::ErrNotRegular, ExceptionForMatrix::ErrDimensionMismatch
+    return nil
+  end
+  fit
+end
+
+def weekly_poisson_prediction(fit, features, exposure)
+  x = Vector.elements(features)
+  mu = Math.exp(Math.log([exposure.to_f, 1e-12].max) + x.inner_product(fit[:beta]))
+  coefficient_variance = (x.to_matrix.transpose * fit[:covariance] * x.to_matrix)[0, 0]
+  [mu, fit[:dispersion] * mu + mu**2 * [coefficient_variance, 0.0].max]
+end
+
+def weekly_reference_years(target_year, baseline)
+  case baseline
+  when 'fixed_2015_2019' then (2015..2019).to_a
+  when 'fixed_2016_2020' then (2016..2020).to_a
+  else ((target_year - 5)..(target_year - 1)).to_a
+  end
+end
+
+def circular_week_distance(left, right)
+  [(left - right).abs, 52 - (left - right).abs, 53 - (left - right).abs].min
+end
+
+# 日本語: 週次観測値に固定2015–2019年または直前5年の基準線を計算する。
+# English: Calculate a fixed 2015-2019 or preceding-five-year baseline for weekly observations.
+def weekly_baseline_analysis(rows, method:, baseline:, metric:)
+  rows.group_by { |row| row[:series] }.flat_map do |series, series_rows|
+    usable = series_rows.select { |row| row[:model_strata] && row[:date] }.sort_by { |row| row[:date] }
+    by_age = Hash.new { |hash, age| hash[age] = [] }
+    fit_cache = {}
+    usable.each do |row|
+      date = Date.iso8601(row[:date].to_s)
+      row[:model_strata].each do |stratum|
+        by_age[stratum[:age]] << stratum.merge(date: date, year: date.cwyear, week: date.cweek)
+      end
+    end
+    usable.filter_map do |row|
+      target_date = Date.iso8601(row[:date].to_s)
+      target_year = target_date.cwyear
+      fixed_end_year = { 'fixed_2015_2019' => 2019, 'fixed_2016_2020' => 2020 }[baseline]
+      next if fixed_end_year && target_year <= fixed_end_year
+      reference_years = weekly_reference_years(target_year, baseline)
+      estimates = row[:model_strata].filter_map do |target|
+        history = by_age[target[:age]].select { |item| reference_years.include?(item[:year]) }
+        next if history.empty?
+        exposure = metric == 'deaths' ? 1.0 : target[:population].to_f * 7.0 / DAYS_PER_YEAR
+        if method == 'five_year'
+          refs = history.select { |item| item[:week] == target_date.cweek }
+          next unless refs.length == reference_years.length
+          values = refs.map { |item| item[:deaths].to_f }
+          { age: target[:age], weight: target[:weight].to_f, population: target[:population].to_f,
+            expected: values.sum / values.length, variance: nil, lower: values.min, upper: values.max }
+        else
+          samples = if method == 'farrington'
+                      history.select { |item| circular_week_distance(item[:week], target_date.cweek) <= 3 }
+                    else
+                      history.select { |item| (16..25).cover?(item[:week]) || (37..44).cover?(item[:week]) }
+                    end
+          next if samples.length < 10
+          cache_key = [target[:age], method, reference_years,
+                       method == 'farrington' ? target_date.cweek : nil]
+          cached = fit_cache[cache_key]
+          origin = cached ? cached[:origin] : samples.map { |item| item[:date] }.min
+          features_for = lambda do |item|
+            trend = (item[:date] - origin).to_f / DAYS_PER_YEAR
+            if method == 'euromomo'
+              angle = 2 * Math::PI * item[:week].to_f / 52.1775
+              [1.0, trend, Math.sin(angle), Math.cos(angle)]
+            else
+              [1.0, trend]
+            end
+          end
+          fit_samples = samples.map do |item|
+            item_exposure = metric == 'deaths' ? 1.0 : item[:population].to_f * 7.0 / DAYS_PER_YEAR
+            { deaths: item[:deaths], exposure: item_exposure, features: features_for.call(item) }
+          end
+          fit = cached ? cached[:fit] : fit_weekly_poisson(fit_samples, robust: method == 'farrington')
+          next unless fit
+          fit_cache[cache_key] ||= { fit: fit, origin: origin }
+          target_item = target.merge(date: target_date, week: target_date.cweek)
+          expected, variance = weekly_poisson_prediction(fit, features_for.call(target_item), exposure)
+          { age: target[:age], weight: target[:weight].to_f, population: target[:population].to_f,
+            expected: expected, variance: variance }
+        end
+      end
+      next unless estimates.length == row[:model_strata].length
+
+      if metric == 'deaths'
+        expected = estimates.sum { |item| item[:expected] }
+        variance = estimates.any? { |item| item[:variance].nil? } ? nil : estimates.sum { |item| item[:variance] }
+        lower = estimates.sum { |item| item[:lower].to_f }
+        upper = estimates.sum { |item| item[:upper].to_f }
+      elsif metric == 'crude_rate'
+        population = estimates.sum { |item| item[:population] }
+        factor = DAYS_PER_YEAR * 100_000.0 / (7.0 * population)
+        expected = estimates.sum { |item| item[:expected] } * factor
+        variance = estimates.any? { |item| item[:variance].nil? } ? nil : estimates.sum { |item| item[:variance] } * factor**2
+        lower = estimates.sum { |item| item[:lower].to_f } * factor
+        upper = estimates.sum { |item| item[:upper].to_f } * factor
+      else
+        expected = estimates.sum do |item|
+          item[:expected] * DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+        end
+        variance = if estimates.any? { |item| item[:variance].nil? }
+                     nil
+                   else
+                     estimates.sum do |item|
+                       factor = DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+                       item[:variance] * factor**2
+                     end
+                   end
+        lower = estimates.sum do |item|
+          item[:lower].to_f * DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+        end
+        upper = estimates.sum do |item|
+          item[:upper].to_f * DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+        end
+      end
+      if variance
+        margin = 1.96 * Math.sqrt([variance, 0.0].max)
+        lower = [expected - margin, 0.0].max
+        upper = expected + margin
+      end
+      observed = row[:observed].to_f
+      { series: series, date: row[:date], expected: expected, lower: lower, upper: upper,
+        excess: observed - expected,
+        excess_lower: [observed - upper, 0.0].max,
+        excess_upper: [observed - expected, 0.0].max,
+        method: method, baseline: baseline }
+    end
+  end
 end
 
 # 日本語: 日本の週次粗死亡率を週死亡数と各月の公式人口から人口日で再計算する。
@@ -1097,7 +1327,7 @@ def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, s
     # Place the monthly average at mid-month instead of the first day of the month.
     midpoint = date + (Date.new(date.year, date.month, -1).day - 1) / 2
     series_key = mode == 'country' ? loc :
-      "#{selected_locations.first}-#{selected_ages.join('+')}-#{cause}"
+      "#{selected_locations.first}-#{selected_ages.join('+')}-vital-#{cause}"
     { loc: loc, dcode: cause, date: midpoint.iso8601,
       observed: row[:age_all].to_f, series: series_key,
       detail_period: $l == :ja ? '月' : 'Month' }
@@ -1944,22 +2174,23 @@ if selected_dataset != 'vital'
   menu_catalog = nil
   annual_catalog.select! { |code, _entry| code == 'JPN' }
 end
+location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
+weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('crude') }.keys
 if selected_period != 'calendar'
-  location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
-  weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('crude') }.keys
   if menu_catalog
-    weekly_codes.select! do |code|
+    period_codes = weekly_codes.select do |code|
       menu_catalog.fetch(code, {}).fetch(:series, []).any? do |item|
-        item[:period] == selected_period && item[:metric] == selected_metric && item[:displayable]
+        (selected_period == 'weekly' || item[:period] == selected_period) &&
+          item[:metric] == selected_metric && item[:displayable]
       end
     end
+    weekly_codes = period_codes
   end
-  annual_catalog.select! { |code, _entry| weekly_codes.include?(code) }
 end
 $annual_catalog = annual_catalog
 metric_locations = annual_catalog.select do |code, catalog|
   selected_period == 'calendar' ? annual_metric_available?(code, catalog, selected_metric) :
-    %w[deaths crude_rate asr].include?(selected_metric)
+    weekly_codes.include?(code) && %w[deaths crude_rate asr].include?(selected_metric)
 end.keys.sort
 metric_locations = ['JPN'] if selected_dataset != 'vital' && annual_catalog.key?('JPN')
 metric_locations = ['JPN'].select { |code| annual_catalog.key?(code) } if selected_metric == 'std_deaths'
@@ -2269,7 +2500,8 @@ panel_label = lambda do |loc, cause, dataset|
 end
 
 series_datasets = [['vital', selected_vital_causes], ['cancer-death', selected_cancer_causes]]
-series_datasets << ['cancer-incidence', selected_cancer_causes] if include_incidence
+series_datasets = [['vital', selected_vital_causes]] if selected_period != 'calendar'
+series_datasets << ['cancer-incidence', selected_cancer_causes] if include_incidence && selected_period == 'calendar'
 series_specs = if mode == 'country'
                  selected_locations.map do |loc|
                    cause = selected_causes.first
@@ -2343,12 +2575,13 @@ chart_data.each do |row|
   date = selected_period == 'calendar' ? Date.new(row[:year], 1, 1) : Date.new(row[:year] + 1, 1, 1)
   row[:plot_date] = date.iso8601
 end
-weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
+weekly_context = if selected_period == 'weekly' ||
+                    (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
                     detailed_calendar_rate
-                   weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages,
-                                    asr_weights: asr_stmf_weights).map do |row|
+                   weekly_display_rows(count_rows, rate_rows, selected_metric, selected_ages,
+                                       asr_weights: asr_stmf_weights).map do |row|
                      series_key = mode == 'country' ? row[:loc] :
-                       "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:dcode]}"
+                       "#{selected_locations.first}-#{selected_ages.join('+')}-vital-#{row[:dcode]}"
                      row.merge(series: series_key)
                    end
                  else
@@ -2385,6 +2618,24 @@ else
     row.merge(detail_period: $l == :ja ? '週' : 'Week')
   end
 end
+weekly_combinations = weekly_methods.product(weekly_baselines)
+if selected_period == 'weekly'
+  base_weekly_context = weekly_context
+  weekly_context = weekly_combinations.flat_map do |method, baseline|
+    analysis = weekly_baseline_analysis(base_weekly_context, method: method,
+                                        baseline: baseline, metric: selected_metric)
+    analysis_by_key = analysis.to_h { |row| [[row[:series], row[:date]], row] }
+    base_weekly_context.map do |row|
+      result = analysis_by_key[[row[:series], row[:date]]]
+      combined_series = "#{row[:series]}--#{method}--#{baseline}"
+      result ? row.merge(result.reject { |key, _value| %i[series date].include?(key) }, series: combined_series) :
+        row.merge(series: combined_series)
+    end
+  end
+end
+# 日本語: 回帰用の年齢階級値はHTMLへ重複埋込みせず、計算後に除く。
+# English: Remove duplicated model strata after calculation instead of embedding them in HTML.
+weekly_context.each { |row| row.delete(:model_strata) }
 weekly_context = insert_detail_gaps(weekly_context)
 detail_series = weekly_context.filter_map { |row| row[:series] if row[:observed] }.uniq
 
@@ -2409,10 +2660,29 @@ cutoff_label = lambda do |year|
   year.to_s
 end
 available_specs = series_specs.select { |key, _age, _cause, _label| chart_data.any? { |row| row[:series] == key } }
+if selected_period == 'weekly'
+  method_labels = {
+    'five_year' => ($l == :ja ? '5年平均' : 'Five-year average'),
+    'farrington' => ($l == :ja ? 'Farrington型' : 'Farrington-style'),
+    'euromomo' => ($l == :ja ? 'EuroMOMO型' : 'EuroMOMO-style')
+  }
+  baseline_labels = {
+    'fixed_2015_2019' => ($l == :ja ? '基準期間2015–2019' : 'baseline 2015–2019'),
+    'fixed_2016_2020' => ($l == :ja ? '基準期間2016–2020' : 'baseline 2016–2020'),
+    'rolling' => ($l == :ja ? '直前5年移動基準' : 'previous-five-year rolling baseline')
+  }
+  available_specs = available_specs.flat_map do |key, ages, cause, label, dataset|
+    weekly_combinations.map do |method, baseline|
+      ["#{key}--#{method}--#{baseline}", ages, cause,
+       "#{label} — #{method_labels.fetch(method)}・#{baseline_labels.fetch(baseline)}", dataset]
+    end
+  end
+end
 
 if opts[:summary]
   summary = available_specs.to_h do |key, _age, _cause, label|
-    values = chart_data.select { |row| row[:series] == key }
+    base_key = key.sub(/--(?:five_year|farrington|euromomo)--(?:fixed_2015_2019|fixed_2016_2020|rolling)\z/, '')
+    values = chart_data.select { |row| row[:series] == base_key }
     last_cutoff = values.map { |row| row[:train_to] }.max
     requested_summary_cutoff = values.map { |row| row[:train_to] }.include?(default_cutoff) ? default_cutoff : last_cutoff
     selected_values = values.select { |row| interval_mode == 'analytic' ? row[:interval_method] == 'analytic' : row[:auto_selected] }
@@ -2502,11 +2772,16 @@ puts <<~HTML
       <span>#{ $l == :ja ? 'インフルエンザ年（開始:' : 'Influenza year (start:' }</span>
       <label><input class="period-option" type="radio" name="period" value="flu27" #{checked(selected_period == 'flu27')}>#{ $l == :ja ? '第27週' : 'W27' }</label>
       <label><input class="period-option" type="radio" name="period" value="flu36" #{checked(selected_period == 'flu36')}>#{ $l == :ja ? '第36週）' : 'W36)' }</label>
-      #{detail_series.any? ? %(<label><input id="weekly-view-checkbox" type="checkbox">#{ if monthly_supplement_enabled
-             $l == :ja ? '週次・月次表示' : 'Weekly/monthly view'
-           else
-             $l == :ja ? '週次表示' : 'Weekly view'
-           end }</label>) : ''}
+      <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次' : 'Weekly' }</label>
+    </fieldset>
+    <fieldset id="weekly-method-fieldset" style="#{selected_period == 'weekly' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '週次基準線' : 'Weekly baseline' }</legend>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="five_year" #{checked(weekly_methods.include?('five_year'))}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="farrington" #{checked(weekly_methods.include?('farrington'))}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="euromomo" #{checked(weekly_methods.include?('euromomo'))}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
+      &nbsp;
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2015_2019" #{checked(weekly_baselines.include?('fixed_2015_2019'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2016_2020" #{checked(weekly_baselines.include?('fixed_2016_2020'))}>#{ $l == :ja ? '基準期間2016–2020' : 'Baseline period 2016–2020' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="rolling" #{checked(weekly_baselines.include?('rolling'))}>#{ $l == :ja ? '直前5年移動基準' : 'Previous-five-year rolling baseline' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
@@ -2540,6 +2815,8 @@ REGION_LABELS.each do |region, region_names|
       code == 'JPN'
     elsif selected_period == 'calendar'
       annual_metric_available?(code, annual_catalog.fetch(code), selected_metric)
+    elsif selected_period == 'weekly'
+      weekly_codes.include?(code) && %w[deaths crude_rate asr].include?(selected_metric)
     else
       period_metric_available?(annual_catalog.fetch(code), selected_metric, selected_period)
     end
@@ -2548,18 +2825,14 @@ REGION_LABELS.each do |region, region_names|
   puts %(<details class="location-region" #{open ? 'open' : ''}><summary><span class="location-region-name">#{CGI.escapeHTML(region_names.fetch($l))}</span>（<span class="location-region-count">#{selectable_count}</span>）<input class="location-region-toggle" type="checkbox" title="#{CGI.escapeHTML(toggle_label)}" aria-label="#{CGI.escapeHTML(toggle_label)}"></summary><div class="mortyear-options">)
   codes.each do |code|
     names = location_names(code)
-    metrics = METRICS.keys.select do |metric|
-      if metric == 'std_deaths'
-        selected_period == 'calendar' && code == 'JPN'
-      elsif selected_period == 'calendar'
-        annual_metric_available?(code, annual_catalog.fetch(code), metric)
-      else
-        period_metric_available?(annual_catalog.fetch(code), metric, selected_period)
-      end
+    annual_metrics = METRICS.keys.select do |metric|
+      metric == 'std_deaths' ? code == 'JPN' : annual_metric_available?(code, annual_catalog.fetch(code), metric)
     end
+    detail_metrics = weekly_codes.include?(code) ? %w[deaths crude_rate asr] : []
+    metrics = selected_period == 'calendar' ? annual_metrics : detail_metrics
     hidden = !metrics.include?(selected_metric)
     type = mode == 'country' ? 'checkbox' : 'radio'
-    puts %(<label class="location-label" data-metrics="#{metrics.join(' ')}" style="#{hidden ? 'display:none' : ''}"><input class="location-option" type="#{type}" name="c" value="#{code}" #{checked(selected_locations.include?(code))} #{disabled(hidden)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+    puts %(<label class="location-label" data-annual-metrics="#{annual_metrics.join(' ')}" data-weekly-metrics="#{detail_metrics.join(' ')}" style="#{hidden ? 'display:none' : ''}"><input class="location-option" type="#{type}" name="c" value="#{code}" #{checked(selected_locations.include?(code))} #{disabled(hidden)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
   end
   puts %(</div></details>)
 end
@@ -2573,7 +2846,9 @@ puts <<~HTML
     <fieldset id="season-age-fieldset" style="#{selected_period == 'calendar' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
 HTML
 STMF_AGES.each do |age|
-  puts %(<label><input class="age-season-option" type="checkbox" name="age" value="#{age}" #{checked(selected_ages.include?(age))}>#{STMF_AGE_LABELS.fetch(age)}</label>)
+  type = mode == 'country' ? 'radio' : 'checkbox'
+  unavailable = selected_metric == 'asr' && age != 'age_all'
+  puts %(<label><input class="age-season-option" type="#{type}" name="age" value="#{age}" #{checked(selected_ages.include?(age) && !unavailable)} #{disabled(unavailable)}>#{STMF_AGE_LABELS.fetch(age)}</label>)
 end
 puts <<~HTML
     </fieldset>
@@ -2664,8 +2939,10 @@ render_cancer_group = lambda do |dataset_key, heading|
   end
   puts %(</div></details>)
 end
-puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="include_incidence" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
-render_cancer_group.call('cancer-death', $l == :ja ? '癌部位' : 'Cancer sites')
+if selected_period == 'calendar'
+  puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="include_incidence" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
+  render_cancer_group.call('cancer-death', $l == :ja ? '癌部位' : 'Cancer sites')
+end
 puts <<~HTML
     </fieldset><br>
     <button type="submit">#{ $l == :ja ? '読込み' : 'Submit' }</button>
@@ -2722,6 +2999,11 @@ puts <<~HTML
         const causes = params.getAll('dcodes');
         params.delete('dcodes');
         if (causes.length) params.set('dcodes', causes.join('~'));
+        ['weekly_method', 'weekly_baseline'].forEach(name => {
+          const values = params.getAll(name);
+          params.delete(name);
+          if (values.length) params.set(name, values.join('~'));
+        });
         // 日本語: 期間を切り替えたsubmitでは旧期間のlocation codeがformに残るため、
         // 暦年はGBR、インフルエンザ年はENGへcanonical化する。
         // English: On period changes the form still contains the previous period's location
@@ -2758,12 +3040,21 @@ puts <<~HTML
         const selected = document.querySelector('.comparison-mode:checked').value;
         const locations = Array.from(document.querySelectorAll('.location-option'));
         const causes = Array.from(document.querySelectorAll('.cause-option'));
+        const seasonAges = Array.from(document.querySelectorAll('.age-season-option'));
+        const weeklyMethods = Array.from(document.querySelectorAll('.weekly-method-option'));
+        const weeklyBaselines = Array.from(document.querySelectorAll('.weekly-baseline-option'));
         if (selected === 'country') {
           setInputMode(locations, 'checkbox', 'c');
           setInputMode(causes, 'radio', 'dcodes');
+          setInputMode(seasonAges, 'radio', 'age');
+          setInputMode(weeklyMethods, 'radio', 'weekly_method');
+          setInputMode(weeklyBaselines, 'radio', 'weekly_baseline');
         } else {
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'dcodes');
+          setInputMode(seasonAges, 'checkbox', 'age');
+          setInputMode(weeklyMethods, 'checkbox', 'weekly_method');
+          setInputMode(weeklyBaselines, 'checkbox', 'weekly_baseline');
         }
         document.querySelectorAll('.location-region-toggle').forEach(toggle => {
           toggle.style.display = selected === 'country' ? '' : 'none';
@@ -2806,6 +3097,11 @@ puts <<~HTML
         });
         updateRegionToggles();
       }
+      function locationMetrics(label) {
+        const period = document.querySelector('.period-option:checked')?.value || 'calendar';
+        const value = period === 'calendar' ? label.dataset.annualMetrics : label.dataset.weeklyMetrics;
+        return (value || '').split(/\s+/).filter(Boolean);
+      }
       function syncCauseVisibility(restrictLocations = false) {
         const fieldset = document.getElementById('cause-fieldset');
         const causes = Array.from(document.querySelectorAll('.cause-option'));
@@ -2814,7 +3110,7 @@ puts <<~HTML
         const calendarPeriod = document.querySelector('.period-option:checked').value === 'calendar';
         const birthLocations = selectedLocations.length > 0 && selectedLocations.every(location => {
           const input = document.querySelector(`.location-option[value="${location}"]`);
-          return input && input.closest('label').dataset.metrics.split(' ').includes('birth_rate');
+          return input && locationMetrics(input.closest('label')).includes('birth_rate');
         });
         const japanContext = calendarPeriod && selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate';
         const scope = japanContext ? 'japan' :
@@ -2849,7 +3145,7 @@ puts <<~HTML
           const selectedCauses = causes.filter(input => input.dataset.causeScope === 'birth' && input.checked);
           document.querySelectorAll('.location-label').forEach(label => {
             const input = label.querySelector('.location-option');
-            const metricAvailable = label.dataset.metrics.split(/\s+/).includes('birth_rate');
+            const metricAvailable = locationMetrics(label).includes('birth_rate');
             const causeAvailable = selectedCauses.every(cause =>
               cause.dataset.locations.split(/\s+/).includes(input.value)
             );
@@ -2932,7 +3228,6 @@ puts <<~HTML
         applyAgeRange();
       });
       const storageKey = "mortyear-location-selection";
-      const isCalendarPeriod = #{selected_period == 'calendar' ? 'true' : 'false'};
       const hasRequestedLocations = #{requested_locations.empty? ? 'false' : 'true'};
       function rememberLocations() {
         const values = Array.from(document.querySelectorAll('.location-option:checked')).map(input => input.value);
@@ -2948,6 +3243,9 @@ puts <<~HTML
       }
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
+        const selectedPeriod = document.querySelector('.period-option:checked').value;
+        const isCalendarPeriod = selectedPeriod === 'calendar';
+        document.getElementById('weekly-method-fieldset').style.display = selectedPeriod === 'weekly' ? '' : 'none';
         const fixedAllAges = metric === 'birth_rate';
         const sexFieldset = document.getElementById('sex-fieldset');
         sexFieldset.style.display = metric === 'birth_rate' ? 'none' : '';
@@ -2958,10 +3256,12 @@ puts <<~HTML
         document.getElementById('age-fieldset').style.display = isCalendarPeriod && metric !== 'birth_rate' ? '' : 'none';
         document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod ? '' : 'none';
         document.querySelectorAll('.age-season-option').forEach(input => {
-          input.disabled = false;
+          const asrUnavailable = metric === 'asr' && input.value !== 'age_all';
+          input.disabled = isCalendarPeriod || asrUnavailable;
+          if (!isCalendarPeriod && metric === 'asr') input.checked = input.value === 'age_all';
         });
         document.querySelectorAll('.age-option').forEach(input => {
-          input.disabled = metric === 'birth_rate';
+          input.disabled = metric === 'birth_rate' || !isCalendarPeriod;
           if (fixedAllAges) input.checked = input.value === 'age_all';
         });
         if (!fixedAllAges && document.querySelector('.age-special-option[value="age_all"]').checked) {
@@ -2969,7 +3269,7 @@ puts <<~HTML
         }
         ageSlider.style.display = fixedAllAges ? 'none' : '';
         document.querySelectorAll('.location-label').forEach(label => {
-          const available = label.dataset.metrics.split(/\s+/).includes(metric);
+          const available = locationMetrics(label).includes(metric);
           label.style.display = available ? "" : "none";
           label.querySelector('input').disabled = !available;
         });
@@ -3030,8 +3330,18 @@ puts <<~HTML
         const trainTo = document.getElementById('train-to-hidden');
         if (event.target.value === 'calendar' && trainTo.value === '2018') trainTo.value = '2019';
         if (event.target.value !== 'calendar' && trainTo.value === '2019') trainTo.value = '2018';
-        showLoading();
-        document.querySelector('.mortyear-form').requestSubmit();
+        // 日本語: 年次GBRと週次ENGを、再読込み前の選択欄でも対応付ける。
+        // English: Map annual GBR and weekly ENG in the controls before reloading.
+        const gbr = document.querySelector('.location-option[value="GBR"]');
+        const eng = document.querySelector('.location-option[value="ENG"]');
+        const sco = document.querySelector('.location-option[value="SCO"]');
+        if (event.target.value === 'calendar' && ((eng && eng.checked) || (sco && sco.checked)) && gbr) {
+          gbr.checked = true;
+        } else if (event.target.value !== 'calendar' && gbr && gbr.checked && eng) {
+          eng.checked = true;
+        }
+        syncMetric();
+        syncCauseVisibility();
       }));
       restoreLocations();
       syncAgeSlider();
@@ -3076,12 +3386,21 @@ else
               else
                 'Observed and standardized deaths are shown as counts. Crude and age-standardized mortality rates are shown per 100,000 population. Birth-related mortality rates are shown per 1,000 births or deliveries. The age-0 population rate is shown per 100,000 age-0 population and uses a different denominator from birth-related mortality rates.'
               end
-  sources_by_location = available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
-    loc = mode == 'country' ? key : selected_locations.first
-    urls = chart_data.select { |row| row[:series] == key }.flat_map { |row| row[:src_url] }.uniq
-    sources[loc] ||= []
-    sources[loc] |= urls
-  end
+  sources_by_location = if selected_period == 'weekly'
+                          weekly_context.each_with_object({}) do |row, sources|
+                            loc = row[:loc].to_s.upcase
+                            next if loc.empty?
+                            sources[loc] ||= []
+                            sources[loc] |= Array(row[:src_url]).compact
+                          end
+                        else
+                          available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
+                            loc = mode == 'country' ? key : selected_locations.first
+                            urls = chart_data.select { |row| row[:series] == key }.flat_map { |row| row[:src_url] }.uniq
+                            sources[loc] ||= []
+                            sources[loc] |= urls
+                          end
+                        end
   source_entries = []
   if selected_dataset != 'vital'
     method = if selected_dataset == 'cancer-incidence'
@@ -3108,7 +3427,23 @@ else
     end
     source_entries << { loc: 'JPN', method: method, urls: urls }
   elsif sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
-    method = if jpn_2015_asr && selected_period != 'calendar' && $l == :ja
+    method = if selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all'] && $l == :ja
+               '日本の超過死亡ダッシュボードが公表する補正済み週次死亡数を使用しています。'
+             elsif selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all']
+               'Uses corrected weekly death counts published by the Japanese excess-mortality dashboard.'
+             elsif selected_period == 'weekly' && selected_metric == 'crude_rate' && selected_ages == ['age_all'] && $l == :ja
+               '日本の超過死亡ダッシュボードの補正済み週次死亡数と、e-Statの月次人口から粗死亡率を計算しています。'
+             elsif selected_period == 'weekly' && selected_metric == 'crude_rate' && selected_ages == ['age_all']
+               'Calculates crude mortality rates from corrected weekly deaths published by the Japanese excess-mortality dashboard and monthly e-Stat populations.'
+             elsif jpn_2015_asr && selected_period == 'weekly' && $l == :ja
+               'e-Statの月次死亡数・月次人口から作った週次推計値を、日本の2015年モデル人口で年齢調整しています。'
+             elsif jpn_2015_asr && selected_period == 'weekly'
+               'Uses weekly estimates derived from monthly e-Stat deaths and populations, standardized to the Japan 2015 model population.'
+             elsif selected_period == 'weekly' && $l == :ja
+               'e-Statの月次死亡数・月次人口から作った週次推計値を使用しています。'
+             elsif selected_period == 'weekly'
+               'Uses weekly estimates derived from monthly e-Stat deaths and populations.'
+             elsif jpn_2015_asr && selected_period != 'calendar' && $l == :ja
                'e-Statの月次死亡数・月次人口から作った週次推計値をインフルエンザ年へ再集計し、日本の2015年モデル人口で年齢調整しています。'
              elsif jpn_2015_asr && selected_period != 'calendar'
                'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years and standardizes them to the Japan 2015 model population.'
@@ -3152,9 +3487,15 @@ else
     other_urls = sources_by_location['JPN'].reject do |url|
       url.include?('e-stat.go.jp') || (mixed_japan_series && url.include?('ganjoho.jp'))
     end
-    death_urls = selected_period == 'calendar' ? [ESTAT_ANNUAL_DEATH_URL, ESTAT_DEATH_URL] : [ESTAT_DEATH_URL]
-    stable_urls = death_urls
-    stable_urls << ESTAT_POP_URL unless selected_metric == 'birth_rate'
+    stable_urls = if selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all']
+                    []
+                  elsif selected_period == 'weekly' && selected_metric == 'crude_rate' && selected_ages == ['age_all']
+                    [ESTAT_POP_URL]
+                  else
+                    selected_period == 'calendar' ? [ESTAT_ANNUAL_DEATH_URL, ESTAT_DEATH_URL] : [ESTAT_DEATH_URL]
+                  end
+    stable_urls << ESTAT_POP_URL unless selected_metric == 'birth_rate' || stable_urls.include?(ESTAT_POP_URL) ||
+                                           (selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all'])
     source_entries << { loc: 'JPN', method: method, urls: (stable_urls + other_urls).uniq }
   end
   if mixed_japan_series && selected_cancer_causes.any?
@@ -3174,7 +3515,11 @@ else
     next if selected_dataset != 'vital' && loc == 'JPN'
     next if loc == 'JPN' && urls.any? { |url| url.include?('e-stat.go.jp') }
 
-    method = if selected_period != 'calendar' && urls.include?(HMD_URL) && $l == :ja
+    method = if selected_period == 'weekly' && urls.include?(HMD_URL) && $l == :ja
+               'HMD STMFの週次死亡数・死亡率を使用しています。'
+             elsif selected_period == 'weekly' && urls.include?(HMD_URL)
+               'Uses weekly deaths and mortality rates from HMD STMF.'
+             elsif selected_period != 'calendar' && urls.include?(HMD_URL) && $l == :ja
                'HMD STMFの週次死亡数・死亡率を、インフルエンザ年へ再集計しています。'
              elsif selected_period != 'calendar' && urls.include?(HMD_URL)
                'Aggregates HMD STMF weekly deaths and mortality rates into influenza years.'
@@ -3274,6 +3619,12 @@ else
                          [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'infant')],
                          [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'perm')]
                        ]
+                     elsif selected_period == 'weekly'
+                       count = location_rates.count do |_code, rates|
+                         rates.include?('') && rates.include?('crude')
+                       end
+                       [[$l == :ja ? '実死亡数・粗死亡率・年齢調整死亡率' :
+                                      'Deaths, crude rates, and age-standardized rates', count]]
                      else
                        counts = %w[deaths crude_rate asr].map do |metric|
                          menu_catalog.count do |_loc, entry|
@@ -3304,11 +3655,51 @@ else
                   end
     [key, short_label]
   end
-  interval_note = if $l == :ja
+  interval_note = if selected_period == 'weekly'
+                    if $l == :ja
+                      '週次基準線はSTMF由来の週次値だけで計算し、過去の月次補完値は使いません。5年平均の帯は同じ週の最小・最大、Farrington型は対象週の前後3週、EuroMOMO型は第16–25週・第37–44週を基準にします。'
+                    else
+                      'Weekly baselines use only STMF-derived weekly values, never the historical monthly supplement. The five-year average is accompanied by the same-week minimum-to-maximum band; Farrington-style uses ±3 weeks; EuroMOMO-style uses W16–25 and W37–44 as baseline weeks.'
+                    end
+                  elsif $l == :ja
                     '準ポアソンは、観測された過分散を反映した近似95%予測区間です。ポアソンでは、計算済みなら10,000回シミュレーションによる区間へ切り替えられます（青：準ポアソン、緑：ポアソン近似、黄：シミュレーション）。'
                   else
                     'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
                   end
+  weekly_excess_enabled = selected_period == 'weekly'
+  weekly_cumulative_start = weekly_baselines.include?('fixed_2016_2020') ? 2021 : 2020
+  weekly_excess_title = if $l == :ja
+                          selected_metric == 'deaths' ? '超過死亡数' : '超過死亡率'
+                        else
+                          selected_metric == 'deaths' ? 'Excess deaths' : 'Excess mortality rate'
+                        end
+  weekly_excess_trend_title = $l == :ja ? "#{weekly_excess_title}の推移" : "#{weekly_excess_title} trend"
+  weekly_excess_cumulative_title = if $l == :ja
+                                     "#{weekly_cumulative_start}年からの累積#{weekly_excess_title}"
+                                   else
+                                     "Cumulative #{weekly_excess_title.downcase} from #{weekly_cumulative_start}"
+                                   end
+  weekly_excess_lower_title = if weekly_methods == ['five_year']
+                                $l == :ja ? '過去5年最大値超過' : 'Above five-year maximum'
+                              elsif !weekly_methods.include?('five_year')
+                                $l == :ja ? '予測上限超過' : 'Above prediction limit'
+                              else
+                                $l == :ja ? '保守的超過' : 'Conservative excess'
+                              end
+  weekly_excess_upper_title = $l == :ja ? '基準線超過' : 'Above baseline'
+  if weekly_excess_enabled
+    dark_red_note = if weekly_methods.include?('five_year') && weekly_methods.length > 1
+                      $l == :ja ? '5年平均では過去5年最大値超過、Farrington型・EuroMOMO型では予測上限超過' :
+                        'above the five-year maximum for the five-year average and above the prediction limit for Farrington-style and EuroMOMO-style'
+                    else
+                      weekly_excess_lower_title
+                    end
+    interval_note += if $l == :ja
+                       " 下2段は超過死亡の推移と累積を同じ色で示し、薄赤は#{weekly_excess_upper_title}、濃赤は#{dark_red_note}です。"
+                     else
+                       " The two lower panels show the excess trend and cumulative excess using the same colors: light red is #{weekly_excess_upper_title.downcase}; dark red is #{dark_red_note.downcase}."
+                     end
+  end
   puts <<~HTML
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
@@ -3316,7 +3707,7 @@ else
         <output id="start-year-output">#{cutoff_label.call(default_start_year)}</output>
       </label>
       &nbsp;
-      <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999'}–" }
+      <label style="#{selected_period == 'weekly' ? 'display:none' : ''}">#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999'}–" }
         <input id="train-to-slider" type="range" min="#{cutoffs.min}" max="#{cutoffs.max}" step="1" value="#{default_cutoff}">
         <output id="train-to-output">#{cutoff_label.call(default_cutoff)}</output>
       </label>
@@ -3324,12 +3715,21 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
+      #{detail_series.any? && selected_period != 'weekly' ? %(
       &nbsp;
-      <span>#{ $l == :ja ? 'モデル' : 'Model' }:</span>
-      <label><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
+      <label><input id="weekly-view-checkbox" type="checkbox">
+        #{ if monthly_supplement_enabled
+             $l == :ja ? '週次・月次表示' : 'Weekly/monthly view'
+           else
+             $l == :ja ? '週次表示' : 'Weekly view'
+           end }
+      </label>) : ''}
+      &nbsp;
+      <span style="#{selected_period == 'weekly' ? 'display:none' : ''}">#{ $l == :ja ? 'モデル' : 'Model' }:</span>
+      <label style="#{selected_period == 'weekly' ? 'display:none' : ''}"><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
         #{ $l == :ja ? '準ポアソン' : 'Quasi-Poisson' }
       </label>
-      <label><input class="model-option" type="radio" name="chart_model" value="poisson" #{checked(default_model == 'poisson')}>
+      <label style="#{selected_period == 'weekly' ? 'display:none' : ''}"><input class="model-option" type="radio" name="chart_model" value="poisson" #{checked(default_model == 'poisson')}>
         #{ $l == :ja ? 'ポアソン' : 'Poisson' }
       </label>
       <!-- 推定φの計算値はchart dataに残すが、画面には表示しない。
@@ -3352,10 +3752,12 @@ else
       const periodYearLabel = year => String(year);
       const modelDefault = #{JSON.generate(default_model)};
       const intervalModeDefault = #{JSON.generate(interval_mode)};
+      const excessRateWeekFactor = #{selected_metric == 'deaths' ? '1' : (7.0 / DAYS_PER_YEAR).to_s};
+      const excessCumulativeStart = #{weekly_cumulative_start};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const startWeek = #{start_week};
-      const displayStartDate = year => #{selected_period == 'calendar' ? '`${year}-01-01`' : '`${year + 1}-01-01`'};
+      const displayStartDate = year => #{%w[calendar weekly].include?(selected_period) ? '`${year}-01-01`' : '`${year + 1}-01-01`'};
       const annualTooltip = [
         #{selected_period == 'calendar' ?
           %({field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}}) :
@@ -3368,7 +3770,22 @@ else
         {field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}},
         {field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
       ];
+      const weeklyTooltip = [
+        {field:"date", type:"temporal", title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},
+        {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
+        {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '基準値' : 'Baseline')}},
+        {field:"lower", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '下限' : 'Lower')}},
+        {field:"upper", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '上限' : 'Upper')}},
+        {field:"excess_lower", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_lower_title)}},
+        {field:"excess_upper", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_upper_title)}}
+      ];
+      const excessTooltip = [
+        {field:"date", type:"temporal", title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},
+        {field:"display_excess_lower", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_lower_title)}},
+        {field:"display_excess_upper", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_upper_title)}}
+      ];
       const annualTransforms = [
+        {filter: "!primary_weekly"},
         {filter: "toDate(datum.plot_date) >= toDate(display_start_date) && toDate(datum.plot_date) <= now()"},
         {filter: "datum.train_to == train_to"},
         {filter: "datum.model == model"},
@@ -3382,7 +3799,9 @@ else
           {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')", labelOverlap: false, labelSeparation: 6}, title: #{JSON.generate(if selected_period == 'calendar'
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: #{weekly_excess_enabled ? '{labels:false,ticks:false,domain:false,title:null}' : %({labelExpr:"datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')",labelOverlap:false,labelSeparation:6})}, title: #{JSON.generate(if weekly_excess_enabled
+            nil
+          elsif %w[calendar weekly].include?(selected_period)
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
@@ -3393,13 +3812,48 @@ else
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#174a73", strokeDash:[7,4], strokeWidth:2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"expected",type:"quantitative"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.observed)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"point", opacity:0, size:260, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:weeklyTooltip}},
           {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
-          {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
+          {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"!primary_weekly"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
       }));
+      const excessPanelSpec = (key, cumulative) => ({
+        title:{text:cumulative ? #{JSON.generate(weekly_excess_cumulative_title)} : #{JSON.generate(weekly_excess_trend_title)},anchor:"start",fontSize:15},
+        width:"container",height:115,
+        data:{values:weeklyValues},
+        transform:[
+          {filter:`datum.series == '${key}'`},
+          {filter:"isValid(datum.excess_upper)"},
+          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_lower * excess_rate_week_factor : 0",as:"excess_lower_increment"},
+          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_upper * excess_rate_week_factor : 0",as:"excess_upper_increment"},
+          {window:[{op:"sum",field:"excess_lower_increment",as:"cumulative_excess_lower"},{op:"sum",field:"excess_upper_increment",as:"cumulative_excess_upper"}],sort:[{field:"date",order:"ascending"}],frame:[null,0]},
+          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_lower : null" : "datum.excess_lower",as:"display_excess_lower"},
+          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_upper : null" : "datum.excess_upper",as:"display_excess_upper"},
+          {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
+        ],
+        encoding:{
+          x:{field:"date",type:"temporal",scale:{domainMin:{expr:"toDate(display_start_date)"},domainMax:{expr:"now()"},nice:false},axis:{labelExpr:"datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')",labelOverlap:false,labelSeparation:6},title:#{JSON.generate($l == :ja ? '年' : 'Year')}}
+        },
+        layer:[
+          {mark:{type:"bar",color:"#e7a0a5",clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+          {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+          {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative"},tooltip:excessTooltip}}
+        ]
+      });
+      const chartSpecs = [];
+      panelSpecs.forEach((panel, index) => {
+        chartSpecs.push(panel);
+        if (#{weekly_excess_enabled ? 'true' : 'false'}) {
+          const key = panels[index][0];
+          chartSpecs.push(excessPanelSpec(key, false));
+          chartSpecs.push(excessPanelSpec(key, true));
+        }
+      });
       const spec = {
         $schema: "https://vega.github.io/schema/vega-lite/v5.json",
         data: {values},
@@ -3411,10 +3865,13 @@ else
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
           {name:"zero_base", value:false},
-          {name:"view_mode", value:"annual"},
+          {name:"excess_rate_week_factor", value:excessRateWeekFactor},
+          {name:"excess_cumulative_start", value:excessCumulativeStart},
+          {name:"primary_weekly", value:#{selected_period == 'weekly' ? 'true' : 'false'}},
+          {name:"view_mode", value:#{JSON.generate(selected_period == 'weekly' ? 'weekly' : 'annual')}},
           {name:"detail_series", value:detailSeries}
         ],
-        vconcat: panelSpecs,
+        vconcat: chartSpecs,
         autosize: {type:"fit-x", contains:"padding", resize:true},
         resolve: {scale: {y: "independent"}},
         config: {view:{stroke:null}, axis:{labelFontSize:15,titleFontSize:17}, axisY:{minExtent:84,maxExtent:84}, title:{fontSize:19}}
