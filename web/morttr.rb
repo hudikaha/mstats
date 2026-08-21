@@ -300,6 +300,7 @@ selected_metric = 'deaths' if selected_dataset != 'vital' && !%w[deaths crude_ra
 selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric == 'asr'
 selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
+include_deficit = %w[1 true yes on].include?(cgi['include_deficit'].downcase)
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
 weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.split(/[~,]/) } &
                  %w[five_year farrington euromomo]
@@ -1272,8 +1273,16 @@ def weekly_baseline_analysis(rows, method:, baseline:, metric:)
         upper = expected + margin
       end
       observed = row[:observed].to_f
+      outside_deviation = if observed > upper
+                            observed - upper
+                          elsif observed < lower
+                            observed - lower
+                          else
+                            0.0
+                          end
       { series: series, date: row[:date], expected: expected, lower: lower, upper: upper,
         excess: observed - expected,
+        outside_deviation: outside_deviation,
         excess_lower: [observed - upper, 0.0].max,
         excess_upper: [observed - expected, 0.0].max,
         method: method, baseline: baseline }
@@ -3765,6 +3774,17 @@ else
                                    else
                                      "Cumulative #{weekly_excess_title.downcase} from #{weekly_cumulative_start}"
                                    end
+  weekly_deficit_title = if $l == :ja
+                           selected_metric == 'deaths' ? '死亡数の増減' : '死亡率の増減'
+                         else
+                           selected_metric == 'deaths' ? 'Mortality difference' : 'Mortality rate difference'
+                         end
+  weekly_deficit_trend_title = $l == :ja ? "#{weekly_deficit_title}の推移" : "#{weekly_deficit_title} trend"
+  weekly_deficit_cumulative_title = if $l == :ja
+                                      "#{weekly_cumulative_start}年からの累積#{weekly_deficit_title}"
+                                    else
+                                      "Cumulative #{weekly_deficit_title.downcase} from #{weekly_cumulative_start}"
+                                    end
   weekly_excess_lower_title = if weekly_methods == ['five_year']
                                 $l == :ja ? '過去5年最大値超過' : 'Above five-year maximum'
                               elsif !weekly_methods.include?('five_year')
@@ -3787,9 +3807,9 @@ else
                       weekly_excess_lower_title
                     end
     interval_note += if $l == :ja
-                       " 下2段は超過死亡の推移と累積を同じ色で示し、薄赤は#{weekly_excess_upper_title}、濃赤は#{dark_red_note}です。"
+                       " 下2段は超過死亡の推移と累積を同じ色で示し、薄赤は#{weekly_excess_upper_title}、濃赤は#{dark_red_note}です。「過少死亡も表示・累積」では負の差を青で示し、累積死亡増減から差し引きます。"
                      else
-                       " The two lower panels show the excess trend and cumulative excess using the same colors: light red is #{weekly_excess_upper_title.downcase}; dark red is #{dark_red_note.downcase}."
+                       " The two lower panels show the excess trend and cumulative excess using the same colors: light red is #{weekly_excess_upper_title.downcase}; dark red is #{dark_red_note.downcase}. With mortality deficits enabled, negative differences are blue and reduce the cumulative mortality difference."
                      end
   end
   puts <<~HTML
@@ -3807,6 +3827,11 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
+      #{weekly_excess_enabled ? %(
+      &nbsp;
+      <label><input id="deficit-checkbox" type="checkbox" #{checked(include_deficit)}>
+        #{ $l == :ja ? '過少死亡も表示・累積' : 'Show and accumulate mortality deficits' }
+      </label>) : ''}
       #{covid_overlay_available ? %(
       &nbsp;
       <label><input id="covid-overlay-checkbox" type="checkbox">
@@ -3884,8 +3909,8 @@ else
       ];
       const excessTooltip = [
         {field:"date", type:"temporal", title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},
-        {field:"display_excess_lower", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_lower_title)}},
-        {field:"display_excess_upper", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_upper_title)}}
+        {field:"display_excess_lower", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '予測範囲外の差' : 'Difference outside prediction range')}},
+        {field:"display_excess_upper", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '基準線との差' : 'Difference from baseline')}}
       ];
       const annualTransforms = [
         {filter: "!primary_weekly"},
@@ -3929,17 +3954,17 @@ else
         resolve:{scale:{y:"shared"},axis:{y:"independent"}}
       }));
       const excessPanelSpec = (key, cumulative) => ({
-        title:{text:cumulative ? #{JSON.generate(weekly_excess_cumulative_title)} : #{JSON.generate(weekly_excess_trend_title)},anchor:"start",fontSize:15},
+        title:{text:{expr:cumulative ? "include_deficit ? deficit_cumulative_title : excess_cumulative_title" : "include_deficit ? deficit_trend_title : excess_trend_title"},anchor:"start",fontSize:15},
         width:"container",height:115,
         data:{values:weeklyValues},
         transform:[
           {filter:`datum.series == '${key}'`},
           {filter:"isValid(datum.excess_upper)"},
-          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_lower * excess_rate_week_factor : 0",as:"excess_lower_increment"},
-          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_upper * excess_rate_week_factor : 0",as:"excess_upper_increment"},
+          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? (include_deficit ? datum.outside_deviation : datum.excess_lower) * excess_rate_week_factor : 0",as:"excess_lower_increment"},
+          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? (include_deficit ? datum.excess : datum.excess_upper) * excess_rate_week_factor : 0",as:"excess_upper_increment"},
           {window:[{op:"sum",field:"excess_lower_increment",as:"cumulative_excess_lower"},{op:"sum",field:"excess_upper_increment",as:"cumulative_excess_upper"}],sort:[{field:"date",order:"ascending"}],frame:[null,0]},
-          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_lower : null" : "datum.excess_lower",as:"display_excess_lower"},
-          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_upper : null" : "datum.excess_upper",as:"display_excess_upper"},
+          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_lower : null" : "include_deficit ? datum.outside_deviation : datum.excess_lower",as:"display_excess_lower"},
+          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_upper : null" : "include_deficit ? datum.excess : datum.excess_upper",as:"display_excess_upper"},
           {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
         ],
         encoding:{
@@ -3947,8 +3972,8 @@ else
         },
         layer:[
           {layer:[
-            {mark:{type:"bar",color:"#e7a0a5",clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
-            {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+            {mark:{type:"bar",clip:true},encoding:{color:{condition:{test:"datum.display_excess_upper < 0",value:"#91b9dc"},value:"#e7a0a5",legend:null},y:{field:"display_excess_upper",type:"quantitative",scale:{zero:true},title:{expr:"include_deficit ? deficit_axis_title : excess_axis_title"}},y2:{datum:0}}},
+            {mark:{type:"bar",clip:true},encoding:{color:{condition:{test:"datum.display_excess_lower < 0",value:"#326f9f"},value:"#b92f3a",legend:null},y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:{expr:"include_deficit ? deficit_axis_title : excess_axis_title"}},y2:{datum:0}}},
             {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative"},tooltip:excessTooltip}}
           ]},
           ...(cumulative ? [] : [{data:{values:overlayValues},transform:[{filter:`datum.loc == '${panels.find(panel => panel[0] == key)[2]}' && datum.overlay == 'vaxx'`},{filter:"show_vaxx_overlay"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}],mark:{type:"line",color:"#16835b",strokeWidth:2,clip:true},encoding:{x:{field:"date",type:"temporal"},y:{field:"value",type:"quantitative",scale:{zero:true},title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')},axis:{orient:"right",titleColor:"#16835b",labelColor:"#16835b"}},tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},{field:"value",type:"quantitative",format:",.0f",title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')}}]}}])
@@ -3977,6 +4002,13 @@ else
           {name:"zero_base", value:false},
           {name:"show_covid_overlay", value:false},
           {name:"show_vaxx_overlay", value:false},
+          {name:"include_deficit", value:#{include_deficit ? 'true' : 'false'}},
+          {name:"excess_axis_title", value:#{JSON.generate(weekly_excess_title)}},
+          {name:"deficit_axis_title", value:#{JSON.generate(weekly_deficit_title)}},
+          {name:"excess_trend_title", value:#{JSON.generate(weekly_excess_trend_title)}},
+          {name:"deficit_trend_title", value:#{JSON.generate(weekly_deficit_trend_title)}},
+          {name:"excess_cumulative_title", value:#{JSON.generate(weekly_excess_cumulative_title)}},
+          {name:"deficit_cumulative_title", value:#{JSON.generate(weekly_deficit_cumulative_title)}},
           {name:"excess_rate_week_factor", value:excessRateWeekFactor},
           {name:"excess_cumulative_start", value:excessCumulativeStart},
           {name:"primary_weekly", value:#{selected_period == 'weekly' ? 'true' : 'false'}},
@@ -3996,6 +4028,7 @@ else
         const output = document.getElementById("train-to-output");
         const modelOptions = Array.from(document.querySelectorAll(".model-option"));
         const zeroBase = document.getElementById("zero-base-checkbox");
+        const deficit = document.getElementById("deficit-checkbox");
         const covidOverlay = document.getElementById("covid-overlay-checkbox");
         const vaxxOverlay = document.getElementById("vaxx-overlay-checkbox");
         const simulationControl = document.getElementById("simulation-interval-control");
@@ -4044,6 +4077,18 @@ else
         zeroBase.addEventListener("change", () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
         });
+        if (deficit) {
+          const syncDeficit = () => {
+            result.view.signal("include_deficit", deficit.checked).runAsync();
+            const url = new URL(window.location.href);
+            if (deficit.checked) url.searchParams.set("include_deficit", "1");
+            else url.searchParams.delete("include_deficit");
+            history.replaceState(null, "", url);
+          };
+          deficit.addEventListener("change", syncDeficit);
+          window.addEventListener("pageshow", syncDeficit);
+          syncDeficit();
+        }
         if (covidOverlay) {
           const syncCovidOverlay = () => result.view.signal("show_covid_overlay", covidOverlay.checked).runAsync();
           covidOverlay.addEventListener("change", syncCovidOverlay);

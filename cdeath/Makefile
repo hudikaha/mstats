@@ -64,6 +64,9 @@ OWID_VACCINATIONS ?= $(OWID_DIR)/vaccinations_global.csv
 OWID_PREFECTURE ?= $(OWID_DIR)/prefecture.ndjson
 OWID_CASES_DEATHS_URL := https://catalog.ourworldindata.org/garden/covid/latest/cases_deaths/cases_deaths.csv
 OWID_VACCINATIONS_URL := https://catalog.ourworldindata.org/garden/covid/latest/vaccinations_global/vaccinations_global.csv
+MORTTR ?= $(ROOT)/../web/morttr.rb
+MORTTR_QR ?= $(ROOT)/../web/qr/morttr.rb.svg
+MORTTR_URL ?= https://medicalfacts.info/morttr.rb
 
 POP_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0
 DCAUSE_URL := https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00450011&tstat=000001028897&cycle=1&tclass1=000001053058&tclass2=000001053060&tclass3val=0
@@ -79,7 +82,7 @@ CODEX ?= codex
 .PHONY: help all location-config fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly fetch-owid check csv rebuild-all-csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv covid-vaxx-weekly-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv japan-mortality-csv \
   yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv ncc-python ncc-cancer-sample-csv ncc-cancer-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed \
-	upload-exdeaths-sample upload-exdeaths upload-ncc upload-covid-vaxx upload-japan-mortality upload-mstats-all check-latest-id-collisions mortyear-catalog-csv reset-mstats-index clone-mstats-index check-mstats-index delete-ncc-index-records replace-ncc-index delete-japan-mortality-index-records replace-japan-mortality-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-covid-vaxx logstash-japan-monthly logstash-japan-weekly logstash-japan-yearly logstash-japan-mortality logstash-all cod codtr
+	upload-exdeaths-sample upload-exdeaths upload-ncc upload-covid-vaxx upload-japan-mortality upload-mstats-all check-latest-id-collisions morttr-catalog-csv mortyear-catalog-csv morttr-qr morttr-check reset-mstats-index clone-mstats-index check-mstats-index delete-ncc-index-records replace-ncc-index delete-japan-mortality-index-records replace-japan-mortality-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-covid-vaxx logstash-japan-monthly logstash-japan-weekly logstash-japan-yearly logstash-japan-mortality logstash-all cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -185,7 +188,9 @@ help:
 	@echo 'make logstash-exdeaths YEARLY_INDEX=mstats20260816 全国・47都道府県の7系列を指定indexへ投入'
 	@echo 'make upload-mstats-all 全系列の最新CSVをserverへ送りsymlinkを更新'
 	@echo 'make check-latest-id-collisions 各系列の最新版1本ずつについて横断ID重複を検査'
-	@echo 'make mortyear-catalog-csv YEARLY_INDEX=mstats20260819 最新CSVからmortyear catalogを生成'
+	@echo 'make morttr-catalog-csv YEARLY_INDEX=mstats20260819 最新CSVからmorttr catalogを生成'
+	@echo 'make morttr-qr morttr.rbの正式URLを指すQR SVGを再生成'
+	@echo 'make morttr-check morttr.rbの構文と代表Web検査MY01・MY31〜MY33を実行'
 	@echo 'make reset-mstats-index YEARLY_INDEX=mstats20260816 指定物理indexだけを削除・新規作成'
 	@echo 'make clone-mstats-index SOURCE_INDEX=mstats20260818 YEARLY_INDEX=mstats20260819 mapping作成後に全recordを複製'
 	@echo 'make replace-ncc-index YEARLY_INDEX=mstats20260819 NCC CSVを生成・検査・転送後、指定物理indexの旧NCC系列を削除して再投入'
@@ -765,16 +770,32 @@ check-latest-id-collisions:
 	 [[ -z $$duplicates ]] || { echo "duplicate IDs across latest CSVs:"; print -r -- "$$duplicates"; exit 1; }; \
 	 echo "latest CSV cross-validation=ok files=$$#files"
 
-mortyear-catalog-csv:
+morttr-catalog-csv:
 	@patterns=(jp-yearly jp-infant-yearly us-yearly jp-yearly-cfm \
 	  jp-dcause-weekly stmf-weekly exdeaths-weekly \
-	  un-wpp-yearly oecd-infant-yearly); \
+	  un-wpp-yearly oecd-infant-yearly covid-vaxx-weekly); \
 	 files=(); for pattern in $$patterns; do candidates=("$(DATA_DIR)/$${pattern}-"<->-<->.csv(Nom)); \
 	   (( $$#candidates )) || { echo "latest CSV is missing: $$pattern"; exit 1; }; files+=("$${candidates[1]}"); done; \
 	 started=$$SECONDS; args=(); for file in $$files; do args+=(--catalog-csv "$$file"); done; \
 	 mkdir -p "$(CATALOG_DIR)"; \
-	 REQUEST_METHOD=GET ruby "$(ROOT)/../web/mortyear2.rb" --index "$(YEARLY_INDEX)" --cache-dir "$(CATALOG_DIR)" --rebuild-catalog "$${args[@]}"; \
-	 echo "[timing] mortyear catalog from CSV: $$((SECONDS - started))s files=$$#files"
+	 REQUEST_METHOD=GET ruby "$(MORTTR)" --index "$(YEARLY_INDEX)" --cache-dir "$(CATALOG_DIR)" --rebuild-catalog "$${args[@]}"; \
+	 echo "[timing] morttr catalog from CSV: $$((SECONDS - started))s files=$$#files"
+
+# 旧target名は手順書やshell履歴との互換用に残す。
+# Keep the former target name for documentation and shell-history compatibility.
+mortyear-catalog-csv: morttr-catalog-csv
+
+morttr-qr:
+	@command -v qrencode >/dev/null || { echo 'qrencodeが必要です。'; exit 1; }; \
+	 tmp="$(MORTTR_QR).tmp"; qrencode -t SVG -o "$$tmp" "$(MORTTR_URL)"; mv "$$tmp" "$(MORTTR_QR)"; \
+	 echo "created $(MORTTR_QR) -> $(MORTTR_URL)"
+
+morttr-check:
+	@ruby -c "$(MORTTR)"
+	@node --check "$(ROOT)/bin/test-web-actions.js"
+	@ruby "$(ROOT)/bin/test-web.rb" --ids MY01,MY31,MY32,MY33
+	@node "$(ROOT)/bin/test-web-dom.js" --ids MY01,MY31,MY32,MY33
+	@node "$(ROOT)/bin/test-web-actions.js" --ids MY31
 
 reset-mstats-index:
 	@[[ "$(YEARLY_INDEX)" == mstats<-> ]] || { echo 'YEARLY_INDEXはmstatsに年月日等を続けた物理index名に限定します。'; exit 1; }; \

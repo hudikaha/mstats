@@ -70,3 +70,10 @@ years=2019~2021-2025
 ```
 
 These are URL representations, not Elasticsearch document-ID components.
+
+## Weekly mortality deficits
+
+In weekly views of `morttr.rb`, `include_deficit=1` includes negative weekly
+differences below the baseline in both the trend and cumulative panels. Without
+this parameter, negative differences are treated as zero and the existing
+cumulative excess-mortality display is preserved.

@@ -120,9 +120,9 @@ const tests = [
   },
   {
     id: 'MY31', summary: '表示開始年と新型コロナ死亡・ワクチン全体接種を保持',
-    action: `(() => { const url = new URL(location.href); url.searchParams.set('start_year', '2019'); history.replaceState(null, '', url); const slider = document.querySelector('#start-year-slider'); slider.value = '2020'; slider.dispatchEvent(new Event('input', {bubbles:true})); document.querySelector('#covid-overlay-checkbox').click(); document.querySelector('#vaxx-overlay-checkbox').click(); return true; })()`,
+    action: `(() => { const url = new URL(location.href); url.searchParams.set('start_year', '2019'); history.replaceState(null, '', url); const slider = document.querySelector('#start-year-slider'); slider.value = '2020'; slider.dispatchEvent(new Event('input', {bubbles:true})); const deficit = document.querySelector('#deficit-checkbox'); if (deficit.checked) deficit.click(); deficit.click(); document.querySelector('#covid-overlay-checkbox').click(); document.querySelector('#vaxx-overlay-checkbox').click(); return true; })()`,
     noNavigation: true,
-    expect: `(() => new URL(location.href).searchParams.get('start_year') === '2020' && document.querySelector('#start-year-hidden')?.value === '2020' && document.querySelector('#start-year-slider')?.max === '2020' && document.querySelector('#start-year-slider')?.value === '2020' && document.querySelector('#covid-overlay-checkbox')?.checked && document.querySelector('#vaxx-overlay-checkbox')?.checked && window.mortyearView?.signal('show_covid_overlay') === true && window.mortyearView?.signal('show_vaxx_overlay') === true)()`
+    expect: `(() => new URL(location.href).searchParams.get('start_year') === '2020' && new URL(location.href).searchParams.get('include_deficit') === '1' && document.querySelector('#start-year-hidden')?.value === '2020' && document.querySelector('#start-year-slider')?.max === '2020' && document.querySelector('#start-year-slider')?.value === '2020' && document.querySelector('#deficit-checkbox')?.checked && document.querySelector('#covid-overlay-checkbox')?.checked && document.querySelector('#vaxx-overlay-checkbox')?.checked && weeklyValues.some(item => item.excess < 0) && window.mortyearView?.signal('include_deficit') === true && window.mortyearView?.signal('show_covid_overlay') === true && window.mortyearView?.signal('show_vaxx_overlay') === true)()`
   }
 ].filter(test => !selectedIds || selectedIds.includes(test.id));
 
@@ -153,7 +153,7 @@ const tests = [
     } catch (error) {
       let state = null;
       try {
-        state = client && await evaluate(client.send, `({url: location.href, checked: [...document.querySelectorAll('input:checked')].map(input => [input.name, input.value])})`);
+        state = client && await evaluate(client.send, `({url: location.href, checked: [...document.querySelectorAll('input:checked')].map(input => [input.name, input.value]), deficitSignal: window.mortyearView?.signal('include_deficit'), negativeWeeks: typeof weeklyValues === 'undefined' ? null : weeklyValues.filter(item => item.excess < 0).length, graphText: document.querySelector('#mortyear-vis')?.textContent.slice(-300)})`);
       } catch (_error) {}
       errors.push(`${error.name}: ${error.message} state=${JSON.stringify(state)}`);
     } finally {
