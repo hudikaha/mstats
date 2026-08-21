@@ -301,8 +301,16 @@ selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric ==
 selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
-weekly_method = %w[none five_year farrington euromomo].include?(cgi['weekly_method']) ? cgi['weekly_method'] : 'none'
-weekly_baseline = cgi['weekly_baseline'] == 'rolling' ? 'rolling' : 'fixed'
+weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.split(/[~,]/) } &
+                 %w[five_year farrington euromomo]
+weekly_baselines = cgi.params.fetch('weekly_baseline', []).flat_map { |value| value.split(/[~,]/) } &
+                   %w[fixed rolling]
+weekly_methods = ['five_year'] if weekly_methods.empty?
+weekly_baselines = ['fixed'] if weekly_baselines.empty?
+weekly_methods = [weekly_methods.first] if mode == 'country'
+weekly_baselines = [weekly_baselines.first] if mode == 'country'
+weekly_method = weekly_methods.first
+weekly_baseline = weekly_baselines.first
 $mortyear_period = selected_period
 $mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
 # 日本語: 暦年の英国とSTMF週次の英国地域を期間切替時に相互変換する。
@@ -1311,7 +1319,7 @@ def prepend_monthly_crude(weekly_rows, monthly_rows, mode, selected_locations, s
     # Place the monthly average at mid-month instead of the first day of the month.
     midpoint = date + (Date.new(date.year, date.month, -1).day - 1) / 2
     series_key = mode == 'country' ? loc :
-      "#{selected_locations.first}-#{selected_ages.join('+')}-#{cause}"
+      "#{selected_locations.first}-#{selected_ages.join('+')}-vital-#{cause}"
     { loc: loc, dcode: cause, date: midpoint.iso8601,
       observed: row[:age_all].to_f, series: series_key,
       detail_period: $l == :ja ? '月' : 'Month' }
@@ -2564,7 +2572,7 @@ weekly_context = if selected_period == 'weekly' ||
                    weekly_display_rows(count_rows, rate_rows, selected_metric, selected_ages,
                                        asr_weights: asr_stmf_weights).map do |row|
                      series_key = mode == 'country' ? row[:loc] :
-                       "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:dcode]}"
+                       "#{selected_locations.first}-#{selected_ages.join('+')}-vital-#{row[:dcode]}"
                      row.merge(series: series_key)
                    end
                  else
@@ -2601,16 +2609,20 @@ else
     row.merge(detail_period: $l == :ja ? '週' : 'Week')
   end
 end
-weekly_analysis = if selected_period == 'weekly' && weekly_method != 'none'
-                    weekly_baseline_analysis(weekly_context, method: weekly_method,
-                                             baseline: weekly_baseline, metric: selected_metric)
-                  else
-                    []
-                  end
-weekly_analysis_by_key = weekly_analysis.to_h { |row| [[row[:series], row[:date]], row] }
-weekly_context = weekly_context.map do |row|
-  analysis = weekly_analysis_by_key[[row[:series], row[:date]]]
-  analysis ? row.merge(analysis.reject { |key, _value| %i[series date].include?(key) }) : row
+weekly_combinations = weekly_methods.product(weekly_baselines)
+if selected_period == 'weekly'
+  base_weekly_context = weekly_context
+  weekly_context = weekly_combinations.flat_map do |method, baseline|
+    analysis = weekly_baseline_analysis(base_weekly_context, method: method,
+                                        baseline: baseline, metric: selected_metric)
+    analysis_by_key = analysis.to_h { |row| [[row[:series], row[:date]], row] }
+    base_weekly_context.map do |row|
+      result = analysis_by_key[[row[:series], row[:date]]]
+      combined_series = "#{row[:series]}--#{method}--#{baseline}"
+      result ? row.merge(result.reject { |key, _value| %i[series date].include?(key) }, series: combined_series) :
+        row.merge(series: combined_series)
+    end
+  end
 end
 # 日本語: 回帰用の年齢階級値はHTMLへ重複埋込みせず、計算後に除く。
 # English: Remove duplicated model strata after calculation instead of embedding them in HTML.
@@ -2639,10 +2651,28 @@ cutoff_label = lambda do |year|
   year.to_s
 end
 available_specs = series_specs.select { |key, _age, _cause, _label| chart_data.any? { |row| row[:series] == key } }
+if selected_period == 'weekly'
+  method_labels = {
+    'five_year' => ($l == :ja ? '5年平均' : 'Five-year average'),
+    'farrington' => ($l == :ja ? 'Farrington型' : 'Farrington-style'),
+    'euromomo' => ($l == :ja ? 'EuroMOMO型' : 'EuroMOMO-style')
+  }
+  baseline_labels = {
+    'fixed' => ($l == :ja ? '基準期間2015–2019' : 'baseline 2015–2019'),
+    'rolling' => ($l == :ja ? '直前5年移動基準' : 'previous-five-year rolling baseline')
+  }
+  available_specs = available_specs.flat_map do |key, ages, cause, label, dataset|
+    weekly_combinations.map do |method, baseline|
+      ["#{key}--#{method}--#{baseline}", ages, cause,
+       "#{label} — #{method_labels.fetch(method)}・#{baseline_labels.fetch(baseline)}", dataset]
+    end
+  end
+end
 
 if opts[:summary]
   summary = available_specs.to_h do |key, _age, _cause, label|
-    values = chart_data.select { |row| row[:series] == key }
+    base_key = key.sub(/--(?:five_year|farrington|euromomo)--(?:fixed|rolling)\z/, '')
+    values = chart_data.select { |row| row[:series] == base_key }
     last_cutoff = values.map { |row| row[:train_to] }.max
     requested_summary_cutoff = values.map { |row| row[:train_to] }.include?(default_cutoff) ? default_cutoff : last_cutoff
     selected_values = values.select { |row| interval_mode == 'analytic' ? row[:interval_method] == 'analytic' : row[:auto_selected] }
@@ -2735,13 +2765,12 @@ puts <<~HTML
       <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次' : 'Weekly' }</label>
     </fieldset>
     <fieldset id="weekly-method-fieldset" style="#{selected_period == 'weekly' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '週次基準線' : 'Weekly baseline' }</legend>
-      <label><input type="radio" name="weekly_method" value="none" #{checked(weekly_method == 'none')}>#{ $l == :ja ? 'なし' : 'None' }</label>
-      <label><input type="radio" name="weekly_method" value="five_year" #{checked(weekly_method == 'five_year')}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
-      <label><input type="radio" name="weekly_method" value="farrington" #{checked(weekly_method == 'farrington')}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
-      <label><input type="radio" name="weekly_method" value="euromomo" #{checked(weekly_method == 'euromomo')}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="five_year" #{checked(weekly_methods.include?('five_year'))}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="farrington" #{checked(weekly_methods.include?('farrington'))}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="euromomo" #{checked(weekly_methods.include?('euromomo'))}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
       &nbsp;
-      <label><input type="radio" name="weekly_baseline" value="fixed" #{checked(weekly_baseline == 'fixed')}>#{ $l == :ja ? '2015–2019固定' : 'Fixed 2015–2019' }</label>
-      <label><input type="radio" name="weekly_baseline" value="rolling" #{checked(weekly_baseline == 'rolling')}>#{ $l == :ja ? '直前5年' : 'Previous five years' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed" #{checked(weekly_baselines.include?('fixed'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="rolling" #{checked(weekly_baselines.include?('rolling'))}>#{ $l == :ja ? '直前5年移動基準' : 'Previous-five-year rolling baseline' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
@@ -2957,6 +2986,11 @@ puts <<~HTML
         const causes = params.getAll('dcodes');
         params.delete('dcodes');
         if (causes.length) params.set('dcodes', causes.join('~'));
+        ['weekly_method', 'weekly_baseline'].forEach(name => {
+          const values = params.getAll(name);
+          params.delete(name);
+          if (values.length) params.set(name, values.join('~'));
+        });
         // 日本語: 期間を切り替えたsubmitでは旧期間のlocation codeがformに残るため、
         // 暦年はGBR、インフルエンザ年はENGへcanonical化する。
         // English: On period changes the form still contains the previous period's location
@@ -2994,14 +3028,20 @@ puts <<~HTML
         const locations = Array.from(document.querySelectorAll('.location-option'));
         const causes = Array.from(document.querySelectorAll('.cause-option'));
         const seasonAges = Array.from(document.querySelectorAll('.age-season-option'));
+        const weeklyMethods = Array.from(document.querySelectorAll('.weekly-method-option'));
+        const weeklyBaselines = Array.from(document.querySelectorAll('.weekly-baseline-option'));
         if (selected === 'country') {
           setInputMode(locations, 'checkbox', 'c');
           setInputMode(causes, 'radio', 'dcodes');
           setInputMode(seasonAges, 'radio', 'age');
+          setInputMode(weeklyMethods, 'radio', 'weekly_method');
+          setInputMode(weeklyBaselines, 'radio', 'weekly_baseline');
         } else {
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'dcodes');
           setInputMode(seasonAges, 'checkbox', 'age');
+          setInputMode(weeklyMethods, 'checkbox', 'weekly_method');
+          setInputMode(weeklyBaselines, 'checkbox', 'weekly_baseline');
         }
         document.querySelectorAll('.location-region-toggle').forEach(toggle => {
           toggle.style.display = selected === 'country' ? '' : 'none';
@@ -3572,23 +3612,31 @@ else
                   else
                     'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
                   end
-  weekly_excess_enabled = selected_period == 'weekly' && weekly_method != 'none'
+  weekly_excess_enabled = selected_period == 'weekly'
   weekly_excess_title = if $l == :ja
                           selected_metric == 'deaths' ? '超過死亡数' : '超過死亡率'
                         else
                           selected_metric == 'deaths' ? 'Excess deaths' : 'Excess mortality rate'
                         end
-  weekly_excess_lower_title = if weekly_method == 'five_year'
+  weekly_excess_lower_title = if weekly_methods == ['five_year']
                                 $l == :ja ? '過去5年最大値超過' : 'Above five-year maximum'
-                              else
+                              elsif !weekly_methods.include?('five_year')
                                 $l == :ja ? '予測上限超過' : 'Above prediction limit'
+                              else
+                                $l == :ja ? '保守的超過' : 'Conservative excess'
                               end
   weekly_excess_upper_title = $l == :ja ? '基準線超過' : 'Above baseline'
   if weekly_excess_enabled
+    dark_red_note = if weekly_methods.include?('five_year') && weekly_methods.length > 1
+                      $l == :ja ? '5年平均では過去5年最大値超過、Farrington型・EuroMOMO型では予測上限超過' :
+                        'above the five-year maximum for the five-year average and above the prediction limit for Farrington-style and EuroMOMO-style'
+                    else
+                      weekly_excess_lower_title
+                    end
     interval_note += if $l == :ja
-                       " 下段の薄赤は#{weekly_excess_upper_title}、濃赤は#{weekly_excess_lower_title}です。"
+                       " 下段の薄赤は#{weekly_excess_upper_title}、濃赤は#{dark_red_note}です。"
                      else
-                       " In the lower panel, light red is #{weekly_excess_upper_title.downcase}; dark red is #{weekly_excess_lower_title.downcase}."
+                       " In the lower panel, light red is #{weekly_excess_upper_title.downcase}; dark red is #{dark_red_note.downcase}."
                      end
   end
   puts <<~HTML
