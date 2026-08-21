@@ -301,6 +301,8 @@ selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric ==
 selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
+weekly_method = %w[none five_year farrington euromomo].include?(cgi['weekly_method']) ? cgi['weekly_method'] : 'none'
+weekly_baseline = cgi['weekly_baseline'] == 'rolling' ? 'rolling' : 'fixed'
 $mortyear_period = selected_period
 $mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
 # 日本語: 暦年の英国とSTMF週次の英国地域を期間切替時に相互変換する。
@@ -1035,9 +1037,7 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
 
     observed = if metric == 'asr'
                  next unless selected_asr_ages.all? { |age| rate[age.to_sym]&.to_f&.positive? }
-                 selected_asr_ages.sum do |age|
-                   rate[age.to_sym].to_f * weights.fetch(age).to_f / weight_total
-                 end
+                 selected_asr_ages.sum { |age| rate[age.to_sym].to_f * weights.fetch(age).to_f / weight_total }
                else
                  values = ages.map { |age| count[age.to_sym] }
                  rate_values = ages.map { |age| rate[age.to_sym] }
@@ -1048,8 +1048,24 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
                  end
                  deaths * DAYS_PER_YEAR * 100_000 / (7 * population)
                end
+    strata = if metric == 'asr'
+               selected_asr_ages.map do |age|
+                 deaths = count[age.to_sym].to_f
+                 age_rate = rate[age.to_sym].to_f
+                 population = deaths * DAYS_PER_YEAR * 100_000 / (7 * age_rate)
+                 { age: age, deaths: deaths, population: population,
+                   weight: weights.fetch(age).to_f / weight_total }
+               end
+             else
+               values = ages.map { |age| count[age.to_sym].to_f }
+               rate_values = ages.map { |age| rate[age.to_sym].to_f }
+               population = ages.each_index.sum do |index|
+                 values[index] * DAYS_PER_YEAR * 100_000 / (7 * rate_values[index])
+               end
+               [{ age: 'combined', deaths: values.sum, population: population, weight: 1.0 }]
+             end
     { loc: count[:loc].to_s.upcase, dcode: count[:dcode],
-      date: count[:date], observed: observed }
+      date: count[:date], observed: observed, model_strata: strata }
   end.sort_by { |row| [row[:loc], row[:date].to_s] }
 end
 
@@ -1062,9 +1078,187 @@ def weekly_display_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
     values = ages.map { |age| count[age.to_sym] }
     next if values.any?(&:nil?)
 
+    deaths = values.sum(&:to_f)
     { loc: count[:loc].to_s.upcase, dcode: count[:dcode], date: count[:date],
-      observed: values.sum(&:to_f) }
+      observed: deaths, model_strata: [{ age: 'combined', deaths: deaths, population: 1.0, weight: 1.0 }] }
   end.sort_by { |row| [row[:loc], row[:date].to_s] }
+end
+
+# 日本語: offset付きPoisson回帰をIRLSで当て、予測分散に過分散と係数推定誤差を含める。
+# English: Fit an offset Poisson GLM by IRLS and include overdispersion and coefficient uncertainty in predictions.
+def fit_weekly_poisson(samples, robust: false)
+  return nil if samples.length < 4
+
+  active = samples
+  fit = nil
+  (robust ? 2 : 1).times do
+    p = active.first[:features].length
+    beta = Vector.elements(Array.new(p, 0.0))
+    40.times do
+      xtwx = Matrix.zero(p)
+      xtwz = Vector.elements(Array.new(p, 0.0))
+      active.each do |sample|
+        x = Vector.elements(sample[:features])
+        offset = Math.log([sample[:exposure].to_f, 1e-12].max)
+        eta = [[offset + x.inner_product(beta), 20.0].min, -20.0].max
+        mu = Math.exp(eta)
+        z = eta + (sample[:deaths].to_f - mu) / mu
+        xtwx += x.to_matrix * x.to_matrix.transpose * mu
+        xtwz += x * (mu * (z - offset))
+      end
+      updated = xtwx.inverse * xtwz
+      break beta = updated if (updated - beta).magnitude < 1e-8
+      beta = updated
+    rescue ExceptionForMatrix::ErrNotRegular, ExceptionForMatrix::ErrDimensionMismatch
+      return nil
+    end
+    mus = active.map do |sample|
+      Math.exp(Math.log([sample[:exposure].to_f, 1e-12].max) +
+               Vector.elements(sample[:features]).inner_product(beta))
+    end
+    pearson = active.each_index.sum do |index|
+      (active[index][:deaths].to_f - mus[index])**2 / [mus[index], 1e-12].max
+    end
+    phi = [pearson / [active.length - p, 1].max, 1.0].max
+    xtwx = Matrix.zero(p)
+    active.each_with_index do |sample, index|
+      x = Vector.elements(sample[:features])
+      xtwx += x.to_matrix * x.to_matrix.transpose * mus[index]
+    end
+    covariance = xtwx.inverse * phi
+    fit = { beta: beta, covariance: covariance, dispersion: phi }
+    break unless robust
+
+    filtered = active.each_with_index.filter_map do |sample, index|
+      residual = (sample[:deaths].to_f - mus[index]) / Math.sqrt([phi * mus[index], 1e-12].max)
+      sample if residual.abs <= 2.58
+    end
+    break if filtered.length < [p + 2, 4].max || filtered.length == active.length
+    active = filtered
+  rescue ExceptionForMatrix::ErrNotRegular, ExceptionForMatrix::ErrDimensionMismatch
+    return nil
+  end
+  fit
+end
+
+def weekly_poisson_prediction(fit, features, exposure)
+  x = Vector.elements(features)
+  mu = Math.exp(Math.log([exposure.to_f, 1e-12].max) + x.inner_product(fit[:beta]))
+  coefficient_variance = (x.to_matrix.transpose * fit[:covariance] * x.to_matrix)[0, 0]
+  [mu, fit[:dispersion] * mu + mu**2 * [coefficient_variance, 0.0].max]
+end
+
+def weekly_reference_years(target_year, baseline)
+  baseline == 'fixed' ? (2015..2019).to_a : ((target_year - 5)..(target_year - 1)).to_a
+end
+
+def circular_week_distance(left, right)
+  [(left - right).abs, 52 - (left - right).abs, 53 - (left - right).abs].min
+end
+
+# 日本語: 週次観測値に固定2015–2019年または直前5年の基準線を計算する。
+# English: Calculate a fixed 2015-2019 or preceding-five-year baseline for weekly observations.
+def weekly_baseline_analysis(rows, method:, baseline:, metric:)
+  rows.group_by { |row| row[:series] }.flat_map do |series, series_rows|
+    usable = series_rows.select { |row| row[:model_strata] && row[:date] }.sort_by { |row| row[:date] }
+    by_age = Hash.new { |hash, age| hash[age] = [] }
+    fit_cache = {}
+    usable.each do |row|
+      date = Date.iso8601(row[:date].to_s)
+      row[:model_strata].each do |stratum|
+        by_age[stratum[:age]] << stratum.merge(date: date, year: date.cwyear, week: date.cweek)
+      end
+    end
+    usable.filter_map do |row|
+      target_date = Date.iso8601(row[:date].to_s)
+      target_year = target_date.cwyear
+      next if baseline == 'fixed' && target_year < 2020
+      reference_years = weekly_reference_years(target_year, baseline)
+      estimates = row[:model_strata].filter_map do |target|
+        history = by_age[target[:age]].select { |item| reference_years.include?(item[:year]) }
+        next if history.empty?
+        exposure = metric == 'deaths' ? 1.0 : target[:population].to_f * 7.0 / DAYS_PER_YEAR
+        if method == 'five_year'
+          refs = history.select { |item| item[:week] == target_date.cweek }
+          next unless refs.length == reference_years.length
+          values = refs.map { |item| item[:deaths].to_f }
+          { age: target[:age], weight: target[:weight].to_f, population: target[:population].to_f,
+            expected: values.sum / values.length, variance: nil, lower: values.min, upper: values.max }
+        else
+          samples = if method == 'farrington'
+                      history.select { |item| circular_week_distance(item[:week], target_date.cweek) <= 3 }
+                    else
+                      history.select { |item| (16..25).cover?(item[:week]) || (37..44).cover?(item[:week]) }
+                    end
+          next if samples.length < 10
+          cache_key = [target[:age], method, reference_years,
+                       method == 'farrington' ? target_date.cweek : nil]
+          cached = fit_cache[cache_key]
+          origin = cached ? cached[:origin] : samples.map { |item| item[:date] }.min
+          features_for = lambda do |item|
+            trend = (item[:date] - origin).to_f / DAYS_PER_YEAR
+            if method == 'euromomo'
+              angle = 2 * Math::PI * item[:week].to_f / 52.1775
+              [1.0, trend, Math.sin(angle), Math.cos(angle)]
+            else
+              [1.0, trend]
+            end
+          end
+          fit_samples = samples.map do |item|
+            item_exposure = metric == 'deaths' ? 1.0 : item[:population].to_f * 7.0 / DAYS_PER_YEAR
+            { deaths: item[:deaths], exposure: item_exposure, features: features_for.call(item) }
+          end
+          fit = cached ? cached[:fit] : fit_weekly_poisson(fit_samples, robust: method == 'farrington')
+          next unless fit
+          fit_cache[cache_key] ||= { fit: fit, origin: origin }
+          target_item = target.merge(date: target_date, week: target_date.cweek)
+          expected, variance = weekly_poisson_prediction(fit, features_for.call(target_item), exposure)
+          { age: target[:age], weight: target[:weight].to_f, population: target[:population].to_f,
+            expected: expected, variance: variance }
+        end
+      end
+      next unless estimates.length == row[:model_strata].length
+
+      if metric == 'deaths'
+        expected = estimates.sum { |item| item[:expected] }
+        variance = estimates.any? { |item| item[:variance].nil? } ? nil : estimates.sum { |item| item[:variance] }
+        lower = estimates.sum { |item| item[:lower].to_f }
+        upper = estimates.sum { |item| item[:upper].to_f }
+      elsif metric == 'crude_rate'
+        population = estimates.sum { |item| item[:population] }
+        factor = DAYS_PER_YEAR * 100_000.0 / (7.0 * population)
+        expected = estimates.sum { |item| item[:expected] } * factor
+        variance = estimates.any? { |item| item[:variance].nil? } ? nil : estimates.sum { |item| item[:variance] } * factor**2
+        lower = estimates.sum { |item| item[:lower].to_f } * factor
+        upper = estimates.sum { |item| item[:upper].to_f } * factor
+      else
+        expected = estimates.sum do |item|
+          item[:expected] * DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+        end
+        variance = if estimates.any? { |item| item[:variance].nil? }
+                     nil
+                   else
+                     estimates.sum do |item|
+                       factor = DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+                       item[:variance] * factor**2
+                     end
+                   end
+        lower = estimates.sum do |item|
+          item[:lower].to_f * DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+        end
+        upper = estimates.sum do |item|
+          item[:upper].to_f * DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
+        end
+      end
+      if variance
+        margin = 1.96 * Math.sqrt([variance, 0.0].max)
+        lower = [expected - margin, 0.0].max
+        upper = expected + margin
+      end
+      { series: series, date: row[:date], expected: expected, lower: lower, upper: upper,
+        excess: row[:observed].to_f - expected, method: method, baseline: baseline }
+    end
+  end
 end
 
 # 日本語: 日本の週次粗死亡率を週死亡数と各月の公式人口から人口日で再計算する。
@@ -2403,6 +2597,20 @@ else
     row.merge(detail_period: $l == :ja ? '週' : 'Week')
   end
 end
+weekly_analysis = if selected_period == 'weekly' && weekly_method != 'none'
+                    weekly_baseline_analysis(weekly_context, method: weekly_method,
+                                             baseline: weekly_baseline, metric: selected_metric)
+                  else
+                    []
+                  end
+weekly_analysis_by_key = weekly_analysis.to_h { |row| [[row[:series], row[:date]], row] }
+weekly_context = weekly_context.map do |row|
+  analysis = weekly_analysis_by_key[[row[:series], row[:date]]]
+  analysis ? row.merge(analysis.reject { |key, _value| %i[series date].include?(key) }) : row
+end
+# 日本語: 回帰用の年齢階級値はHTMLへ重複埋込みせず、計算後に除く。
+# English: Remove duplicated model strata after calculation instead of embedding them in HTML.
+weekly_context.each { |row| row.delete(:model_strata) }
 weekly_context = insert_detail_gaps(weekly_context)
 detail_series = weekly_context.filter_map { |row| row[:series] if row[:observed] }.uniq
 
@@ -2521,6 +2729,15 @@ puts <<~HTML
       <label><input class="period-option" type="radio" name="period" value="flu27" #{checked(selected_period == 'flu27')}>#{ $l == :ja ? '第27週' : 'W27' }</label>
       <label><input class="period-option" type="radio" name="period" value="flu36" #{checked(selected_period == 'flu36')}>#{ $l == :ja ? '第36週）' : 'W36)' }</label>
       <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次' : 'Weekly' }</label>
+    </fieldset>
+    <fieldset id="weekly-method-fieldset" style="#{selected_period == 'weekly' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '週次基準線' : 'Weekly baseline' }</legend>
+      <label><input type="radio" name="weekly_method" value="none" #{checked(weekly_method == 'none')}>#{ $l == :ja ? 'なし' : 'None' }</label>
+      <label><input type="radio" name="weekly_method" value="five_year" #{checked(weekly_method == 'five_year')}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
+      <label><input type="radio" name="weekly_method" value="farrington" #{checked(weekly_method == 'farrington')}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input type="radio" name="weekly_method" value="euromomo" #{checked(weekly_method == 'euromomo')}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
+      &nbsp;
+      <label><input type="radio" name="weekly_baseline" value="fixed" #{checked(weekly_baseline == 'fixed')}>#{ $l == :ja ? '2015–2019固定' : 'Fixed 2015–2019' }</label>
+      <label><input type="radio" name="weekly_baseline" value="rolling" #{checked(weekly_baseline == 'rolling')}>#{ $l == :ja ? '直前5年' : 'Previous five years' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
@@ -2969,7 +3186,9 @@ puts <<~HTML
       }
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
-        const isCalendarPeriod = document.querySelector('.period-option:checked').value === 'calendar';
+        const selectedPeriod = document.querySelector('.period-option:checked').value;
+        const isCalendarPeriod = selectedPeriod === 'calendar';
+        document.getElementById('weekly-method-fieldset').style.display = selectedPeriod === 'weekly' ? '' : 'none';
         const fixedAllAges = metric === 'birth_rate';
         const sexFieldset = document.getElementById('sex-fieldset');
         sexFieldset.style.display = metric === 'birth_rate' ? 'none' : '';
@@ -3338,7 +3557,13 @@ else
                   end
     [key, short_label]
   end
-  interval_note = if $l == :ja
+  interval_note = if selected_period == 'weekly'
+                    if $l == :ja
+                      '週次基準線はSTMF由来の週次値だけで計算し、過去の月次補完値は使いません。5年平均の帯は同じ週の最小・最大、Farrington型は対象週の前後3週、EuroMOMO型は第16–25週・第37–44週を基準にします。'
+                    else
+                      'Weekly baselines use only STMF-derived weekly values, never the historical monthly supplement. The five-year average is accompanied by the same-week minimum-to-maximum band; Farrington-style uses ±3 weeks; EuroMOMO-style uses W16–25 and W37–44 as baseline weeks.'
+                    end
+                  elsif $l == :ja
                     '準ポアソンは、観測された過分散を反映した近似95%予測区間です。ポアソンでは、計算済みなら10,000回シミュレーションによる区間へ切り替えられます（青：準ポアソン、緑：ポアソン近似、黄：シミュレーション）。'
                   else
                     'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
@@ -3411,6 +3636,14 @@ else
         {field:"dispersion", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '分散比' : 'Dispersion')}},
         {field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
       ];
+      const weeklyTooltip = [
+        {field:"date", type:"temporal", title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},
+        {field:"observed", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '観測値' : 'Observed')}},
+        {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '基準値' : 'Baseline')}},
+        {field:"lower", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '下限' : 'Lower')}},
+        {field:"upper", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '上限' : 'Upper')}},
+        {field:"excess", type:"quantitative", format:"+.2f", title:#{JSON.generate($l == :ja ? '差' : 'Difference')}}
+      ];
       const annualTransforms = [
         {filter: "!primary_weekly"},
         {filter: "toDate(datum.plot_date) >= toDate(display_start_date) && toDate(datum.plot_date) <= now()"},
@@ -3437,7 +3670,10 @@ else
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#174a73", strokeDash:[7,4], strokeWidth:2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"expected",type:"quantitative"}}},
           {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.observed)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"point", opacity:0, size:260, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:weeklyTooltip}},
           {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
           {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"!primary_weekly"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
