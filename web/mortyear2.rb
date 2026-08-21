@@ -258,7 +258,7 @@ $mortyear_category = CANCER_DATASETS.fetch(selected_dataset).fetch(:category)
 $mortyear_types = CANCER_DATASETS.fetch(selected_dataset).fetch(:types)
 requested_locations = cgi.params.fetch('c', []).flat_map { |value| value.split(/[~,]/) }.
                       map(&:upcase).uniq
-selected_period = %w[calendar flu27 flu36].include?(cgi['period']) ? cgi['period'] : 'calendar'
+selected_period = %w[calendar flu27 flu36 weekly].include?(cgi['period']) ? cgi['period'] : 'calendar'
 if selected_dataset != 'vital'
   selected_period = 'calendar'
   mode = 'series'
@@ -1048,6 +1048,20 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
                end
     { loc: count[:loc].to_s.upcase, dcode: count[:dcode],
       date: count[:date], observed: observed }
+  end.sort_by { |row| [row[:loc], row[:date].to_s] }
+end
+
+# 日本語: 週次主表示では死亡数を率へ変換せず、その週の選択年齢死亡数として返す。
+# English: For the primary weekly view, return selected-age weekly death counts without rate conversion.
+def weekly_display_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
+  return weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: asr_weights) unless metric == 'deaths'
+
+  count_rows.filter_map do |count|
+    values = ages.map { |age| count[age.to_sym] }
+    next if values.any?(&:nil?)
+
+    { loc: count[:loc].to_s.upcase, dcode: count[:dcode], date: count[:date],
+      observed: values.sum(&:to_f) }
   end.sort_by { |row| [row[:loc], row[:date].to_s] }
 end
 
@@ -1944,22 +1958,23 @@ if selected_dataset != 'vital'
   menu_catalog = nil
   annual_catalog.select! { |code, _entry| code == 'JPN' }
 end
+location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
+weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('crude') }.keys
 if selected_period != 'calendar'
-  location_rates = available_location_rates(index: opts[:index], fixture: fixture_data)
-  weekly_codes = location_rates.select { |_code, rates| rates.include?('') && rates.include?('crude') }.keys
   if menu_catalog
-    weekly_codes.select! do |code|
+    period_codes = weekly_codes.select do |code|
       menu_catalog.fetch(code, {}).fetch(:series, []).any? do |item|
-        item[:period] == selected_period && item[:metric] == selected_metric && item[:displayable]
+        (selected_period == 'weekly' || item[:period] == selected_period) &&
+          item[:metric] == selected_metric && item[:displayable]
       end
     end
+    weekly_codes = period_codes
   end
-  annual_catalog.select! { |code, _entry| weekly_codes.include?(code) }
 end
 $annual_catalog = annual_catalog
 metric_locations = annual_catalog.select do |code, catalog|
   selected_period == 'calendar' ? annual_metric_available?(code, catalog, selected_metric) :
-    %w[deaths crude_rate asr].include?(selected_metric)
+    weekly_codes.include?(code) && %w[deaths crude_rate asr].include?(selected_metric)
 end.keys.sort
 metric_locations = ['JPN'] if selected_dataset != 'vital' && annual_catalog.key?('JPN')
 metric_locations = ['JPN'].select { |code| annual_catalog.key?(code) } if selected_metric == 'std_deaths'
@@ -2343,10 +2358,11 @@ chart_data.each do |row|
   date = selected_period == 'calendar' ? Date.new(row[:year], 1, 1) : Date.new(row[:year] + 1, 1, 1)
   row[:plot_date] = date.iso8601
 end
-weekly_context = if (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
+weekly_context = if selected_period == 'weekly' ||
+                    (selected_period != 'calendar' && %w[crude_rate asr].include?(selected_metric)) ||
                     detailed_calendar_rate
-                   weekly_rate_rows(count_rows, rate_rows, selected_metric, selected_ages,
-                                    asr_weights: asr_stmf_weights).map do |row|
+                   weekly_display_rows(count_rows, rate_rows, selected_metric, selected_ages,
+                                       asr_weights: asr_stmf_weights).map do |row|
                      series_key = mode == 'country' ? row[:loc] :
                        "#{selected_locations.first}-#{selected_ages.join('+')}-#{row[:dcode]}"
                      row.merge(series: series_key)
@@ -2502,11 +2518,7 @@ puts <<~HTML
       <span>#{ $l == :ja ? 'インフルエンザ年（開始:' : 'Influenza year (start:' }</span>
       <label><input class="period-option" type="radio" name="period" value="flu27" #{checked(selected_period == 'flu27')}>#{ $l == :ja ? '第27週' : 'W27' }</label>
       <label><input class="period-option" type="radio" name="period" value="flu36" #{checked(selected_period == 'flu36')}>#{ $l == :ja ? '第36週）' : 'W36)' }</label>
-      #{detail_series.any? ? %(<label><input id="weekly-view-checkbox" type="checkbox">#{ if monthly_supplement_enabled
-             $l == :ja ? '週次・月次表示' : 'Weekly/monthly view'
-           else
-             $l == :ja ? '週次表示' : 'Weekly view'
-           end }</label>) : ''}
+      <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次' : 'Weekly' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
@@ -2540,6 +2552,8 @@ REGION_LABELS.each do |region, region_names|
       code == 'JPN'
     elsif selected_period == 'calendar'
       annual_metric_available?(code, annual_catalog.fetch(code), selected_metric)
+    elsif selected_period == 'weekly'
+      weekly_codes.include?(code) && %w[deaths crude_rate asr].include?(selected_metric)
     else
       period_metric_available?(annual_catalog.fetch(code), selected_metric, selected_period)
     end
@@ -2548,18 +2562,14 @@ REGION_LABELS.each do |region, region_names|
   puts %(<details class="location-region" #{open ? 'open' : ''}><summary><span class="location-region-name">#{CGI.escapeHTML(region_names.fetch($l))}</span>（<span class="location-region-count">#{selectable_count}</span>）<input class="location-region-toggle" type="checkbox" title="#{CGI.escapeHTML(toggle_label)}" aria-label="#{CGI.escapeHTML(toggle_label)}"></summary><div class="mortyear-options">)
   codes.each do |code|
     names = location_names(code)
-    metrics = METRICS.keys.select do |metric|
-      if metric == 'std_deaths'
-        selected_period == 'calendar' && code == 'JPN'
-      elsif selected_period == 'calendar'
-        annual_metric_available?(code, annual_catalog.fetch(code), metric)
-      else
-        period_metric_available?(annual_catalog.fetch(code), metric, selected_period)
-      end
+    annual_metrics = METRICS.keys.select do |metric|
+      metric == 'std_deaths' ? code == 'JPN' : annual_metric_available?(code, annual_catalog.fetch(code), metric)
     end
+    detail_metrics = weekly_codes.include?(code) ? %w[deaths crude_rate asr] : []
+    metrics = selected_period == 'calendar' ? annual_metrics : detail_metrics
     hidden = !metrics.include?(selected_metric)
     type = mode == 'country' ? 'checkbox' : 'radio'
-    puts %(<label class="location-label" data-metrics="#{metrics.join(' ')}" style="#{hidden ? 'display:none' : ''}"><input class="location-option" type="#{type}" name="c" value="#{code}" #{checked(selected_locations.include?(code))} #{disabled(hidden)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
+    puts %(<label class="location-label" data-annual-metrics="#{annual_metrics.join(' ')}" data-weekly-metrics="#{detail_metrics.join(' ')}" style="#{hidden ? 'display:none' : ''}"><input class="location-option" type="#{type}" name="c" value="#{code}" #{checked(selected_locations.include?(code))} #{disabled(hidden)}>#{CGI.escapeHTML(names.fetch($l))}</label>)
   end
   puts %(</div></details>)
 end
@@ -2806,6 +2816,11 @@ puts <<~HTML
         });
         updateRegionToggles();
       }
+      function locationMetrics(label) {
+        const period = document.querySelector('.period-option:checked')?.value || 'calendar';
+        const value = period === 'calendar' ? label.dataset.annualMetrics : label.dataset.weeklyMetrics;
+        return (value || '').split(/\s+/).filter(Boolean);
+      }
       function syncCauseVisibility(restrictLocations = false) {
         const fieldset = document.getElementById('cause-fieldset');
         const causes = Array.from(document.querySelectorAll('.cause-option'));
@@ -2814,7 +2829,7 @@ puts <<~HTML
         const calendarPeriod = document.querySelector('.period-option:checked').value === 'calendar';
         const birthLocations = selectedLocations.length > 0 && selectedLocations.every(location => {
           const input = document.querySelector(`.location-option[value="${location}"]`);
-          return input && input.closest('label').dataset.metrics.split(' ').includes('birth_rate');
+          return input && locationMetrics(input.closest('label')).includes('birth_rate');
         });
         const japanContext = calendarPeriod && selectedLocations.length === 1 && selectedLocations[0] === 'JPN' && metric !== 'birth_rate';
         const scope = japanContext ? 'japan' :
@@ -2849,7 +2864,7 @@ puts <<~HTML
           const selectedCauses = causes.filter(input => input.dataset.causeScope === 'birth' && input.checked);
           document.querySelectorAll('.location-label').forEach(label => {
             const input = label.querySelector('.location-option');
-            const metricAvailable = label.dataset.metrics.split(/\s+/).includes('birth_rate');
+            const metricAvailable = locationMetrics(label).includes('birth_rate');
             const causeAvailable = selectedCauses.every(cause =>
               cause.dataset.locations.split(/\s+/).includes(input.value)
             );
@@ -2932,7 +2947,6 @@ puts <<~HTML
         applyAgeRange();
       });
       const storageKey = "mortyear-location-selection";
-      const isCalendarPeriod = #{selected_period == 'calendar' ? 'true' : 'false'};
       const hasRequestedLocations = #{requested_locations.empty? ? 'false' : 'true'};
       function rememberLocations() {
         const values = Array.from(document.querySelectorAll('.location-option:checked')).map(input => input.value);
@@ -2948,6 +2962,7 @@ puts <<~HTML
       }
       function syncMetric() {
         const metric = document.querySelector('.metric-option:checked').value;
+        const isCalendarPeriod = document.querySelector('.period-option:checked').value === 'calendar';
         const fixedAllAges = metric === 'birth_rate';
         const sexFieldset = document.getElementById('sex-fieldset');
         sexFieldset.style.display = metric === 'birth_rate' ? 'none' : '';
@@ -2958,10 +2973,10 @@ puts <<~HTML
         document.getElementById('age-fieldset').style.display = isCalendarPeriod && metric !== 'birth_rate' ? '' : 'none';
         document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod ? '' : 'none';
         document.querySelectorAll('.age-season-option').forEach(input => {
-          input.disabled = false;
+          input.disabled = isCalendarPeriod;
         });
         document.querySelectorAll('.age-option').forEach(input => {
-          input.disabled = metric === 'birth_rate';
+          input.disabled = metric === 'birth_rate' || !isCalendarPeriod;
           if (fixedAllAges) input.checked = input.value === 'age_all';
         });
         if (!fixedAllAges && document.querySelector('.age-special-option[value="age_all"]').checked) {
@@ -2969,7 +2984,7 @@ puts <<~HTML
         }
         ageSlider.style.display = fixedAllAges ? 'none' : '';
         document.querySelectorAll('.location-label').forEach(label => {
-          const available = label.dataset.metrics.split(/\s+/).includes(metric);
+          const available = locationMetrics(label).includes(metric);
           label.style.display = available ? "" : "none";
           label.querySelector('input').disabled = !available;
         });
@@ -3030,8 +3045,18 @@ puts <<~HTML
         const trainTo = document.getElementById('train-to-hidden');
         if (event.target.value === 'calendar' && trainTo.value === '2018') trainTo.value = '2019';
         if (event.target.value !== 'calendar' && trainTo.value === '2019') trainTo.value = '2018';
-        showLoading();
-        document.querySelector('.mortyear-form').requestSubmit();
+        // 日本語: 年次GBRと週次ENGを、再読込み前の選択欄でも対応付ける。
+        // English: Map annual GBR and weekly ENG in the controls before reloading.
+        const gbr = document.querySelector('.location-option[value="GBR"]');
+        const eng = document.querySelector('.location-option[value="ENG"]');
+        const sco = document.querySelector('.location-option[value="SCO"]');
+        if (event.target.value === 'calendar' && ((eng && eng.checked) || (sco && sco.checked)) && gbr) {
+          gbr.checked = true;
+        } else if (event.target.value !== 'calendar' && gbr && gbr.checked && eng) {
+          eng.checked = true;
+        }
+        syncMetric();
+        syncCauseVisibility();
       }));
       restoreLocations();
       syncAgeSlider();
@@ -3316,7 +3341,7 @@ else
         <output id="start-year-output">#{cutoff_label.call(default_start_year)}</output>
       </label>
       &nbsp;
-      <label>#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999'}–" }
+      <label style="#{selected_period == 'weekly' ? 'display:none' : ''}">#{ $l == :ja ? "学習期間 #{selected_period == 'calendar' ? '2000' : '1999'}–" : "Training period #{selected_period == 'calendar' ? '2000' : '1999'}–" }
         <input id="train-to-slider" type="range" min="#{cutoffs.min}" max="#{cutoffs.max}" step="1" value="#{default_cutoff}">
         <output id="train-to-output">#{cutoff_label.call(default_cutoff)}</output>
       </label>
@@ -3324,12 +3349,21 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
+      #{detail_series.any? && selected_period != 'weekly' ? %(
       &nbsp;
-      <span>#{ $l == :ja ? 'モデル' : 'Model' }:</span>
-      <label><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
+      <label><input id="weekly-view-checkbox" type="checkbox">
+        #{ if monthly_supplement_enabled
+             $l == :ja ? '週次・月次表示' : 'Weekly/monthly view'
+           else
+             $l == :ja ? '週次表示' : 'Weekly view'
+           end }
+      </label>) : ''}
+      &nbsp;
+      <span style="#{selected_period == 'weekly' ? 'display:none' : ''}">#{ $l == :ja ? 'モデル' : 'Model' }:</span>
+      <label style="#{selected_period == 'weekly' ? 'display:none' : ''}"><input class="model-option" type="radio" name="chart_model" value="quasi_poisson" #{checked(default_model == 'quasi_poisson')}>
         #{ $l == :ja ? '準ポアソン' : 'Quasi-Poisson' }
       </label>
-      <label><input class="model-option" type="radio" name="chart_model" value="poisson" #{checked(default_model == 'poisson')}>
+      <label style="#{selected_period == 'weekly' ? 'display:none' : ''}"><input class="model-option" type="radio" name="chart_model" value="poisson" #{checked(default_model == 'poisson')}>
         #{ $l == :ja ? 'ポアソン' : 'Poisson' }
       </label>
       <!-- 推定φの計算値はchart dataに残すが、画面には表示しない。
@@ -3355,7 +3389,7 @@ else
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const startWeek = #{start_week};
-      const displayStartDate = year => #{selected_period == 'calendar' ? '`${year}-01-01`' : '`${year + 1}-01-01`'};
+      const displayStartDate = year => #{%w[calendar weekly].include?(selected_period) ? '`${year}-01-01`' : '`${year + 1}-01-01`'};
       const annualTooltip = [
         #{selected_period == 'calendar' ?
           %({field:"year", type:"quantitative", title:#{JSON.generate($l == :ja ? '年' : 'Year')}}) :
@@ -3369,6 +3403,7 @@ else
         {field:"interval_label", type:"nominal", title:#{JSON.generate($l == :ja ? '区間計算' : 'Interval method')}}
       ];
       const annualTransforms = [
+        {filter: "!primary_weekly"},
         {filter: "toDate(datum.plot_date) >= toDate(display_start_date) && toDate(datum.plot_date) <= now()"},
         {filter: "datum.train_to == train_to"},
         {filter: "datum.model == model"},
@@ -3382,7 +3417,9 @@ else
           {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')", labelOverlap: false, labelSeparation: 6}, title: #{JSON.generate(if selected_period == 'calendar'
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')", labelOverlap: false, labelSeparation: 6}, title: #{JSON.generate(if selected_period == 'weekly'
+            $l == :ja ? '週' : 'Week'
+          elsif selected_period == 'calendar'
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
@@ -3393,10 +3430,10 @@ else
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
           {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
-          {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
+          {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"!primary_weekly"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
       }));
@@ -3411,7 +3448,8 @@ else
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
           {name:"zero_base", value:false},
-          {name:"view_mode", value:"annual"},
+          {name:"primary_weekly", value:#{selected_period == 'weekly' ? 'true' : 'false'}},
+          {name:"view_mode", value:#{JSON.generate(selected_period == 'weekly' ? 'weekly' : 'annual')}},
           {name:"detail_series", value:detailSeries}
         ],
         vconcat: panelSpecs,
