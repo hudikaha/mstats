@@ -3426,9 +3426,7 @@ else
           {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')", labelOverlap: false, labelSeparation: 6}, title: #{JSON.generate(if selected_period == 'weekly'
-            $l == :ja ? '週' : 'Week'
-          elsif selected_period == 'calendar'
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')", labelOverlap: false, labelSeparation: 6}, title: #{JSON.generate(if %w[calendar weekly].include?(selected_period)
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
