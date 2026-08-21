@@ -4023,6 +4023,9 @@ else
           const value = Number(startSlider.value);
           startOutput.value = periodYearLabel(value);
           document.getElementById("start-year-hidden").value = value;
+          const url = new URL(window.location.href);
+          url.searchParams.set("start_year", value);
+          history.replaceState(null, "", url);
           result.view.signal("display_start", value).signal("display_start_date", displayStartDate(value)).runAsync();
         });
         slider.addEventListener("input", () => {
