@@ -1255,8 +1255,12 @@ def weekly_baseline_analysis(rows, method:, baseline:, metric:)
         lower = [expected - margin, 0.0].max
         upper = expected + margin
       end
+      observed = row[:observed].to_f
       { series: series, date: row[:date], expected: expected, lower: lower, upper: upper,
-        excess: row[:observed].to_f - expected, method: method, baseline: baseline }
+        excess: observed - expected,
+        excess_lower: [observed - upper, 0.0].max,
+        excess_upper: [observed - expected, 0.0].max,
+        method: method, baseline: baseline }
     end
   end
 end
@@ -3568,6 +3572,25 @@ else
                   else
                     'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
                   end
+  weekly_excess_enabled = selected_period == 'weekly' && weekly_method != 'none'
+  weekly_excess_title = if $l == :ja
+                          selected_metric == 'deaths' ? '超過死亡数' : '超過死亡率'
+                        else
+                          selected_metric == 'deaths' ? 'Excess deaths' : 'Excess mortality rate'
+                        end
+  weekly_excess_lower_title = if weekly_method == 'five_year'
+                                $l == :ja ? '過去5年最大値超過' : 'Above five-year maximum'
+                              else
+                                $l == :ja ? '予測上限超過' : 'Above prediction limit'
+                              end
+  weekly_excess_upper_title = $l == :ja ? '基準線超過' : 'Above baseline'
+  if weekly_excess_enabled
+    interval_note += if $l == :ja
+                       " 下段の薄赤は#{weekly_excess_upper_title}、濃赤は#{weekly_excess_lower_title}です。"
+                     else
+                       " In the lower panel, light red is #{weekly_excess_upper_title.downcase}; dark red is #{weekly_excess_lower_title.downcase}."
+                     end
+  end
   puts <<~HTML
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
@@ -3642,7 +3665,8 @@ else
         {field:"expected", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '基準値' : 'Baseline')}},
         {field:"lower", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '下限' : 'Lower')}},
         {field:"upper", type:"quantitative", format:".2f", title:#{JSON.generate($l == :ja ? '上限' : 'Upper')}},
-        {field:"excess", type:"quantitative", format:"+.2f", title:#{JSON.generate($l == :ja ? '差' : 'Difference')}}
+        {field:"excess_lower", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_lower_title)}},
+        {field:"excess_upper", type:"quantitative", format:".2f", title:#{JSON.generate(weekly_excess_upper_title)}}
       ];
       const annualTransforms = [
         {filter: "!primary_weekly"},
@@ -3659,7 +3683,9 @@ else
           {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: {labelExpr: "datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')", labelOverlap: false, labelSeparation: 6}, title: #{JSON.generate(if %w[calendar weekly].include?(selected_period)
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: #{weekly_excess_enabled ? '{labels:false,ticks:false,domain:false,title:null}' : %({labelExpr:"datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')",labelOverlap:false,labelSeparation:6})}, title: #{JSON.generate(if weekly_excess_enabled
+            nil
+          elsif %w[calendar weekly].include?(selected_period)
             $l == :ja ? '年' : 'Year'
           else
             start_week = selected_period == 'flu27' ? 27 : 36
@@ -3680,6 +3706,29 @@ else
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
       }));
+      const excessPanelSpecs = panels.map(([key, _label]) => ({
+        title:{text:#{JSON.generate(weekly_excess_title)},anchor:"start",fontSize:15},
+        width:"container",height:115,
+        data:{values:weeklyValues},
+        transform:[
+          {filter:`datum.series == '${key}'`},
+          {filter:"isValid(datum.excess_upper)"},
+          {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
+        ],
+        encoding:{
+          x:{field:"date",type:"temporal",scale:{domainMin:{expr:"toDate(display_start_date)"},domainMax:{expr:"now()"},nice:false},axis:{labelExpr:"datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')",labelOverlap:false,labelSeparation:6},title:#{JSON.generate($l == :ja ? '年' : 'Year')}}
+        },
+        layer:[
+          {mark:{type:"bar",color:"#e7a0a5",clip:true},encoding:{y:{field:"excess_upper",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+          {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+          {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"excess_upper",type:"quantitative"},tooltip:weeklyTooltip}}
+        ]
+      }));
+      const chartSpecs = [];
+      panelSpecs.forEach((panel, index) => {
+        chartSpecs.push(panel);
+        if (#{weekly_excess_enabled ? 'true' : 'false'}) chartSpecs.push(excessPanelSpecs[index]);
+      });
       const spec = {
         $schema: "https://vega.github.io/schema/vega-lite/v5.json",
         data: {values},
@@ -3695,7 +3744,7 @@ else
           {name:"view_mode", value:#{JSON.generate(selected_period == 'weekly' ? 'weekly' : 'annual')}},
           {name:"detail_series", value:detailSeries}
         ],
-        vconcat: panelSpecs,
+        vconcat: chartSpecs,
         autosize: {type:"fit-x", contains:"padding", resize:true},
         resolve: {scale: {y: "independent"}},
         config: {view:{stroke:null}, axis:{labelFontSize:15,titleFontSize:17}, axisY:{minExtent:84,maxExtent:84}, title:{fontSize:19}}
