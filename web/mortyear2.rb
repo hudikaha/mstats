@@ -1073,7 +1073,8 @@ def weekly_rate_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
                [{ age: 'combined', deaths: values.sum, population: population, weight: 1.0 }]
              end
     { loc: count[:loc].to_s.upcase, dcode: count[:dcode],
-      date: count[:date], observed: observed, model_strata: strata }
+      date: count[:date], observed: observed, model_strata: strata,
+      src_url: (Array(count[:src_url]) + Array(rate[:src_url])).compact.uniq }
   end.sort_by { |row| [row[:loc], row[:date].to_s] }
 end
 
@@ -1088,7 +1089,8 @@ def weekly_display_rows(count_rows, rate_rows, metric, ages, asr_weights: nil)
 
     deaths = values.sum(&:to_f)
     { loc: count[:loc].to_s.upcase, dcode: count[:dcode], date: count[:date],
-      observed: deaths, model_strata: [{ age: 'combined', deaths: deaths, population: 1.0, weight: 1.0 }] }
+      observed: deaths, model_strata: [{ age: 'combined', deaths: deaths, population: 1.0, weight: 1.0 }],
+      src_url: Array(count[:src_url]).compact.uniq }
   end.sort_by { |row| [row[:loc], row[:date].to_s] }
 end
 
@@ -3373,12 +3375,21 @@ else
               else
                 'Observed and standardized deaths are shown as counts. Crude and age-standardized mortality rates are shown per 100,000 population. Birth-related mortality rates are shown per 1,000 births or deliveries. The age-0 population rate is shown per 100,000 age-0 population and uses a different denominator from birth-related mortality rates.'
               end
-  sources_by_location = available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
-    loc = mode == 'country' ? key : selected_locations.first
-    urls = chart_data.select { |row| row[:series] == key }.flat_map { |row| row[:src_url] }.uniq
-    sources[loc] ||= []
-    sources[loc] |= urls
-  end
+  sources_by_location = if selected_period == 'weekly'
+                          weekly_context.each_with_object({}) do |row, sources|
+                            loc = row[:loc].to_s.upcase
+                            next if loc.empty?
+                            sources[loc] ||= []
+                            sources[loc] |= Array(row[:src_url]).compact
+                          end
+                        else
+                          available_specs.each_with_object({}) do |(key, _age, _cause, _label), sources|
+                            loc = mode == 'country' ? key : selected_locations.first
+                            urls = chart_data.select { |row| row[:series] == key }.flat_map { |row| row[:src_url] }.uniq
+                            sources[loc] ||= []
+                            sources[loc] |= urls
+                          end
+                        end
   source_entries = []
   if selected_dataset != 'vital'
     method = if selected_dataset == 'cancer-incidence'
@@ -3405,7 +3416,23 @@ else
     end
     source_entries << { loc: 'JPN', method: method, urls: urls }
   elsif sources_by_location['JPN']&.any? { |url| url.include?('e-stat.go.jp') }
-    method = if jpn_2015_asr && selected_period != 'calendar' && $l == :ja
+    method = if selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all'] && $l == :ja
+               '日本の超過死亡ダッシュボードが公表する補正済み週次死亡数を使用しています。'
+             elsif selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all']
+               'Uses corrected weekly death counts published by the Japanese excess-mortality dashboard.'
+             elsif selected_period == 'weekly' && selected_metric == 'crude_rate' && selected_ages == ['age_all'] && $l == :ja
+               '日本の超過死亡ダッシュボードの補正済み週次死亡数と、e-Statの月次人口から粗死亡率を計算しています。'
+             elsif selected_period == 'weekly' && selected_metric == 'crude_rate' && selected_ages == ['age_all']
+               'Calculates crude mortality rates from corrected weekly deaths published by the Japanese excess-mortality dashboard and monthly e-Stat populations.'
+             elsif jpn_2015_asr && selected_period == 'weekly' && $l == :ja
+               'e-Statの月次死亡数・月次人口から作った週次推計値を、日本の2015年モデル人口で年齢調整しています。'
+             elsif jpn_2015_asr && selected_period == 'weekly'
+               'Uses weekly estimates derived from monthly e-Stat deaths and populations, standardized to the Japan 2015 model population.'
+             elsif selected_period == 'weekly' && $l == :ja
+               'e-Statの月次死亡数・月次人口から作った週次推計値を使用しています。'
+             elsif selected_period == 'weekly'
+               'Uses weekly estimates derived from monthly e-Stat deaths and populations.'
+             elsif jpn_2015_asr && selected_period != 'calendar' && $l == :ja
                'e-Statの月次死亡数・月次人口から作った週次推計値をインフルエンザ年へ再集計し、日本の2015年モデル人口で年齢調整しています。'
              elsif jpn_2015_asr && selected_period != 'calendar'
                'Aggregates weekly estimates derived from monthly e-Stat deaths and populations into influenza years and standardizes them to the Japan 2015 model population.'
@@ -3449,9 +3476,15 @@ else
     other_urls = sources_by_location['JPN'].reject do |url|
       url.include?('e-stat.go.jp') || (mixed_japan_series && url.include?('ganjoho.jp'))
     end
-    death_urls = selected_period == 'calendar' ? [ESTAT_ANNUAL_DEATH_URL, ESTAT_DEATH_URL] : [ESTAT_DEATH_URL]
-    stable_urls = death_urls
-    stable_urls << ESTAT_POP_URL unless selected_metric == 'birth_rate'
+    stable_urls = if selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all']
+                    []
+                  elsif selected_period == 'weekly' && selected_metric == 'crude_rate' && selected_ages == ['age_all']
+                    [ESTAT_POP_URL]
+                  else
+                    selected_period == 'calendar' ? [ESTAT_ANNUAL_DEATH_URL, ESTAT_DEATH_URL] : [ESTAT_DEATH_URL]
+                  end
+    stable_urls << ESTAT_POP_URL unless selected_metric == 'birth_rate' || stable_urls.include?(ESTAT_POP_URL) ||
+                                           (selected_period == 'weekly' && selected_metric == 'deaths' && selected_ages == ['age_all'])
     source_entries << { loc: 'JPN', method: method, urls: (stable_urls + other_urls).uniq }
   end
   if mixed_japan_series && selected_cancer_causes.any?
@@ -3471,7 +3504,11 @@ else
     next if selected_dataset != 'vital' && loc == 'JPN'
     next if loc == 'JPN' && urls.any? { |url| url.include?('e-stat.go.jp') }
 
-    method = if selected_period != 'calendar' && urls.include?(HMD_URL) && $l == :ja
+    method = if selected_period == 'weekly' && urls.include?(HMD_URL) && $l == :ja
+               'HMD STMFの週次死亡数・死亡率を使用しています。'
+             elsif selected_period == 'weekly' && urls.include?(HMD_URL)
+               'Uses weekly deaths and mortality rates from HMD STMF.'
+             elsif selected_period != 'calendar' && urls.include?(HMD_URL) && $l == :ja
                'HMD STMFの週次死亡数・死亡率を、インフルエンザ年へ再集計しています。'
              elsif selected_period != 'calendar' && urls.include?(HMD_URL)
                'Aggregates HMD STMF weekly deaths and mortality rates into influenza years.'
@@ -3571,6 +3608,12 @@ else
                          [$l == :ja ? '乳児死亡率' : 'Infant mortality rates', available_count.call('birth_rate', cause: 'infant')],
                          [$l == :ja ? '周産期死亡率' : 'Perinatal mortality rates', available_count.call('birth_rate', cause: 'perm')]
                        ]
+                     elsif selected_period == 'weekly'
+                       count = location_rates.count do |_code, rates|
+                         rates.include?('') && rates.include?('crude')
+                       end
+                       [[$l == :ja ? '実死亡数・粗死亡率・年齢調整死亡率' :
+                                      'Deaths, crude rates, and age-standardized rates', count]]
                      else
                        counts = %w[deaths crude_rate asr].map do |metric|
                          menu_catalog.count do |_loc, entry|
