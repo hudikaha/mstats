@@ -303,10 +303,11 @@ interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
 weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.split(/[~,]/) } &
                  %w[five_year farrington euromomo]
-weekly_baselines = cgi.params.fetch('weekly_baseline', []).flat_map { |value| value.split(/[~,]/) } &
-                   %w[fixed rolling]
+weekly_baselines = cgi.params.fetch('weekly_baseline', []).flat_map { |value| value.split(/[~,]/) }.
+                   map { |value| value == 'fixed' ? 'fixed_2015_2019' : value } &
+                   %w[fixed_2015_2019 fixed_2016_2020 rolling]
 weekly_methods = ['five_year'] if weekly_methods.empty?
-weekly_baselines = ['fixed'] if weekly_baselines.empty?
+weekly_baselines = ['fixed_2015_2019'] if weekly_baselines.empty?
 weekly_methods = [weekly_methods.first] if mode == 'country'
 weekly_baselines = [weekly_baselines.first] if mode == 'country'
 weekly_method = weekly_methods.first
@@ -1159,7 +1160,11 @@ def weekly_poisson_prediction(fit, features, exposure)
 end
 
 def weekly_reference_years(target_year, baseline)
-  baseline == 'fixed' ? (2015..2019).to_a : ((target_year - 5)..(target_year - 1)).to_a
+  case baseline
+  when 'fixed_2015_2019' then (2015..2019).to_a
+  when 'fixed_2016_2020' then (2016..2020).to_a
+  else ((target_year - 5)..(target_year - 1)).to_a
+  end
 end
 
 def circular_week_distance(left, right)
@@ -1182,7 +1187,8 @@ def weekly_baseline_analysis(rows, method:, baseline:, metric:)
     usable.filter_map do |row|
       target_date = Date.iso8601(row[:date].to_s)
       target_year = target_date.cwyear
-      next if baseline == 'fixed' && target_year < 2020
+      fixed_end_year = { 'fixed_2015_2019' => 2019, 'fixed_2016_2020' => 2020 }[baseline]
+      next if fixed_end_year && target_year <= fixed_end_year
       reference_years = weekly_reference_years(target_year, baseline)
       estimates = row[:model_strata].filter_map do |target|
         history = by_age[target[:age]].select { |item| reference_years.include?(item[:year]) }
@@ -2494,7 +2500,8 @@ panel_label = lambda do |loc, cause, dataset|
 end
 
 series_datasets = [['vital', selected_vital_causes], ['cancer-death', selected_cancer_causes]]
-series_datasets << ['cancer-incidence', selected_cancer_causes] if include_incidence
+series_datasets = [['vital', selected_vital_causes]] if selected_period != 'calendar'
+series_datasets << ['cancer-incidence', selected_cancer_causes] if include_incidence && selected_period == 'calendar'
 series_specs = if mode == 'country'
                  selected_locations.map do |loc|
                    cause = selected_causes.first
@@ -2660,7 +2667,8 @@ if selected_period == 'weekly'
     'euromomo' => ($l == :ja ? 'EuroMOMO型' : 'EuroMOMO-style')
   }
   baseline_labels = {
-    'fixed' => ($l == :ja ? '基準期間2015–2019' : 'baseline 2015–2019'),
+    'fixed_2015_2019' => ($l == :ja ? '基準期間2015–2019' : 'baseline 2015–2019'),
+    'fixed_2016_2020' => ($l == :ja ? '基準期間2016–2020' : 'baseline 2016–2020'),
     'rolling' => ($l == :ja ? '直前5年移動基準' : 'previous-five-year rolling baseline')
   }
   available_specs = available_specs.flat_map do |key, ages, cause, label, dataset|
@@ -2673,7 +2681,7 @@ end
 
 if opts[:summary]
   summary = available_specs.to_h do |key, _age, _cause, label|
-    base_key = key.sub(/--(?:five_year|farrington|euromomo)--(?:fixed|rolling)\z/, '')
+    base_key = key.sub(/--(?:five_year|farrington|euromomo)--(?:fixed_2015_2019|fixed_2016_2020|rolling)\z/, '')
     values = chart_data.select { |row| row[:series] == base_key }
     last_cutoff = values.map { |row| row[:train_to] }.max
     requested_summary_cutoff = values.map { |row| row[:train_to] }.include?(default_cutoff) ? default_cutoff : last_cutoff
@@ -2771,7 +2779,8 @@ puts <<~HTML
       <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="farrington" #{checked(weekly_methods.include?('farrington'))}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
       <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="euromomo" #{checked(weekly_methods.include?('euromomo'))}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
       &nbsp;
-      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed" #{checked(weekly_baselines.include?('fixed'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2015_2019" #{checked(weekly_baselines.include?('fixed_2015_2019'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2016_2020" #{checked(weekly_baselines.include?('fixed_2016_2020'))}>#{ $l == :ja ? '基準期間2016–2020' : 'Baseline period 2016–2020' }</label>
       <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="rolling" #{checked(weekly_baselines.include?('rolling'))}>#{ $l == :ja ? '直前5年移動基準' : 'Previous-five-year rolling baseline' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
@@ -2930,8 +2939,10 @@ render_cancer_group = lambda do |dataset_key, heading|
   end
   puts %(</div></details>)
 end
-puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="include_incidence" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
-render_cancer_group.call('cancer-death', $l == :ja ? '癌部位' : 'Cancer sites')
+if selected_period == 'calendar'
+  puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="include_incidence" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
+  render_cancer_group.call('cancer-death', $l == :ja ? '癌部位' : 'Cancer sites')
+end
 puts <<~HTML
     </fieldset><br>
     <button type="submit">#{ $l == :ja ? '読込み' : 'Submit' }</button>
@@ -3656,6 +3667,7 @@ else
                     'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
                   end
   weekly_excess_enabled = selected_period == 'weekly'
+  weekly_cumulative_start = weekly_baselines.include?('fixed_2016_2020') ? 2021 : 2020
   weekly_excess_title = if $l == :ja
                           selected_metric == 'deaths' ? '超過死亡数' : '超過死亡率'
                         else
@@ -3700,7 +3712,7 @@ else
       #{weekly_excess_enabled ? %(
       &nbsp;
       <label><input id="excess-cumulative-checkbox" type="checkbox">
-        #{ $l == :ja ? '2020年から累計表示' : 'Cumulative from 2020' }
+        #{ $l == :ja ? "#{weekly_cumulative_start}年から累計表示" : "Cumulative from #{weekly_cumulative_start}" }
       </label>) : ''}
       #{detail_series.any? && selected_period != 'weekly' ? %(
       &nbsp;
@@ -3740,6 +3752,7 @@ else
       const modelDefault = #{JSON.generate(default_model)};
       const intervalModeDefault = #{JSON.generate(interval_mode)};
       const excessRateWeekFactor = #{selected_metric == 'deaths' ? '1' : (7.0 / DAYS_PER_YEAR).to_s};
+      const excessCumulativeStart = #{weekly_cumulative_start};
       const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const startWeek = #{start_week};
@@ -3815,11 +3828,11 @@ else
         transform:[
           {filter:`datum.series == '${key}'`},
           {filter:"isValid(datum.excess_upper)"},
-          {calculate:"year(toDate(datum.date)) >= 2020 ? datum.excess_lower * excess_rate_week_factor : 0",as:"excess_lower_increment"},
-          {calculate:"year(toDate(datum.date)) >= 2020 ? datum.excess_upper * excess_rate_week_factor : 0",as:"excess_upper_increment"},
+          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_lower * excess_rate_week_factor : 0",as:"excess_lower_increment"},
+          {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_upper * excess_rate_week_factor : 0",as:"excess_upper_increment"},
           {window:[{op:"sum",field:"excess_lower_increment",as:"cumulative_excess_lower"},{op:"sum",field:"excess_upper_increment",as:"cumulative_excess_upper"}],sort:[{field:"date",order:"ascending"}],frame:[null,0]},
-          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= 2020 ? datum.cumulative_excess_lower : null) : datum.excess_lower",as:"display_excess_lower"},
-          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= 2020 ? datum.cumulative_excess_upper : null) : datum.excess_upper",as:"display_excess_upper"},
+          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_lower : null) : datum.excess_lower",as:"display_excess_lower"},
+          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_upper : null) : datum.excess_upper",as:"display_excess_upper"},
           {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
         ],
         encoding:{
@@ -3849,6 +3862,7 @@ else
           {name:"zero_base", value:false},
           {name:"excess_cumulative", value:false},
           {name:"excess_rate_week_factor", value:excessRateWeekFactor},
+          {name:"excess_cumulative_start", value:excessCumulativeStart},
           {name:"primary_weekly", value:#{selected_period == 'weekly' ? 'true' : 'false'}},
           {name:"view_mode", value:#{JSON.generate(selected_period == 'weekly' ? 'weekly' : 'annual')}},
           {name:"detail_series", value:detailSeries}
