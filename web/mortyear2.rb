@@ -319,6 +319,8 @@ selected_metric = 'deaths' if selected_period != 'calendar' && !%w[deaths crude_
 selected_ages &= STMF_AGES if selected_period != 'calendar'
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_ages = ['age_all'] if selected_period != 'calendar' && selected_ages.include?('age_all')
+selected_ages = ['age_all'] if selected_period != 'calendar' && selected_metric == 'asr'
+selected_ages = [selected_ages.first] if selected_period != 'calendar' && mode == 'country'
 requested_dcodes = cgi.params.fetch('dcodes', [])
 requested_dcodes = cgi.params.fetch('death_codes', []) if requested_dcodes.empty?
 requested_causes = requested_dcodes.flat_map { |value| value.split(/[~,]/) }.
@@ -2583,7 +2585,9 @@ puts <<~HTML
     <fieldset id="season-age-fieldset" style="#{selected_period == 'calendar' ? 'display:none' : ''}"><legend>#{ $l == :ja ? '年齢' : 'Age' }</legend>
 HTML
 STMF_AGES.each do |age|
-  puts %(<label><input class="age-season-option" type="checkbox" name="age" value="#{age}" #{checked(selected_ages.include?(age))}>#{STMF_AGE_LABELS.fetch(age)}</label>)
+  type = mode == 'country' ? 'radio' : 'checkbox'
+  unavailable = selected_metric == 'asr' && age != 'age_all'
+  puts %(<label><input class="age-season-option" type="#{type}" name="age" value="#{age}" #{checked(selected_ages.include?(age) && !unavailable)} #{disabled(unavailable)}>#{STMF_AGE_LABELS.fetch(age)}</label>)
 end
 puts <<~HTML
     </fieldset>
@@ -2768,12 +2772,15 @@ puts <<~HTML
         const selected = document.querySelector('.comparison-mode:checked').value;
         const locations = Array.from(document.querySelectorAll('.location-option'));
         const causes = Array.from(document.querySelectorAll('.cause-option'));
+        const seasonAges = Array.from(document.querySelectorAll('.age-season-option'));
         if (selected === 'country') {
           setInputMode(locations, 'checkbox', 'c');
           setInputMode(causes, 'radio', 'dcodes');
+          setInputMode(seasonAges, 'radio', 'age');
         } else {
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'dcodes');
+          setInputMode(seasonAges, 'checkbox', 'age');
         }
         document.querySelectorAll('.location-region-toggle').forEach(toggle => {
           toggle.style.display = selected === 'country' ? '' : 'none';
@@ -2973,7 +2980,9 @@ puts <<~HTML
         document.getElementById('age-fieldset').style.display = isCalendarPeriod && metric !== 'birth_rate' ? '' : 'none';
         document.getElementById('season-age-fieldset').style.display = !isCalendarPeriod ? '' : 'none';
         document.querySelectorAll('.age-season-option').forEach(input => {
-          input.disabled = isCalendarPeriod;
+          const asrUnavailable = metric === 'asr' && input.value !== 'age_all';
+          input.disabled = isCalendarPeriod || asrUnavailable;
+          if (!isCalendarPeriod && metric === 'asr') input.checked = input.value === 'age_all';
         });
         document.querySelectorAll('.age-option').forEach(input => {
           input.disabled = metric === 'birth_rate' || !isCalendarPeriod;
