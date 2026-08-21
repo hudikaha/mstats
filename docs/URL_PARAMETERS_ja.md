@@ -3,7 +3,7 @@
 [English](URL_PARAMETERS.md) | 日本語
 
 グラフpageのURLには、同じグラフを共有・再現できるよう選択状態を保存します。`cod.rb`と
-`mortyear.rb`では、複数の死因・年齢について次の形式を標準とします。
+`morttr.rb`では、複数の死因・年齢について次の形式を標準とします。
 
 ## 基本規則
 
@@ -21,7 +21,7 @@ dcodes=infant~perm
 dcodes=04000~05000~06000
 ```
 
-`mortyear.rb`は旧名`death_codes`や反復parameterも読み込めますが、formから送信すると
+`morttr.rb`は旧名`death_codes`や反復parameterも読み込めますが、formから送信すると
 `dcodes`一つの上記形式になります。
 
 ## 年齢
@@ -44,12 +44,12 @@ ages=80-100plus  # 80_84から100plus
 全年齢は`ages=all`、0歳のみは`ages=0`です。インフルエンザ年では、
 `ages=00-14~15-64`のように元dataの年齢階級を使います。
 
-互換性のため、`mortyear.rb`は`age=age_00_04&age=age_05_09`のような旧形式も読み込めます。
+互換性のため、`morttr.rb`は`age=age_00_04&age=age_05_09`のような旧形式も読み込めます。
 formから送信すると`ages=00-09`になります。
 
 ## 性別
 
-`mortyear.rb`の男女別系列は`sex=male`または`sex=female`で指定します。男女計は既定値のため、
+`morttr.rb`の男女別系列は`sex=male`または`sex=female`で指定します。男女計は既定値のため、
 標準URLでは`sex`を省略します。出生関連死亡率は男女別にせず、`sex`指定があっても男女計として扱います。
 
 ## 年

@@ -12,7 +12,7 @@ import xlrd
 
 FIELDS = [
     "id", "loc", "area", "areaj", "category", "rate", "dcode",
-    "death_cause", "algo", "type", "src_url", "date", "year", "sex",
+    "dname", "dnamej", "algo", "type", "src_url", "date", "year", "sex",
     "age_all", "age_0", "age_1", "age_2", "age_3", "age_4",
     "age_00_04", "age_05_09", "age_10_14", "age_15_19", "age_20_24",
     "age_25_29", "age_30_34", "age_35_39", "age_40_44", "age_45_49",
@@ -107,7 +107,7 @@ def base_row(year, category, series_type, site_code, sex, rate="", algo=""):
     row = {field: "" for field in FIELDS}
     row.update(
         loc="jpn", area="Japan", areaj="日本", category=category, rate=rate,
-        dcode=code, death_cause=name, algo=algo, type=series_type,
+        dcode=code, dnamej=name, algo=algo, type=series_type,
         src_url=SOURCE_URL, date=f"{year:04d}-01-01", year=year, sex=sex,
     )
     row["id"] = record_id(row)

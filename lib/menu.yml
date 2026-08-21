@@ -37,9 +37,9 @@
 - href: enmort.rb
   ja: イングランドのワクチン接種状況別全死因死亡率
   en: All-cause mortality in England by vaccination status
-- href: mortyear.rb
-  ja: 各国・各地域の死亡数・死亡率と予測区間
-  en: Deaths, mortality rates, and prediction intervals by country and area
+- href: morttr.rb
+  ja: 各国・各地域の死亡統計推移
+  en: Mortality trends by country and area
 - href: vaxxinj.rb
   ja: 予防接種健康被害救済制度の認定者数
   en: Vaccine injury compensation certifications

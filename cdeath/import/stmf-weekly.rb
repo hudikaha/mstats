@@ -99,28 +99,32 @@ source_rows.each do |source|
   loc = canonical_code.downcase
   year = source['Year'].to_i
   week = source['Week'].to_i
+  date = week_date(canonical_code, year, week, extra_week_years)
+  iso_year = date.cwyear
+  iso_week = date.cweek
+  period = format('%04dw%02d', iso_year, iso_week)
   sex = SEXES[source['Sex']]
   next unless sex
 
   ['', 'crude'].each_with_index do |rate, column_index|
-    id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
+    id = Mstats2026.record_id(loc: loc, period: period,
                               category: 'death', rate: rate, dcode: 'allcause',
                               type: 'stmf', sex: sex)
     row = {
       id: id,
       loc: loc,
       area: LOCATIONS.fetch(canonical_code, canonical_code),
-      yearweek: format('%04dw%02d', year, week),
+      yearweek: period,
       category: 'death',
       rate: rate,
       dcode: 'allcause',
-      death_cause: 'All causes',
+      dname: 'All causes',
       algo: '',
       type: 'stmf',
       src_url: [Mstats2026::HMD_STMF_URL],
-      date: week_date(canonical_code, year, week, extra_week_years).to_s,
-      year: year,
-      week: week,
+      date: date.to_s,
+      year: iso_year,
+      week: iso_week,
       sex: sex
     }
     AGE_COLUMNS.each do |age, columns|
@@ -130,16 +134,16 @@ source_rows.each do |source|
     rows[id] = row
   end
 
-  crude_id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
+  crude_id = Mstats2026.record_id(loc: loc, period: period,
                                    category: 'death', rate: 'crude', dcode: 'allcause',
                                    type: 'stmf', sex: sex)
   crude = rows.fetch(crude_id)
   next unless STMF_ASR_WEIGHTS.keys.all? { |age| crude[age] }
 
-  asr_id = Mstats2026.record_id(loc: loc, period: format('%04dw%02d', year, week),
+  asr_id = Mstats2026.record_id(loc: loc, period: period,
                                 category: 'death', rate: 'asr', dcode: 'allcause',
                                 algo: 'whostd', type: 'stmf', sex: sex)
-  asr = crude.slice(:loc, :area, :yearweek, :category, :dcode, :death_cause,
+  asr = crude.slice(:loc, :area, :yearweek, :category, :dcode, :dname, :dnamej,
                     :src_url, :date, :year, :week, :sex).merge(
                       id: asr_id, rate: 'asr', algo: 'whostd', type: 'stmf'
                     )

@@ -50,13 +50,13 @@ common_years.each do |year|
   infant_id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'death',
                                    dcode: 'infant', type: 'cfm', sex: 'both')
   rows[infant_id] = common.merge(id: infant_id, category: 'death', dcode: 'infant',
-                                 death_cause: 'Infant mortality',
+                                 dname: 'Infant mortality', dnamej: '乳児死亡',
                                  src_url: [INFANT_URL], age_all: infant_deaths)
 
   perinatal_id = Mstats2026.record_id(loc: 'jpn', period: year, category: 'death',
                                       dcode: 'perm', type: 'cfm', sex: 'both')
   rows[perinatal_id] = common.merge(id: perinatal_id, category: 'death', dcode: 'perm',
-                                    death_cause: 'Perinatal mortality',
+                                    dname: 'Perinatal mortality', dnamej: '周産期死亡',
                                     src_url: [PERINATAL_URL], age_all: perinatal_deaths)
 end
 

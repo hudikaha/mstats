@@ -117,6 +117,12 @@ const tests = [
     id: 'MY20', summary: '言語buttonで日本語URLへ切替',
     action: `document.querySelector('.language-button[data-language="ja"]').click(); true`,
     expect: `new URL(location.href).searchParams.get('l') === 'ja' && document.body.innerText.includes('各国・各地域の死亡数・死亡率と予測区間')`
+  },
+  {
+    id: 'MY31', summary: '新型コロナ死亡・ワクチン全体接種の重ね表示を切替',
+    action: `(() => { document.querySelector('#covid-overlay-checkbox').click(); document.querySelector('#vaxx-overlay-checkbox').click(); return true; })()`,
+    noNavigation: true,
+    expect: `(() => document.querySelector('#start-year-slider')?.max === '2020' && document.querySelector('#start-year-slider')?.value === '2020' && document.querySelector('#covid-overlay-checkbox')?.checked && document.querySelector('#vaxx-overlay-checkbox')?.checked && window.mortyearView?.signal('show_covid_overlay') === true && window.mortyearView?.signal('show_vaxx_overlay') === true)()`
   }
 ].filter(test => !selectedIds || selectedIds.includes(test.id));
 

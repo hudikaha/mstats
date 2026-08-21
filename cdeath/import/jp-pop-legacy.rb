@@ -27,7 +27,6 @@ ARGV.each do |file|
       category: 'pop',
       rate: '',
       dcode: '',
-      death_cause: '',
       algo: '',
       type: type,
       date: source['date'],

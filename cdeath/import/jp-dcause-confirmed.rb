@@ -75,7 +75,7 @@ def record(year, month, code, cause, sex, ages)
                             dcode: code, type: 'cfm', sex: sex)
   [id, {
     id: id, loc: 'jpn', area: 'Japan', yearmonth: period, category: 'death',
-    dcode: code, death_cause: cause, type: 'cfm', src_url: [source_url(year)],
+    dcode: code, dnamej: cause, type: 'cfm', src_url: [source_url(year)],
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: sex
   }.merge(ages.transform_keys(&:to_sym))]
 end

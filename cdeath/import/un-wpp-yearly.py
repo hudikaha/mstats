@@ -40,7 +40,7 @@ AGE_FIELDS = [
 ]
 FIELDS = [
     "id", "loc", "area", "areaj", "category", "rate", "dcode",
-    "death_cause", "algo", "type", "src_url", "date", "year", "sex",
+    "dname", "dnamej", "algo", "type", "src_url", "date", "year", "sex",
 ] + AGE_FIELDS
 
 
@@ -125,7 +125,7 @@ def base(loc, area, areaj, year, sex, category, kind, rate="", code="",
         "loc": loc, "area": area, "areaj": areaj,
         "category": category,
         "rate": rate, "dcode": code,
-        "death_cause": "All causes" if code == "allcause" else "",
+        "dname": "All causes" if code == "allcause" else "",
         "algo": algo, "type": kind, "src_url": json.dumps(src_urls or [WPP_URL]),
         "date": f"{year:04d}-01-01", "year": year, "sex": sex,
     }

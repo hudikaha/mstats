@@ -103,7 +103,7 @@ def parse(path)
     raise "duplicate ID: #{id}" if rows.key?(id)
     rows[id] = {
       id: id, loc: 'jpn', area: 'Japan', category: 'death',
-      dcode: previous_code, death_cause: previous_cause, type: 'cfm',
+      dcode: previous_code, dnamej: previous_cause, type: 'cfm',
       src_url: [source_url(path, year)], date: "#{year}-01-01", year: year, sex: sex
     }.merge(values.transform_keys(&:to_sym))
   end

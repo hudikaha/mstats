@@ -71,14 +71,14 @@ observations.sort.each do |(iso, year), measures|
     id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
                               dcode: 'infant', type: 'recon', sex: 'both')
     rows[id] = common.merge(id: id, category: 'death', dcode: 'infant',
-                            death_cause: 'Infant mortality', src_url: [OECD_URL, WPP_URL],
+                            dname: 'Infant mortality', src_url: [OECD_URL, WPP_URL],
                             age_all: (measures.fetch('INM') * denominator / 1000.0).round)
   end
   if measures.key?('PERM')
     id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
                               dcode: 'perm', type: 'recon', sex: 'both')
     rows[id] = common.merge(id: id, category: 'death', dcode: 'perm',
-                            death_cause: 'Perinatal mortality', src_url: [OECD_URL, WPP_URL],
+                            dname: 'Perinatal mortality', src_url: [OECD_URL, WPP_URL],
                             age_all: (measures.fetch('PERM') * denominator / 1000.0).round)
   end
 end

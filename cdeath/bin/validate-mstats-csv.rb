@@ -17,7 +17,7 @@ OptionParser.new do |parser|
 end.parse!
 abort 'one or more CSV files are required' if ARGV.empty?
 
-ALLOWED_CATEGORIES = %w[death incidence pop birth delivery fetal-death].freeze
+ALLOWED_CATEGORIES = %w[death incidence case vaxx pop birth delivery fetal-death].freeze
 SPECIAL_DEATH_CODES = %w[infant perm].freeze
 LEGACY_RATES = %w[adj amr].freeze
 LEGACY_TYPES = %w[conf jpns reconst unwpp2024proj unwpp2024expproj].freeze
@@ -87,6 +87,7 @@ ARGV.each do |file|
 
     year = row['year'].to_i
     errors << "#{where}: invalid year #{row['year'].inspect}" unless row['year'].to_s.match?(/\A\d{4}\z/)
+    date = nil
     begin
       date = Date.iso8601(row['date'].to_s)
       errors << "#{where}: date year #{date.year} differs from year #{year}" if unit != 'weekly' && date.year != year
@@ -102,6 +103,13 @@ ARGV.each do |file|
       errors << "#{where}: invalid yearweek #{row['yearweek'].inspect}" unless row['yearweek'].match?(/\A\d{4}w\d{2}\z/)
       errors << "#{where}: week is missing" unless row['week'].to_s.match?(/\A(?:[1-9]|[1-4]\d|5[0-3])\z/)
       errors << "#{where}: month must be empty for weekly data" if present?(row['month'])
+      if defined?(date) && date
+        expected_week = format('%04dw%02d', date.cwyear, date.cweek)
+        errors << "#{where}: weekly date must be Sunday: #{date}" unless date.sunday?
+        errors << "#{where}: yearweek differs from date: expected #{expected_week}" unless row['yearweek'] == expected_week
+        errors << "#{where}: year differs from ISO week-year #{date.cwyear}" unless year == date.cwyear
+        errors << "#{where}: week differs from date #{date.cweek}" unless row['week'].to_i == date.cweek
+      end
     else
       errors << "#{where}: month and week must be empty for yearly data" if present?(row['month']) || present?(row['week'])
     end
@@ -113,10 +121,14 @@ ARGV.each do |file|
     end
     errors << "#{where}: legacy rate is forbidden: #{row['rate']}" if LEGACY_RATES.include?(row['rate'])
     errors << "#{where}: legacy type is forbidden: #{row['type']}" if LEGACY_TYPES.include?(row['type'])
-    if %w[death incidence].include?(category)
+    if %w[death incidence case vaxx].include?(category)
       errors << "#{where}: dcode is missing" if dcode.empty?
       system = if dcode == 'allcause'
                  'all'
+               elsif category == 'case' && dcode == 'u07'
+                 'indicator'
+               elsif category == 'vaxx' && %w[dose1 dose2 doseall booster].include?(dcode)
+                 'indicator'
                elsif SPECIAL_DEATH_CODES.include?(dcode)
                  'indicator'
                elsif dcode.match?(/\A\d/)

@@ -37,7 +37,7 @@ module Mstats2026
     age_00_04 age_05_09 age_10_14 age_15_19 age_20_24 age_25_29
     age_30_34 age_35_39 age_40_44 age_45_49 age_50_54 age_55_59
     age_60_64 age_65_69 age_70_74 age_75_79 age_75plus age_80_84 age_85_89
-    age_85plus age_90_94 age_95_99 age_100plus age_unknown
+    age_85plus age_90_94 age_95_99 age_100plus age_00_64 age_65plus age_unknown
     age_elementary age_junior
   ].freeze
 
@@ -47,17 +47,17 @@ module Mstats2026
   ].freeze
 
   FIELDS = (%w[
-    id loc area areaj yearmonth category rate dcode death_cause
+    id loc area areaj yearmonth category rate dcode dname dnamej
     algo type src_url date year month sex
   ] + AGE_FIELDS).freeze
 
   WEEKLY_FIELDS = (%w[
-    id loc area areaj yearweek category rate dcode death_cause
+    id loc area areaj yearweek category rate dcode dname dnamej
     algo type src_url date year week sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
 
   YEARLY_FIELDS = (%w[
-    id loc area areaj category rate dcode death_cause
+    id loc area areaj category rate dcode dname dnamej
     algo type src_url date year sex
   ] + AGE_FIELDS + AGGREGATE_AGE_FIELDS).uniq.freeze
 

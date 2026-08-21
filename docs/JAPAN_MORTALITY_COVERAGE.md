@@ -2,7 +2,7 @@
 
 English | [日本語](JAPAN_MORTALITY_COVERAGE_ja.md)
 
-This table summarizes which publication series, age groups, causes, and cancer sites in Japan's vital and cancer statistics can be used together by `mortyear.rb`, `mort.rb`, `cod.rb`, and `codtr.rb`.
+This table summarizes which publication series, age groups, causes, and cancer sites in Japan's vital and cancer statistics can be used together by `morttr.rb`, `mort.rb`, `cod.rb`, and `codtr.rb`.
 
 | Years | Source | Table used | Age groups | Causes or cancer sites | Main values available |
 |---:|---|---|---|---|---|

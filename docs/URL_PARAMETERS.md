@@ -3,7 +3,7 @@
 English | [日本語](URL_PARAMETERS_ja.md)
 
 Graph-page URLs preserve the selected state so that a graph can be shared and
-reproduced. `cod.rb` and `mortyear.rb` use the following canonical forms for
+reproduced. `cod.rb` and `morttr.rb` use the following canonical forms for
 multi-value cause and age parameters.
 
 ## General rules
@@ -24,7 +24,7 @@ dcodes=infant~perm
 dcodes=04000~05000~06000
 ```
 
-`mortyear.rb` also accepts the former `death_codes` name and repeated
+`morttr.rb` also accepts the former `death_codes` name and repeated
 parameters, but rewrites a submitted selection as one `dcodes` parameter in the
 form above.
 
@@ -50,12 +50,12 @@ ages=80-100plus  # 80_84 through 100plus
 Use `ages=all` for all ages and `ages=0` for age zero alone. Influenza-year
 views use their source bands, such as `ages=00-14~15-64`.
 
-For compatibility, `mortyear.rb` also accepts repeated legacy fields such as
+For compatibility, `morttr.rb` also accepts repeated legacy fields such as
 `age=age_00_04&age=age_05_09`. Submitting the form generates `ages=00-09`.
 
 ## Sex
 
-Use `sex=male` or `sex=female` for sex-specific series in `mortyear.rb`.
+Use `sex=male` or `sex=female` for sex-specific series in `morttr.rb`.
 Both sexes is the default, so canonical URLs omit `sex`. Birth-based mortality
 rates are not separated by sex and ignore a supplied `sex` value.
 

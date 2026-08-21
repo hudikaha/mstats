@@ -173,7 +173,7 @@ curl -sS -H 'Content-Type: application/json' \
 {
   "size": 100,
   "_source": [
-    "id", "date", "yearmonth", "dcode", "death_cause", "sex", "age_all"
+    "id", "date", "yearmonth", "dcode", "dname", "dnamej", "sex", "age_all"
   ],
   "query": {
     "bool": {

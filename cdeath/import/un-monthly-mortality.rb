@@ -142,7 +142,7 @@ observations.each_value do |item|
   period = format('%04dm%02d', year, month)
   common = {
     loc: item[:code], area: item[:area], yearmonth: period,
-    category: 'death', dcode: 'allcause', death_cause: 'All causes', algo: '', type: TYPE,
+    category: 'death', dcode: 'allcause', dname: 'All causes', algo: '', type: TYPE,
     date: format('%04d-%02d-01', year, month), year: year, month: month, sex: 'both'
   }
   count_id = Mstats2026.record_id(loc: item[:code], period: period, category: 'death',

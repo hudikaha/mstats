@@ -1652,7 +1652,7 @@ data0 = elastic_search(
         {'term' => {'type' => 'unmonth'}},
     ],
     :should => should,
-    :source => ['id', 'category', 'date', 'year', 'month', 'dcode', 'death_cause', 'sex', 'type'] +
+    :source => ['id', 'category', 'date', 'year', 'month', 'dcode', 'sex', 'type'] +
                age_sources,
     #:debug => 'SHOWONLY',
 )

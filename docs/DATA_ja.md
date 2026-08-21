@@ -22,7 +22,7 @@
 | `year`, `month`, `week` | integer | 暦年、月、週番号。該当しない単位は存在しない |
 | `category` | keyword | `death`（死亡）、`incidence`（罹患）、`pop`（人口）など |
 | `dcode` | keyword | category内の疾病・死因・指標code。全死因は`allcause` |
-| `death_cause` | keyword | 疾病・死因・指標名 |
+| `dname` / `dnamej` | keyword | 疾病・死因・指標の日英名称 |
 | `sex` | keyword | `male`、`female`、`both`など |
 | `rate` | keyword | 空欄は件数、`crude`は粗死亡率、`asr`は直接法による年齢調整死亡率 |
 | `algo` | keyword | 比較・派生系列の計算法。元の値では空欄 |

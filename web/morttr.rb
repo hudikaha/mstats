@@ -217,7 +217,7 @@ CACHE_MAX_BYTES = 1024 * 1024 * 1024
 CACHE_MAX_AGE = 30 * 24 * 60 * 60
 DEFAULT_CACHE_DIR = '/var/cache/medicalfacts/mortyear'
 
-opts = { index: 'mstats', debug: false, fixture: nil, catalog_csv: [], summary: false,
+opts = { index: 'mstats20260821', debug: false, fixture: nil, catalog_csv: [], summary: false,
          process_cache_jobs: nil, verify_cache: false, rebuild_catalog: false,
          cache_dir: DEFAULT_CACHE_DIR }
 OptionParser.new do |parser|
@@ -349,7 +349,7 @@ if selected_dataset != 'vital' && selected_sex == 'both'
 end
 requested_start_year = cgi['start_year'].to_i
 period_start_year = selected_period == 'calendar' ? 2000 : 1999
-default_start_year = requested_start_year.between?(1950, 2015) ? requested_start_year : period_start_year
+default_start_year = requested_start_year.between?(1950, 2020) ? requested_start_year : period_start_year
 
 def location_names(code)
   known = COUNTRY_NAME_OVERRIDES[code] || COUNTRY_NAMES[code]
@@ -2374,6 +2374,73 @@ else
   )
 end
 
+# 日本語: 週次表示では、死亡数に新型コロナ死亡、超過死亡の推移にワクチン全体接種を重ねる。
+# English: In weekly views, overlay COVID-19 deaths on death counts and all vaccine doses on the excess trend.
+overlay_source = %w[loc yearweek category dcode type date year week sex age_all]
+covid_overlay_eligible = selected_period == 'weekly' && %w[deaths crude_rate].include?(selected_metric) &&
+                           selected_ages == ['age_all'] && selected_sex == 'both'
+overlay_rows = if selected_period != 'weekly'
+                 []
+               elsif opts[:fixture]
+                 fixture_data.select do |row|
+                   weekly_locations_for_query.include?(row[:loc].to_s.downcase) && row[:yearweek] &&
+                     row[:sex] == 'both' &&
+                     ((covid_overlay_eligible && row[:category] == 'death' &&
+                       ((row[:loc].to_s.casecmp('jpn').zero? && row[:dcode] == '22200' && row[:type] == 'stmf') ||
+                        (!row[:loc].to_s.casecmp('jpn').zero? && row[:dcode] == 'u07' && row[:type] == 'owid'))) ||
+                      (row[:category] == 'vaxx' && row[:dcode] == 'doseall'))
+                 end
+               else
+                 covid = if covid_overlay_eligible
+                           japan = if weekly_locations_for_query.include?('jpn')
+                                     elastic_search(
+                                       index: opts[:index], size: 100_000,
+                                       filter: [{ 'term' => { 'loc' => 'jpn' } },
+                                                { 'term' => { 'category' => 'death' } },
+                                                { 'term' => { 'dcode' => '22200' } },
+                                                { 'term' => { 'type' => 'stmf' } },
+                                                { 'term' => { 'sex' => 'both' } },
+                                                { 'exists' => { 'field' => 'yearweek' } }],
+                                       source: overlay_source
+                                     )
+                                   else
+                                     []
+                                   end
+                           other_locations = weekly_locations_for_query - ['jpn']
+                           international = if other_locations.empty?
+                                             []
+                                           else
+                                             elastic_search(
+                                               index: opts[:index], size: 100_000,
+                                               filter: [{ 'terms' => { 'loc' => other_locations } },
+                                                        { 'term' => { 'category' => 'death' } },
+                                                        { 'term' => { 'dcode' => 'u07' } },
+                                                        { 'term' => { 'type' => 'owid' } },
+                                                        { 'term' => { 'sex' => 'both' } },
+                                                        { 'exists' => { 'field' => 'yearweek' } }],
+                                               source: overlay_source
+                                             )
+                                           end
+                           japan + international
+                         else
+                           []
+                         end
+                 vaccinations = elastic_search(
+                   index: opts[:index], size: 100_000,
+                   filter: [{ 'terms' => { 'loc' => weekly_locations_for_query } },
+                            { 'term' => { 'category' => 'vaxx' } }, { 'term' => { 'dcode' => 'doseall' } },
+                            { 'term' => { 'sex' => 'both' } }, { 'exists' => { 'field' => 'yearweek' } }],
+                   source: overlay_source
+                 )
+                 covid + vaccinations
+               end
+overlay_values = overlay_rows.filter_map do |row|
+  next if row[:age_all].nil?
+
+  { loc: row[:loc].to_s.downcase, date: row[:date], value: row[:age_all].to_f,
+    overlay: row[:category] == 'vaxx' ? 'vaxx' : 'covid' }
+end
+
 weekly_required_ages = if selected_metric == 'asr' && selected_ages.include?('age_all')
                          STMF_ASR_AGES
                        else
@@ -2588,6 +2655,25 @@ weekly_context = if selected_period == 'weekly' ||
                    []
                  end
 
+# 日本語: 粗死亡率表示では、OWIDの週次コロナ死亡数を主系列と同じ年率換算へそろえる。
+# English: For crude-rate views, convert weekly OWID COVID-19 deaths to the same annualized scale as the primary series.
+if selected_period == 'weekly' && selected_metric == 'crude_rate'
+  weekly_populations = weekly_context.each_with_object({}) do |row, result|
+    population = Array(row[:model_strata]).sum { |stratum| stratum[:population].to_f }
+    result[[row[:loc].to_s.downcase, row[:date].to_s]] ||= population if population.positive?
+  end
+  overlay_values = overlay_values.filter_map do |row|
+    next row unless row[:overlay] == 'covid'
+
+    population = weekly_populations[[row[:loc], row[:date].to_s]]
+    next unless population&.positive?
+
+    row.merge(value: row[:value] * DAYS_PER_YEAR * 100_000.0 / (7.0 * population))
+  end
+end
+covid_overlay_available = overlay_values.any? { |row| row[:overlay] == 'covid' }
+vaxx_overlay_available = overlay_values.any? { |row| row[:overlay] == 'vaxx' }
+
 # 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次crude rateで補完する。
 # English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly crude rate.
 if monthly_supplement_enabled
@@ -2641,7 +2727,7 @@ detail_series = weekly_context.filter_map { |row| row[:series] if row[:observed]
 
 # 日本語: start_year省略時は分析開始境界以後にある選択系列の最初の値から表示する。
 # English: Without start_year, begin at the first selected value on or after the analysis boundary.
-unless requested_start_year.between?(1950, 2015)
+unless requested_start_year.between?(1950, 2020)
   first_value_year = chart_data.map { |row| row[:year] }.min
   default_start_year = [period_start_year, first_value_year || period_start_year].max
 end
@@ -3687,6 +3773,12 @@ else
                                 $l == :ja ? '保守的超過' : 'Conservative excess'
                               end
   weekly_excess_upper_title = $l == :ja ? '基準線超過' : 'Above baseline'
+  covid_overlay_title = if selected_metric == 'crude_rate'
+                          $l == :ja ? '新型コロナ粗死亡率' : 'COVID-19 crude mortality rate'
+                        else
+                          $l == :ja ? '新型コロナ死亡' : 'COVID-19 deaths'
+                        end
+  covid_overlay_format = selected_metric == 'deaths' ? ',.0f' : '.2f'
   if weekly_excess_enabled
     dark_red_note = if weekly_methods.include?('five_year') && weekly_methods.length > 1
                       $l == :ja ? '5年平均では過去5年最大値超過、Farrington型・EuroMOMO型では予測上限超過' :
@@ -3703,7 +3795,7 @@ else
   puts <<~HTML
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
-        <input id="start-year-slider" type="range" min="1950" max="2015" step="1" value="#{default_start_year}">
+        <input id="start-year-slider" type="range" min="1950" max="2020" step="1" value="#{default_start_year}">
         <output id="start-year-output">#{cutoff_label.call(default_start_year)}</output>
       </label>
       &nbsp;
@@ -3715,6 +3807,16 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
+      #{covid_overlay_available ? %(
+      &nbsp;
+      <label><input id="covid-overlay-checkbox" type="checkbox">
+        #{ $l == :ja ? '新型コロナ死亡を重ねる' : 'Overlay COVID-19 deaths' }
+      </label>) : ''}
+      #{vaxx_overlay_available ? %(
+      &nbsp;
+      <label><input id="vaxx-overlay-checkbox" type="checkbox">
+        #{ $l == :ja ? 'ワクチン全体接種を重ねる' : 'Overlay all vaccine doses' }
+      </label>) : ''}
       #{detail_series.any? && selected_period != 'weekly' ? %(
       &nbsp;
       <label><input id="weekly-view-checkbox" type="checkbox">
@@ -3744,6 +3846,7 @@ else
     <script>
       const values = #{JSON.generate(chart_data)};
       const weeklyValues = #{JSON.generate(weekly_context)};
+      const overlayValues = #{JSON.generate(overlay_values)};
       const detailSeries = #{JSON.generate(detail_series)};
       const displayStartDefault = #{default_start_year};
       const trainMin = #{cutoffs.min};
@@ -3754,7 +3857,7 @@ else
       const intervalModeDefault = #{JSON.generate(interval_mode)};
       const excessRateWeekFactor = #{selected_metric == 'deaths' ? '1' : (7.0 / DAYS_PER_YEAR).to_s};
       const excessCumulativeStart = #{weekly_cumulative_start};
-      const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label] })};
+      const panels = #{JSON.generate(available_specs.map { |key, _age, _cause, label| [key, label, mode == 'country' ? key.split('--').first.downcase : selected_locations.first.downcase] })};
       const dispersionLabels = #{JSON.generate(dispersion_labels)};
       const startWeek = #{start_week};
       const displayStartDate = year => #{%w[calendar weekly].include?(selected_period) ? '`${year}-01-01`' : '`${year + 1}-01-01`'};
@@ -3792,14 +3895,14 @@ else
         {filter: "interval_mode == 'analytic' ? datum.interval_method == 'analytic' : datum.auto_selected"}
       ];
       const predictionTransforms = [...annualTransforms, {filter: "datum.year >= training_start"}];
-      const panelSpecs = panels.map(([key, label]) => ({
+      const panelSpecs = panels.map(([key, label, panelLoc]) => ({
         title: {text: label, anchor: "start"},
         width: "container", height: 260,
         transform: [
           {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: #{weekly_excess_enabled ? '{labels:false,ticks:false,domain:false,title:null}' : %({labelExpr:"datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')",labelOverlap:false,labelSeparation:6})}, title: #{JSON.generate(if weekly_excess_enabled
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: #{weekly_excess_enabled ? '{labels:false,ticks:false,domain:false,title:null}' : %({format:"%Y",tickCount:{interval:"year",step:1},labelOverlap:false,labelSeparation:6})}, title: #{JSON.generate(if weekly_excess_enabled
             nil
           elsif %w[calendar weekly].include?(selected_period)
             $l == :ja ? '年' : 'Year'
@@ -3808,8 +3911,8 @@ else
             $l == :ja ? "インフルエンザ年（第#{start_week}週開始）" : "Influenza year (starts in W#{start_week})"
           end)}}
         },
-        layer: [
-          {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base"}}}, y2: {field: "pi_upper"}}},
+        layer: [{layer: [
+          {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base || show_covid_overlay"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
           {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
@@ -3820,7 +3923,10 @@ else
           {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
           {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"!primary_weekly"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
-        ]
+        ]},
+          {data:{values:overlayValues},transform:[{filter:`datum.loc == '${panelLoc}' && datum.overlay == 'covid'`},{filter:"show_covid_overlay"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}],mark:{type:"line",color:"#6f42c1",strokeWidth:2,clip:true},encoding:{x:{field:"date",type:"temporal"},y:{field:"value",type:"quantitative",axis:{orient:"right",title:#{JSON.generate(covid_overlay_title)},titleColor:"#6f42c1",labelColor:"#6f42c1",tickColor:"#6f42c1",domainColor:"#6f42c1"}},tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},{field:"value",type:"quantitative",format:#{JSON.generate(covid_overlay_format)},title:#{JSON.generate(covid_overlay_title)}}]}}
+        ],
+        resolve:{scale:{y:"shared"},axis:{y:"independent"}}
       }));
       const excessPanelSpec = (key, cumulative) => ({
         title:{text:cumulative ? #{JSON.generate(weekly_excess_cumulative_title)} : #{JSON.generate(weekly_excess_trend_title)},anchor:"start",fontSize:15},
@@ -3837,13 +3943,17 @@ else
           {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
         ],
         encoding:{
-          x:{field:"date",type:"temporal",scale:{domainMin:{expr:"toDate(display_start_date)"},domainMax:{expr:"now()"},nice:false},axis:{labelExpr:"datum.index == 0 || year(datum.value) % 100 == 0 ? timeFormat(datum.value, '%Y') : timeFormat(datum.value, '%y')",labelOverlap:false,labelSeparation:6},title:#{JSON.generate($l == :ja ? '年' : 'Year')}}
+          x:{field:"date",type:"temporal",scale:{domainMin:{expr:"toDate(display_start_date)"},domainMax:{expr:"now()"},nice:false},axis:{format:"%Y",tickCount:{interval:"year",step:1},labelOverlap:false,labelSeparation:6},title:#{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer:[
-          {mark:{type:"bar",color:"#e7a0a5",clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
-          {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
-          {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative"},tooltip:excessTooltip}}
-        ]
+          {layer:[
+            {mark:{type:"bar",color:"#e7a0a5",clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+            {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
+            {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative"},tooltip:excessTooltip}}
+          ]},
+          ...(cumulative ? [] : [{data:{values:overlayValues},transform:[{filter:`datum.loc == '${panels.find(panel => panel[0] == key)[2]}' && datum.overlay == 'vaxx'`},{filter:"show_vaxx_overlay"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}],mark:{type:"line",color:"#16835b",strokeWidth:2,clip:true},encoding:{x:{field:"date",type:"temporal"},y:{field:"value",type:"quantitative",scale:{zero:true},title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')},axis:{orient:"right",titleColor:"#16835b",labelColor:"#16835b"}},tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},{field:"value",type:"quantitative",format:",.0f",title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')}}]}}])
+        ],
+        resolve:{scale:{y:"independent"}}
       });
       const chartSpecs = [];
       panelSpecs.forEach((panel, index) => {
@@ -3865,6 +3975,8 @@ else
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
           {name:"zero_base", value:false},
+          {name:"show_covid_overlay", value:false},
+          {name:"show_vaxx_overlay", value:false},
           {name:"excess_rate_week_factor", value:excessRateWeekFactor},
           {name:"excess_cumulative_start", value:excessCumulativeStart},
           {name:"primary_weekly", value:#{selected_period == 'weekly' ? 'true' : 'false'}},
@@ -3877,12 +3989,15 @@ else
         config: {view:{stroke:null}, axis:{labelFontSize:15,titleFontSize:17}, axisY:{minExtent:84,maxExtent:84}, title:{fontSize:19}}
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
+        window.mortyearView = result.view;
         const slider = document.getElementById("train-to-slider");
         const startSlider = document.getElementById("start-year-slider");
         const startOutput = document.getElementById("start-year-output");
         const output = document.getElementById("train-to-output");
         const modelOptions = Array.from(document.querySelectorAll(".model-option"));
         const zeroBase = document.getElementById("zero-base-checkbox");
+        const covidOverlay = document.getElementById("covid-overlay-checkbox");
+        const vaxxOverlay = document.getElementById("vaxx-overlay-checkbox");
         const simulationControl = document.getElementById("simulation-interval-control");
         const simulationInterval = document.getElementById("simulation-interval-checkbox");
         const weeklyView = document.getElementById("weekly-view-checkbox");
@@ -3926,6 +4041,18 @@ else
         zeroBase.addEventListener("change", () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
         });
+        if (covidOverlay) {
+          const syncCovidOverlay = () => result.view.signal("show_covid_overlay", covidOverlay.checked).runAsync();
+          covidOverlay.addEventListener("change", syncCovidOverlay);
+          window.addEventListener("pageshow", syncCovidOverlay);
+          syncCovidOverlay();
+        }
+        if (vaxxOverlay) {
+          const syncVaxxOverlay = () => result.view.signal("show_vaxx_overlay", vaxxOverlay.checked).runAsync();
+          vaxxOverlay.addEventListener("change", syncVaxxOverlay);
+          window.addEventListener("pageshow", syncVaxxOverlay);
+          syncVaxxOverlay();
+        }
         simulationInterval.addEventListener("change", () => {
           const value = simulationInterval.checked ? "auto" : "analytic";
           result.view.signal("interval_mode", value).runAsync();

@@ -202,7 +202,7 @@ def monthly_series(deaths, populations)
       asr_id = Mstats2026.record_id(loc: source[:loc], period: source[:yearmonth],
                                     category: 'death', rate: 'asr', dcode: source[:dcode],
                                     algo: algo, type: 'stmfrecon', sex: source[:sex])
-      asr = crude.slice(:loc, :area, :yearmonth, :category, :dcode, :death_cause,
+      asr = crude.slice(:loc, :area, :yearmonth, :category, :dcode, :dname, :dnamej,
                         :type, :src_url, :date, :year, :month, :sex).merge(
                           id: asr_id, rate: 'asr', algo: algo,
                           age_all: (weighted / groups.values.sum).round(2)

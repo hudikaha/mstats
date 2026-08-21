@@ -24,7 +24,7 @@ sex, and series, with totals and available age groups. Monthly records contain
 | `year`, `month`, `week` | integer | Calendar year, month, or week number; units that do not apply are absent |
 | `category` | keyword | `death`, `incidence`, `pop`, and related statistical categories |
 | `dcode` | keyword | Disease, cause, or indicator code within a category; `allcause` means all causes |
-| `death_cause` | keyword | Disease, cause, or indicator name |
+| `dname` / `dnamej` | keyword | English / Japanese disease, cause, or indicator name |
 | `sex` | keyword | `male`, `female`, `both`, and related source categories |
 | `rate` | keyword | Empty for counts, `crude` for crude rates, and `asr` for directly age-standardized rates |
 | `algo` | keyword | Method for a comparative or derived series; empty for source values |

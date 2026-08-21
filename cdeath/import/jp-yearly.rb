@@ -89,7 +89,7 @@ death_groups = Hash.new { |hash, key| hash[key] = [] }
 CSV.foreach(ARGV[0], headers: true) do |row|
   next unless row['category'] == 'death' && row['rate'].to_s.empty?
   key = [row['loc'], row['area'], row['year'].to_i, row['dcode'],
-         row['death_cause'], row['algo'], row['type'], row['sex']]
+         row['dname'], row['dnamej'], row['algo'], row['type'], row['sex']]
   death_groups[key] << row
 end
 
@@ -152,7 +152,7 @@ if oldest_pop_path
   end
 end
 
-death_groups.each do |(loc, area, year, code, cause, algo, type, sex), months|
+death_groups.each do |(loc, area, year, code, dname, dnamej, algo, type, sex), months|
   next unless months.map { |row| row['month'].to_i }.uniq.length == 12
 
   ages = Mstats2026::AGE_FIELDS.to_h do |field|
@@ -167,7 +167,7 @@ death_groups.each do |(loc, area, year, code, cause, algo, type, sex), months|
   id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
                             dcode: code, algo: algo, type: type, sex: sex)
   base = { id: id, loc: loc, area: area, category: 'death', dcode: code,
-           death_cause: cause, algo: algo, type: type, src_url: src_url,
+           dname: dname, dnamej: dnamej, algo: algo, type: type, src_url: src_url,
            date: "#{year}-01-01", year: year, sex: sex }
   rows[id] = base.merge(ages.transform_keys(&:to_sym))
 
@@ -212,7 +212,8 @@ if annual_death_path
     area = source['area']
     year = source['year'].to_i
     code = source['dcode']
-    cause = source['death_cause']
+    dname = source['dname']
+    dnamej = source['dnamej']
     algo = source['algo'].to_s
     type = source['type'].to_s
     sex = source['sex']
@@ -225,7 +226,7 @@ if annual_death_path
     id = Mstats2026.record_id(loc: loc, period: year, category: 'death',
                               dcode: code, algo: algo, type: type, sex: sex)
     base = { id: id, loc: loc, area: area, category: 'death', dcode: code,
-             death_cause: cause, algo: algo, type: type, src_url: src_url,
+             dname: dname, dnamej: dnamej, algo: algo, type: type, src_url: src_url,
              date: "#{year}-01-01", year: year, sex: sex }
     rows[id] = base.merge(ages.transform_keys(&:to_sym))
 
