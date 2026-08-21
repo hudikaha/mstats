@@ -3673,6 +3673,12 @@ else
                         else
                           selected_metric == 'deaths' ? 'Excess deaths' : 'Excess mortality rate'
                         end
+  weekly_excess_trend_title = $l == :ja ? "#{weekly_excess_title}の推移" : "#{weekly_excess_title} trend"
+  weekly_excess_cumulative_title = if $l == :ja
+                                     "#{weekly_cumulative_start}年からの累積#{weekly_excess_title}"
+                                   else
+                                     "Cumulative #{weekly_excess_title.downcase} from #{weekly_cumulative_start}"
+                                   end
   weekly_excess_lower_title = if weekly_methods == ['five_year']
                                 $l == :ja ? '過去5年最大値超過' : 'Above five-year maximum'
                               elsif !weekly_methods.include?('five_year')
@@ -3689,9 +3695,9 @@ else
                       weekly_excess_lower_title
                     end
     interval_note += if $l == :ja
-                       " 下段の薄赤は#{weekly_excess_upper_title}、濃赤は#{dark_red_note}です。"
+                       " 下2段は超過死亡の推移と累積を同じ色で示し、薄赤は#{weekly_excess_upper_title}、濃赤は#{dark_red_note}です。"
                      else
-                       " In the lower panel, light red is #{weekly_excess_upper_title.downcase}; dark red is #{dark_red_note.downcase}."
+                       " The two lower panels show the excess trend and cumulative excess using the same colors: light red is #{weekly_excess_upper_title.downcase}; dark red is #{dark_red_note.downcase}."
                      end
   end
   puts <<~HTML
@@ -3709,11 +3715,6 @@ else
       <label><input id="zero-base-checkbox" type="checkbox">
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
-      #{weekly_excess_enabled ? %(
-      &nbsp;
-      <label><input id="excess-cumulative-checkbox" type="checkbox">
-        #{ $l == :ja ? "#{weekly_cumulative_start}年から累計表示" : "Cumulative from #{weekly_cumulative_start}" }
-      </label>) : ''}
       #{detail_series.any? && selected_period != 'weekly' ? %(
       &nbsp;
       <label><input id="weekly-view-checkbox" type="checkbox">
@@ -3821,8 +3822,8 @@ else
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]
       }));
-      const excessPanelSpecs = panels.map(([key, _label]) => ({
-        title:{text:#{JSON.generate(weekly_excess_title)},anchor:"start",fontSize:15},
+      const excessPanelSpec = (key, cumulative) => ({
+        title:{text:cumulative ? #{JSON.generate(weekly_excess_cumulative_title)} : #{JSON.generate(weekly_excess_trend_title)},anchor:"start",fontSize:15},
         width:"container",height:115,
         data:{values:weeklyValues},
         transform:[
@@ -3831,8 +3832,8 @@ else
           {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_lower * excess_rate_week_factor : 0",as:"excess_lower_increment"},
           {calculate:"year(toDate(datum.date)) >= excess_cumulative_start ? datum.excess_upper * excess_rate_week_factor : 0",as:"excess_upper_increment"},
           {window:[{op:"sum",field:"excess_lower_increment",as:"cumulative_excess_lower"},{op:"sum",field:"excess_upper_increment",as:"cumulative_excess_upper"}],sort:[{field:"date",order:"ascending"}],frame:[null,0]},
-          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_lower : null) : datum.excess_lower",as:"display_excess_lower"},
-          {calculate:"excess_cumulative ? (year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_upper : null) : datum.excess_upper",as:"display_excess_upper"},
+          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_lower : null" : "datum.excess_lower",as:"display_excess_lower"},
+          {calculate:cumulative ? "year(toDate(datum.date)) >= excess_cumulative_start ? datum.cumulative_excess_upper : null" : "datum.excess_upper",as:"display_excess_upper"},
           {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
         ],
         encoding:{
@@ -3843,11 +3844,15 @@ else
           {mark:{type:"bar",color:"#b92f3a",clip:true},encoding:{y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:#{JSON.generate(weekly_excess_title)}},y2:{datum:0}}},
           {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative"},tooltip:excessTooltip}}
         ]
-      }));
+      });
       const chartSpecs = [];
       panelSpecs.forEach((panel, index) => {
         chartSpecs.push(panel);
-        if (#{weekly_excess_enabled ? 'true' : 'false'}) chartSpecs.push(excessPanelSpecs[index]);
+        if (#{weekly_excess_enabled ? 'true' : 'false'}) {
+          const key = panels[index][0];
+          chartSpecs.push(excessPanelSpec(key, false));
+          chartSpecs.push(excessPanelSpec(key, true));
+        }
       });
       const spec = {
         $schema: "https://vega.github.io/schema/vega-lite/v5.json",
@@ -3860,7 +3865,6 @@ else
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
           {name:"zero_base", value:false},
-          {name:"excess_cumulative", value:false},
           {name:"excess_rate_week_factor", value:excessRateWeekFactor},
           {name:"excess_cumulative_start", value:excessCumulativeStart},
           {name:"primary_weekly", value:#{selected_period == 'weekly' ? 'true' : 'false'}},
@@ -3879,7 +3883,6 @@ else
         const output = document.getElementById("train-to-output");
         const modelOptions = Array.from(document.querySelectorAll(".model-option"));
         const zeroBase = document.getElementById("zero-base-checkbox");
-        const excessCumulative = document.getElementById("excess-cumulative-checkbox");
         const simulationControl = document.getElementById("simulation-interval-control");
         const simulationInterval = document.getElementById("simulation-interval-checkbox");
         const weeklyView = document.getElementById("weekly-view-checkbox");
@@ -3923,14 +3926,6 @@ else
         zeroBase.addEventListener("change", () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
         });
-        if (excessCumulative) {
-          const syncExcessMode = () => {
-            result.view.signal("excess_cumulative", excessCumulative.checked).runAsync();
-          };
-          excessCumulative.addEventListener("change", syncExcessMode);
-          window.addEventListener("pageshow", syncExcessMode);
-          syncExcessMode();
-        }
         simulationInterval.addEventListener("change", () => {
           const value = simulationInterval.checked ? "auto" : "analytic";
           result.view.signal("interval_mode", value).runAsync();
