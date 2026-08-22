@@ -90,13 +90,13 @@ IFrame = {
 #Object.send(:remove_const, :Cities)
 Cities = {
     'all'      => {sel: nil, ja: '選択市町村合算',  en: 'All selected cities'},
-    'jp132101' => {sel: nil, ja: '東京都小金井市',  en: 'Koganei/Tokyo'},
-    'jp141500' => {sel: nil, ja: '神奈川県相模原市',en: 'Sagamihara/Kanagawa'},
-    'jp221309' => {sel: nil, ja: '静岡県浜松市',    en: 'Hamamatsu/Shizuoka'},
-    'jp222267' => {sel: nil, ja: '静岡県牧之原市',  en: 'Makinohara/Shizuoka'},
-    'jp232076' => {sel: nil, ja: '愛知県豊川市',    en: 'Toyokawa/Aichi'},
-    'jp232068' => {sel: nil, ja: '愛知県春日井市',  en: 'Kasugai/Aichi'},
-    'jp442054' => {sel: nil, ja: '大分県佐伯市',    en: 'Saiki/Oita'},
+    'jp13210' => {sel: nil, ja: '東京都小金井市',  en: 'Koganei/Tokyo'},
+    'jp14150' => {sel: nil, ja: '神奈川県相模原市',en: 'Sagamihara/Kanagawa'},
+    'jp22130' => {sel: nil, ja: '静岡県浜松市',    en: 'Hamamatsu/Shizuoka'},
+    'jp22226' => {sel: nil, ja: '静岡県牧之原市',  en: 'Makinohara/Shizuoka'},
+    'jp23207' => {sel: nil, ja: '愛知県豊川市',    en: 'Toyokawa/Aichi'},
+    'jp23206' => {sel: nil, ja: '愛知県春日井市',  en: 'Kasugai/Aichi'},
+    'jp44205' => {sel: nil, ja: '大分県佐伯市',    en: 'Saiki/Oita'},
     'cze'      => {sel: nil, ja: 'チェコ',          en: 'Czech Republic'},
 
 #    'jp222038' => {sel: nil, ja: '静岡県沼津市',    en: 'Numazu/Shizuoka'},
@@ -217,6 +217,10 @@ Consts.each do |k, v|
 
     # 選択されたものだけチェック
     keys = $cgi[k].split(/,|~|、/)
+    # 旧URLの6桁自治体codeは、現行dataの5桁codeへ正規化して受け付ける。
+    # Accept legacy six-digit municipality codes by normalizing them to current five-digit codes.
+    keys.map! { |key| key.sub(/\A(jp\d{5})\d\z/, '\\1') } if k == 'c'
+    keys.uniq!
     keys.each do |key|
         v[:hash][key][:sel] = v[:selected] if v[:hash][key]
     end
@@ -338,7 +342,7 @@ data0 = elastic_search(
         ], minimum_should_match: 1 } }
     ],
     :should => [],
-    :source => [ 'doc_id', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
+    :source => [ 'doc_id', 'loc', 'areacode', 'area', 'step', 'period', 'age', 'dose', 'deaths', 'persondays', 'mortality', 'lives', 'rr0', 'lb0', 'ub0' ],
     #:source => [],
     #:debug => 'SHOWONLY_QUERY',
     #:debug => 'SHOWONLY',
@@ -348,8 +352,11 @@ $data = Hash.new
 cutoff = Date.parse('2024-07-01')
 data0.each do |k, datum|
     datum2 = datum.dup
-    # 比較系列は内部計算用にorg接頭辞を外し、既存の系列lookupと同じIDへ揃える。
-    # Remove the org prefix for internal lookups so comparison data shares the normal series keys.
+    datum2[:loc] ||= datum2.delete(:areacode)
+    datum2[:loc] = datum2[:loc][0, 7] if datum2[:loc].to_s.match?(/\Ajp\d{6}\z/)
+    k = k.sub(/\A(jp\d{5})\d_/, '\\1_')
+    # 元個票系列は内部計算用にorg接頭辞を外し、通常系列と同じlookupへ揃える。
+    # Remove the org prefix for internal lookups so source data shares the regular series keys.
     k = k.sub(/_org(1|3|6|all)_/, '_\1_')
     datum2[:step] = datum2[:step].sub(/\Aorg/, '') if datum2[:step].is_a?(String)
     # 旧indexの数値文字列を計算対象フィールドだけ数値化する。
@@ -367,8 +374,8 @@ data0.each do |k, datum|
         Log.error PP.pp(datum, '')
         exit
     end
-    if $l == :en && Cities[datum2[:areacode]]
-        datum2[:area] = Cities[datum2[:areacode]][:en]
+    if $l == :en && Cities[datum2[:loc]]
+        datum2[:area] = Cities[datum2[:loc]][:en]
     end
     if Date.parse(datum2[:period] + '-01') < cutoff
         if datum2[:step].to_s == '6'
@@ -388,18 +395,18 @@ end
 
 # 選択自治体を既存pageと同じfield単位で合算する。
 # Aggregate selected municipalities by the same fields as the existing page.
-hama = $data.select{|k, v| v[:areacode] == 'jp221309'}
+hama = $data.select{|k, v| v[:loc] == 'jp22130'}
 data2 = Hash.new
 Cities.each do |k1, city|
     next if ! city[:sel] || k1 == 'all'
-    data2.merge!($data.select{|k2, v| v[:areacode] == k1})
+    data2.merge!($data.select{|k2, v| v[:loc] == k1})
 end
 
 data_all = Hash.new
 hama.each do |k, datum|
     datum2 = datum.dup
-    datum2[:doc_id] = k.sub(/^jp221309/, 'all')
-    datum2[:areacode] = 'all'
+    datum2[:doc_id] = k.sub(/^jp22130/, 'all')
+    datum2[:loc] = 'all'
     datum2[:area] = Cities['all'][$l]
     set = data2.select{|k2, v| v[:step] == datum[:step] &&
                                v[:period] == datum[:period] &&
@@ -428,7 +435,7 @@ $data.merge!(data_all)
 $data = MissingHistory.build_missing_history_scenarios($data)
 
 # Risk Ratio against each area's past baseline:
-# <areacode>_1_2021m02_80+_0
+# <loc>_1_2021m02_80+_0
 # Because period is converted from 2021m02 to 2021-02 above, find by fields.
 past0_by_area = Hash.new
 $data.values.each do |v|
@@ -438,11 +445,11 @@ $data.values.each do |v|
     next unless v[:dose].to_s == '0'
     next unless v[:deaths].to_f > 0 && v[:persondays].to_f > 0
 
-    past0_by_area[[v[:miss], v[:areacode]]] = v
+    past0_by_area[[v[:miss], v[:loc]]] = v
 end
 
 $data.each do |id, datum|
-    past0 = past0_by_area[[datum[:miss], datum[:areacode]]]
+    past0 = past0_by_area[[datum[:miss], datum[:loc]]]
 
     if past0 && datum[:age] == '80+' && datum[:step].to_s == '1'
         datum[:rrp], datum[:lbp], datum[:ubp], dummy =
@@ -675,7 +682,7 @@ def print_stacks (code, city)
           "height": #{$height},
           "transform": [
             {"filter": "#{$filter_1st[:expr]}"},
-            {"filter": "datum.areacode == '#{code}'"},
+            {"filter": "datum.loc == '#{code}'"},
             {"filter": "datum.step == '1'"},
             {"filter": "datum.age == '#{age}'"},
             {"calculate": "test(/all|vaxx/, datum.dose) ? 0 : datum.#{type}", "as": "adj"},
@@ -756,7 +763,7 @@ Cities.each do |code, city|
           "height": #{$height},
           "transform": [
             {"filter": "#{$filter_1st[:expr]}"},
-            {"filter": "datum.areacode == '#{code}'"},
+            {"filter": "datum.loc == '#{code}'"},
             {"filter": "datum.step == '1'"},
             {"filter": "datum.age == '80+'"},
 EOS
@@ -851,7 +858,7 @@ EOS
           "height": #{$height},
           "transform": [
             {"filter": "#{$filter_1st[:expr]}"},
-            {"filter": "datum.areacode == '#{code}'"},
+            {"filter": "datum.loc == '#{code}'"},
             {"filter": "datum.step == '6'"},
             {"filter": "datum.age == '80+'"},
             {"filter": "#{$filter_vaxx}"}
