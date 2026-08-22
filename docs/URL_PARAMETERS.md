@@ -86,6 +86,8 @@ cumulative excess-mortality display is preserved.
 `interval=auto` or `interval=analytic`. The optional detailed weekly/monthly
 view is intentionally not stored in the URL.
 
-With no location or start year specified, the annual view starts in 2000 with
-Japan, the United Kingdom, Sweden, and the United States. A URL containing only
-`period=weekly` starts in 2015 with Japan, England, Sweden, and the United States.
+With no location, metric, or start year specified, the annual view starts in
+2000 with age-standardized mortality for Japan, the United Kingdom, Sweden, and
+the United States. A URL containing only `period=weekly` starts in 2015 with
+weekly death counts for Japan, England, Sweden, and the United States, using the
+Farrington-style method and the 2015–2019 baseline.

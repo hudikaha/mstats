@@ -295,7 +295,7 @@ selected_ages = age_values.flat_map { |value| value.split(/[~,]/) }.flat_map do 
 end.flatten.select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
-selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : 'deaths'
+selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : (selected_period == 'weekly' ? 'deaths' : 'asr')
 selected_metric = 'deaths' if selected_dataset != 'vital' && !%w[deaths crude_rate asr].include?(selected_metric)
 selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric == 'asr'
 selected_sex = 'both' if selected_metric == 'birth_rate'
@@ -310,7 +310,7 @@ weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.
 weekly_baselines = cgi.params.fetch('weekly_baseline', []).flat_map { |value| value.split(/[~,]/) }.
                    map { |value| value == 'fixed' ? 'fixed_2015_2019' : value } &
                    %w[fixed_2015_2019 fixed_2016_2020 rolling]
-weekly_methods = ['five_year'] if weekly_methods.empty?
+weekly_methods = ['farrington'] if weekly_methods.empty?
 weekly_baselines = ['fixed_2015_2019'] if weekly_baselines.empty?
 weekly_methods = [weekly_methods.first] if mode == 'country'
 weekly_baselines = [weekly_baselines.first] if mode == 'country'
@@ -3118,6 +3118,14 @@ puts <<~HTML
         // 日本語: 男女計は既定値なのでcanonical URLでは省略する。
         // English: Omit the default both-sex selection from canonical URLs.
         if (params.get('sex') === 'both') params.delete('sex');
+        // 日本語: form外にあるグラフ表示controlも読込み後のURLへ引き継ぐ。
+        // English: Preserve graph display controls outside the form in the submitted URL.
+        const currentParams = new URL(window.location.href).searchParams;
+        ['zero_base', 'include_deficit', 'covid_overlay', 'vaxx_overlay', 'chart_model', 'interval'].forEach(name => {
+          const value = currentParams.get(name);
+          if (value === null) params.delete(name);
+          else params.set(name, value);
+        });
         showLoading();
         window.location.assign(`${window.location.pathname}?${params.toString().replace(/%7E/gi, '~')}`);
       });
@@ -3943,17 +3951,17 @@ else
         layer: [{layer: [
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base || show_covid_overlay"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
-          {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#c83e4d", strokeWidth: 2, point: true, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
+          {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#111", strokeWidth: 2.6, point: {filled:true,size:55}, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
           {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
           {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#174a73", strokeDash:[7,4], strokeWidth:2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"expected",type:"quantitative"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#c83e4d", strokeWidth:1.5, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
+          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#111", strokeWidth:2.2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
           {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.observed)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"point", opacity:0, size:260, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:weeklyTooltip}},
           {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
           {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"!primary_weekly"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
           {transform:[...annualTransforms,{filter:"datum.year == train_to"}], mark:{type:"rule", color:"#555", strokeDash:[3,3]}}
         ]},
-          {data:{values:overlayValues},transform:[{filter:`datum.loc == '${panelLoc}' && datum.overlay == 'covid'`},{filter:"show_covid_overlay"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}],mark:{type:"line",color:"#6f42c1",strokeWidth:2,clip:true},encoding:{x:{field:"date",type:"temporal"},y:{field:"value",type:"quantitative",axis:{orient:"right",title:#{JSON.generate(covid_overlay_title)},titleColor:"#6f42c1",labelColor:"#6f42c1",tickColor:"#6f42c1",domainColor:"#6f42c1"}},tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},{field:"value",type:"quantitative",format:#{JSON.generate(covid_overlay_format)},title:#{JSON.generate(covid_overlay_title)}}]}}
+          {data:{values:overlayValues},transform:[{filter:`datum.loc == '${panelLoc}' && datum.overlay == 'covid'`},{filter:"show_covid_overlay"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}],mark:{type:"line",color:"#6f42c1",strokeWidth:2,clip:true},encoding:{x:{field:"date",type:"temporal"},y:{field:"value",type:"quantitative",axis:{orient:"right",title:#{JSON.generate(covid_overlay_title)},titleColor:"#6f42c1",labelColor:"#6f42c1",tickColor:"#6f42c1",domainColor:"#6f42c1",labelOpacity:{expr:"show_covid_overlay ? 1 : 0"},tickOpacity:{expr:"show_covid_overlay ? 1 : 0"},domainOpacity:{expr:"show_covid_overlay ? 1 : 0"},titleOpacity:{expr:"show_covid_overlay ? 1 : 0"}}},tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},{field:"value",type:"quantitative",format:#{JSON.generate(covid_overlay_format)},title:#{JSON.generate(covid_overlay_title)}}]}}
         ],
         resolve:{scale:{y:"shared"},axis:{y:"independent"}}
       }));
@@ -3980,7 +3988,7 @@ else
             {mark:{type:"bar",clip:true},encoding:{color:{condition:{test:"datum.display_excess_lower < 0",value:"#326f9f"},value:"#b92f3a",legend:null},y:{field:"display_excess_lower",type:"quantitative",scale:{zero:true},title:{expr:"include_deficit ? deficit_axis_title : excess_axis_title"}},y2:{datum:0}}},
             {mark:{type:"point",opacity:0,size:220,clip:true},encoding:{y:{field:"display_excess_upper",type:"quantitative"},tooltip:excessTooltip}}
           ]},
-          ...(cumulative ? [] : [{data:{values:overlayValues},transform:[{filter:`datum.loc == '${panels.find(panel => panel[0] == key)[2]}' && datum.overlay == 'vaxx'`},{filter:"show_vaxx_overlay"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}],mark:{type:"line",color:"#16835b",strokeWidth:2,clip:true},encoding:{x:{field:"date",type:"temporal"},y:{field:"value",type:"quantitative",scale:{zero:true},title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')},axis:{orient:"right",titleColor:"#16835b",labelColor:"#16835b"}},tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},{field:"value",type:"quantitative",format:",.0f",title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')}}]}}])
+          ...(cumulative ? [] : [{data:{values:overlayValues},transform:[{filter:`datum.loc == '${panels.find(panel => panel[0] == key)[2]}' && datum.overlay == 'vaxx'`},{filter:"show_vaxx_overlay"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}],mark:{type:"line",color:"#16835b",strokeWidth:2,clip:true},encoding:{x:{field:"date",type:"temporal"},y:{field:"value",type:"quantitative",scale:{zero:true},title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')},axis:{orient:"right",titleColor:"#16835b",labelColor:"#16835b",labelOpacity:{expr:"show_vaxx_overlay ? 1 : 0"},tickOpacity:{expr:"show_vaxx_overlay ? 1 : 0"},domainOpacity:{expr:"show_vaxx_overlay ? 1 : 0"},titleOpacity:{expr:"show_vaxx_overlay ? 1 : 0"}}},tooltip:[{field:"date",type:"temporal",title:#{JSON.generate($l == :ja ? '週末日' : 'Week ending')}},{field:"value",type:"quantitative",format:",.0f",title:#{JSON.generate($l == :ja ? 'ワクチン全体接種' : 'All vaccine doses')}}]}}])
         ],
         resolve:{scale:{y:"independent"}}
       });
