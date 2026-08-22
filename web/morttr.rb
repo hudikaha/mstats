@@ -2809,6 +2809,8 @@ title = if selected_dataset == 'cancer-incidence'
           $l == :ja ? '日本のがん罹患数・罹患率と予測区間' : 'Cancer incidence and prediction intervals in Japan'
         elsif selected_dataset == 'cancer-death'
           $l == :ja ? '日本のがん死亡数・死亡率と予測区間' : 'Cancer mortality and prediction intervals in Japan'
+        elsif selected_period == 'weekly'
+          $l == :ja ? '各国・各地域の週次死亡・超過／過少死亡' : 'Weekly mortality and excess/deficit deaths by country and area'
         else
           $l == :ja ? '各国・各地域の死亡数・死亡率と予測区間' : 'Deaths, mortality rates, and prediction intervals by country and area'
         end
