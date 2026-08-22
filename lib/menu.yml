@@ -40,7 +40,7 @@
 - href: morttr.rb?period=calendar
   ja: 死亡統計推移（年次）
   en: Mortality trends (annual)
-- href: morttr.rb?period=weekly&mode=series&start_year=2020&metric=deaths&ages=all&dcodes=allcause&c=jpn
+- href: morttr.rb?period=weekly
   ja: 週次死亡・超過／過少死亡
   en: Weekly mortality and excess/deficit deaths
 - href: vaxxinj.rb

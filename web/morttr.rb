@@ -301,6 +301,9 @@ selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric ==
 selected_sex = 'both' if selected_metric == 'birth_rate'
 interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
 include_deficit = %w[1 true yes on].include?(cgi['include_deficit'].downcase)
+zero_base = %w[1 true yes on].include?(cgi['zero_base'].downcase)
+covid_overlay = %w[1 true yes on].include?(cgi['covid_overlay'].downcase)
+vaxx_overlay = %w[1 true yes on].include?(cgi['vaxx_overlay'].downcase)
 selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
 weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.split(/[~,]/) } &
                  %w[five_year farrington euromomo]
@@ -349,7 +352,7 @@ if selected_dataset != 'vital' && selected_sex == 'both'
   selected_sex = 'male' if requested_site_codes == ['c61']
 end
 requested_start_year = cgi['start_year'].to_i
-period_start_year = selected_period == 'calendar' ? 2000 : 1999
+period_start_year = selected_period == 'calendar' ? 2000 : (selected_period == 'weekly' ? 2015 : 1999)
 default_start_year = requested_start_year.between?(1950, 2020) ? requested_start_year : period_start_year
 
 def location_names(code)
@@ -2206,7 +2209,8 @@ metric_locations = ['JPN'].select { |code| annual_catalog.key?(code) } if select
 available_locations = annual_catalog.keys.sort
 selected_locations = requested_locations.select { |code| available_locations.include?(code) }
 selected_locations &= metric_locations
-selected_locations = %w[JPN USA DEU].select { |code| metric_locations.include?(code) } if selected_locations.empty?
+default_locations = selected_period == 'calendar' ? %w[JPN GBR SWE USA] : %w[JPN ENG SWE USA]
+selected_locations = default_locations.select { |code| metric_locations.include?(code) } if selected_locations.empty?
 selected_locations = [metric_locations.first].compact if selected_locations.empty?
 requested_birth_causes = requested_causes.select { |cause| SPECIAL_CAUSES.key?(cause) }
 if selected_metric == 'birth_rate' && requested_birth_causes.any?
@@ -3824,7 +3828,7 @@ else
         <output id="train-to-output">#{cutoff_label.call(default_cutoff)}</output>
       </label>
       &nbsp;
-      <label><input id="zero-base-checkbox" type="checkbox">
+      <label><input id="zero-base-checkbox" type="checkbox" #{checked(zero_base)}>
         #{ $l == :ja ? 'Y軸を0から表示' : 'Start Y-axis at zero' }
       </label>
       #{weekly_excess_enabled ? %(
@@ -3834,12 +3838,12 @@ else
       </label>) : ''}
       #{covid_overlay_available ? %(
       &nbsp;
-      <label><input id="covid-overlay-checkbox" type="checkbox">
+      <label><input id="covid-overlay-checkbox" type="checkbox" #{checked(covid_overlay)}>
         #{ $l == :ja ? '新型コロナ死亡を重ねる' : 'Overlay COVID-19 deaths' }
       </label>) : ''}
       #{vaxx_overlay_available ? %(
       &nbsp;
-      <label><input id="vaxx-overlay-checkbox" type="checkbox">
+      <label><input id="vaxx-overlay-checkbox" type="checkbox" #{checked(vaxx_overlay)}>
         #{ $l == :ja ? 'ワクチン全体接種を重ねる' : 'Overlay all vaccine doses' }
       </label>) : ''}
       #{detail_series.any? && selected_period != 'weekly' ? %(
@@ -3927,7 +3931,7 @@ else
           {filter: `datum.series == '${key}'`}
         ],
         encoding: {
-          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: #{weekly_excess_enabled ? '{labels:false,ticks:false,domain:false,title:null}' : %({format:"%Y",tickCount:{interval:"year",step:1},labelOverlap:false,labelSeparation:6})}, title: #{JSON.generate(if weekly_excess_enabled
+          x: {field: "plot_date", type: "temporal", scale: {domainMin: {expr: "toDate(display_start_date)"}, domainMax: {expr: "now()"}, nice: false}, axis: #{weekly_excess_enabled ? '{labels:false,ticks:false,domain:false,title:null}' : %({format:"%Y",tickCount:{interval:"year",step:1},labelOverlap:"greedy",labelSeparation:6})}, title: #{JSON.generate(if weekly_excess_enabled
             nil
           elsif %w[calendar weekly].include?(selected_period)
             $l == :ja ? '年' : 'Year'
@@ -3968,7 +3972,7 @@ else
           {filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}
         ],
         encoding:{
-          x:{field:"date",type:"temporal",scale:{domainMin:{expr:"toDate(display_start_date)"},domainMax:{expr:"now()"},nice:false},axis:{format:"%Y",tickCount:{interval:"year",step:1},labelOverlap:false,labelSeparation:6},title:#{JSON.generate($l == :ja ? '年' : 'Year')}}
+          x:{field:"date",type:"temporal",scale:{domainMin:{expr:"toDate(display_start_date)"},domainMax:{expr:"now()"},nice:false},axis:{format:"%Y",tickCount:{interval:"year",step:1},labelOverlap:"greedy",labelSeparation:6},title:#{JSON.generate($l == :ja ? '年' : 'Year')}}
         },
         layer:[
           {layer:[
@@ -3999,9 +4003,9 @@ else
           {name:"train_to", value:trainDefault},
           {name:"model", value:modelDefault},
           {name:"interval_mode", value:intervalModeDefault},
-          {name:"zero_base", value:false},
-          {name:"show_covid_overlay", value:false},
-          {name:"show_vaxx_overlay", value:false},
+          {name:"zero_base", value:#{zero_base ? 'true' : 'false'}},
+          {name:"show_covid_overlay", value:#{covid_overlay ? 'true' : 'false'}},
+          {name:"show_vaxx_overlay", value:#{vaxx_overlay ? 'true' : 'false'}},
           {name:"include_deficit", value:#{include_deficit ? 'true' : 'false'}},
           {name:"excess_axis_title", value:#{JSON.generate(weekly_excess_title)}},
           {name:"deficit_axis_title", value:#{JSON.generate(weekly_deficit_title)}},
@@ -4067,16 +4071,28 @@ else
           // updateDispersion(value); // 推定φは現在非表示。Estimated phi is currently hidden.
           result.view.signal("train_to", value).runAsync();
         });
-        function syncModelControls() {
+        function syncModelControls(updateUrl = false) {
           const model = document.querySelector(".model-option:checked").value;
           result.view.signal("model", model).runAsync();
+          if (updateUrl) {
+            const url = new URL(window.location.href);
+            url.searchParams.set("chart_model", model);
+            history.replaceState(null, "", url);
+          }
           simulationControl.style.display = model === "poisson" ? "" : "none";
         }
-        modelOptions.forEach(input => input.addEventListener("change", syncModelControls));
+        modelOptions.forEach(input => input.addEventListener("change", () => syncModelControls(true)));
         syncModelControls();
-        zeroBase.addEventListener("change", () => {
+        const syncZeroBase = () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
-        });
+          const url = new URL(window.location.href);
+          if (zeroBase.checked) url.searchParams.set("zero_base", "1");
+          else url.searchParams.delete("zero_base");
+          history.replaceState(null, "", url);
+        };
+        zeroBase.addEventListener("change", syncZeroBase);
+        window.addEventListener("pageshow", syncZeroBase);
+        syncZeroBase();
         if (deficit) {
           const syncDeficit = () => {
             result.view.signal("include_deficit", deficit.checked).runAsync();
@@ -4090,13 +4106,25 @@ else
           syncDeficit();
         }
         if (covidOverlay) {
-          const syncCovidOverlay = () => result.view.signal("show_covid_overlay", covidOverlay.checked).runAsync();
+          const syncCovidOverlay = () => {
+            result.view.signal("show_covid_overlay", covidOverlay.checked).runAsync();
+            const url = new URL(window.location.href);
+            if (covidOverlay.checked) url.searchParams.set("covid_overlay", "1");
+            else url.searchParams.delete("covid_overlay");
+            history.replaceState(null, "", url);
+          };
           covidOverlay.addEventListener("change", syncCovidOverlay);
           window.addEventListener("pageshow", syncCovidOverlay);
           syncCovidOverlay();
         }
         if (vaxxOverlay) {
-          const syncVaxxOverlay = () => result.view.signal("show_vaxx_overlay", vaxxOverlay.checked).runAsync();
+          const syncVaxxOverlay = () => {
+            result.view.signal("show_vaxx_overlay", vaxxOverlay.checked).runAsync();
+            const url = new URL(window.location.href);
+            if (vaxxOverlay.checked) url.searchParams.set("vaxx_overlay", "1");
+            else url.searchParams.delete("vaxx_overlay");
+            history.replaceState(null, "", url);
+          };
           vaxxOverlay.addEventListener("change", syncVaxxOverlay);
           window.addEventListener("pageshow", syncVaxxOverlay);
           syncVaxxOverlay();
@@ -4105,8 +4133,7 @@ else
           const value = simulationInterval.checked ? "auto" : "analytic";
           result.view.signal("interval_mode", value).runAsync();
           const url = new URL(window.location.href);
-          if (simulationInterval.checked) url.searchParams.delete("interval");
-          else url.searchParams.set("interval", "analytic");
+          url.searchParams.set("interval", value);
           history.replaceState(null, "", url);
         });
         if (weeklyView) {

@@ -77,3 +77,15 @@ In weekly views of `morttr.rb`, `include_deficit=1` includes negative weekly
 differences below the baseline in both the trend and cumulative panels. Without
 this parameter, negative differences are treated as zero and the existing
 cumulative excess-mortality display is preserved.
+
+## Graph display controls
+
+`morttr.rb` preserves graph-only display controls with `zero_base=1`,
+`covid_overlay=1`, and `vaxx_overlay=1`. The model uses
+`chart_model=quasi_poisson` or `chart_model=poisson`; interval selection uses
+`interval=auto` or `interval=analytic`. The optional detailed weekly/monthly
+view is intentionally not stored in the URL.
+
+With no location or start year specified, the annual view starts in 2000 with
+Japan, the United Kingdom, Sweden, and the United States. A URL containing only
+`period=weekly` starts in 2015 with Japan, England, Sweden, and the United States.

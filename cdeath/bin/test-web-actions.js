@@ -109,9 +109,9 @@ const tests = [
   },
   {
     id: 'MY19', summary: '準PoissonとPoissonでsimulation controlを切替',
-    action: `(() => { const quasi = document.querySelector('.model-option[value="quasi_poisson"]'); quasi.click(); const hidden = getComputedStyle(document.querySelector('#simulation-interval-control')).display === 'none'; const poisson = document.querySelector('.model-option[value="poisson"]'); poisson.click(); return hidden && getComputedStyle(document.querySelector('#simulation-interval-control')).display !== 'none'; })()`,
+    action: `(() => { const quasi = document.querySelector('.model-option[value="quasi_poisson"]'); quasi.click(); const hidden = getComputedStyle(document.querySelector('#simulation-interval-control')).display === 'none'; const poisson = document.querySelector('.model-option[value="poisson"]'); poisson.click(); document.querySelector('#simulation-interval-checkbox').click(); return hidden && getComputedStyle(document.querySelector('#simulation-interval-control')).display !== 'none'; })()`,
     noNavigation: true,
-    expect: `document.querySelector('.model-option[value="poisson"]')?.checked && getComputedStyle(document.querySelector('#simulation-interval-control')).display !== 'none'`
+    expect: `document.querySelector('.model-option[value="poisson"]')?.checked && new URL(location.href).searchParams.get('chart_model') === 'poisson' && new URL(location.href).searchParams.get('interval') === 'auto' && getComputedStyle(document.querySelector('#simulation-interval-control')).display !== 'none'`
   },
   {
     id: 'MY20', summary: '言語buttonで日本語URLへ切替',
@@ -120,9 +120,8 @@ const tests = [
   },
   {
     id: 'MY31', summary: '表示開始年と新型コロナ死亡・ワクチン全体接種を保持',
-    action: `(() => { const url = new URL(location.href); url.searchParams.set('start_year', '2019'); history.replaceState(null, '', url); const slider = document.querySelector('#start-year-slider'); slider.value = '2020'; slider.dispatchEvent(new Event('input', {bubbles:true})); const deficit = document.querySelector('#deficit-checkbox'); if (deficit.checked) deficit.click(); deficit.click(); document.querySelector('#covid-overlay-checkbox').click(); document.querySelector('#vaxx-overlay-checkbox').click(); return true; })()`,
-    noNavigation: true,
-    expect: `(() => new URL(location.href).searchParams.get('start_year') === '2020' && new URL(location.href).searchParams.get('include_deficit') === '1' && document.querySelector('#start-year-hidden')?.value === '2020' && document.querySelector('#start-year-slider')?.max === '2020' && document.querySelector('#start-year-slider')?.value === '2020' && document.querySelector('#deficit-checkbox')?.checked && document.querySelector('#covid-overlay-checkbox')?.checked && document.querySelector('#vaxx-overlay-checkbox')?.checked && weeklyValues.some(item => item.excess < 0) && window.mortyearView?.signal('include_deficit') === true && window.mortyearView?.signal('show_covid_overlay') === true && window.mortyearView?.signal('show_vaxx_overlay') === true)()`
+    action: `(() => { const url = new URL(location.href); url.searchParams.set('start_year', '2019'); history.replaceState(null, '', url); const slider = document.querySelector('#start-year-slider'); slider.value = '2020'; slider.dispatchEvent(new Event('input', {bubbles:true})); document.querySelector('#zero-base-checkbox').click(); const deficit = document.querySelector('#deficit-checkbox'); if (deficit.checked) deficit.click(); deficit.click(); document.querySelector('#covid-overlay-checkbox').click(); document.querySelector('#vaxx-overlay-checkbox').click(); location.reload(); return true; })()`,
+    expect: `(() => new URL(location.href).searchParams.get('start_year') === '2020' && ['zero_base','include_deficit','covid_overlay','vaxx_overlay'].every(name => new URL(location.href).searchParams.get(name) === '1') && document.querySelector('#start-year-hidden')?.value === '2020' && document.querySelector('#start-year-slider')?.max === '2020' && document.querySelector('#start-year-slider')?.value === '2020' && document.querySelector('#zero-base-checkbox')?.checked && document.querySelector('#deficit-checkbox')?.checked && document.querySelector('#covid-overlay-checkbox')?.checked && document.querySelector('#vaxx-overlay-checkbox')?.checked && weeklyValues.some(item => item.excess < 0) && window.mortyearView?.signal('zero_base') === true && window.mortyearView?.signal('include_deficit') === true && window.mortyearView?.signal('show_covid_overlay') === true && window.mortyearView?.signal('show_vaxx_overlay') === true)()`
   }
 ].filter(test => !selectedIds || selectedIds.includes(test.id));
 

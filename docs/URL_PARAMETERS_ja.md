@@ -68,3 +68,14 @@ years=2019~2021-2025
 `morttr.rb`の週次表示では、`include_deficit=1`を指定すると、基準線を下回る週の負の差を
 推移と累積の両方へ含めます。このparameterがない場合は負の差を0として、従来の累積超過死亡を
 表示します。
+
+## グラフ表示control
+
+`morttr.rb`のグラフだけに作用する表示controlは、`zero_base=1`、`covid_overlay=1`、
+`vaxx_overlay=1`でURLへ保存します。モデルは`chart_model=quasi_poisson`または
+`chart_model=poisson`、区間は`interval=auto`または`interval=analytic`です。
+補助的な週次・月次表示の切替えは、意図的にURLへ保存しません。
+
+地域と開始年を指定しない年次表示は、日本・英国・スウェーデン・米国を2000年から表示します。
+`period=weekly`だけを指定した場合は、日本・イングランド・スウェーデン・米国を2015年から
+表示します。
