@@ -37,9 +37,12 @@
 - href: enmort.rb
   ja: イングランドのワクチン接種状況別全死因死亡率
   en: All-cause mortality in England by vaccination status
-- href: morttr.rb
-  ja: 各国・各地域の死亡統計推移
-  en: Mortality trends by country and area
+- href: morttr.rb?period=calendar
+  ja: 死亡統計推移（年次）
+  en: Mortality trends (annual)
+- href: morttr.rb?period=weekly&mode=series&start_year=2020&metric=deaths&ages=all&dcodes=allcause&c=jpn
+  ja: 週次死亡・超過／過少死亡
+  en: Weekly mortality and excess/deficit deaths
 - href: vaxxinj.rb
   ja: 予防接種健康被害救済制度の認定者数
   en: Vaccine injury compensation certifications

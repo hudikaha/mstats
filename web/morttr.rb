@@ -2867,7 +2867,7 @@ puts <<~HTML
       <span>#{ $l == :ja ? 'インフルエンザ年（開始:' : 'Influenza year (start:' }</span>
       <label><input class="period-option" type="radio" name="period" value="flu27" #{checked(selected_period == 'flu27')}>#{ $l == :ja ? '第27週' : 'W27' }</label>
       <label><input class="period-option" type="radio" name="period" value="flu36" #{checked(selected_period == 'flu36')}>#{ $l == :ja ? '第36週）' : 'W36)' }</label>
-      <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次' : 'Weekly' }</label>
+      <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次（超過・過少死亡）' : 'Weekly (excess/deficit mortality)' }</label>
     </fieldset>
     <fieldset id="weekly-method-fieldset" style="#{selected_period == 'weekly' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '週次基準線' : 'Weekly baseline' }</legend>
       <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="five_year" #{checked(weekly_methods.include?('five_year'))}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
