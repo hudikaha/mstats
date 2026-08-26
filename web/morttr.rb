@@ -210,6 +210,7 @@ ESTAT_ANNUAL_DEATH_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layo
 ESTAT_POP_URL = 'https://www.e-stat.go.jp/stat-search/files?page=1&layout=datalist&toukei=00200524&tstat=000000090001&cycle=1&tclass1=000001011678&cycle_facet=tclass1&tclass2val=0'
 DAYS_PER_YEAR = 365.2425
 Z95 = 1.959963984540054
+Z99 = 2.5758293035489004
 MIN_TRAINING_YEARS = 4
 POISSON_SIMULATIONS = 10_000
 CACHE_SCHEMA = 4
@@ -698,9 +699,9 @@ def poisson_fit(rows)
   { beta: beta, covariance: covariance, center: center, dispersion: dispersion }
 end
 
-# 日本語: 係数不確実性とPoisson観測分散を含む近似95%予測区間を作る。
-# English: Build an approximate 95% PI including coefficient and Poisson observation variance.
-def poisson_prediction(row, fit, variance_scale = 1.0)
+# 日本語: 係数不確実性とPoisson観測分散を含む近似95%・99%予測区間を作る。
+# English: Build approximate 95% and 99% PIs including coefficient and Poisson observation variance.
+def poisson_prediction(row, fit, variance_scale = 1.0, include_99: false)
   x = [1.0, row[:year] - fit[:center]]
   eta = fit[:beta][0] + fit[:beta][1] * x[1]
   scale = row.fetch(:unit_scale, 100_000)
@@ -710,9 +711,11 @@ def poisson_prediction(row, fit, variance_scale = 1.0)
     2.times.sum { |j| x[i] * fit[:covariance][i][j] * x[j] }
   end
   se_count = Math.sqrt(variance_scale * mu + mu * mu * variance_scale * var_eta)
-  lower = [0.0, mu - Z95 * se_count].max / row[:population] * scale
-  upper = (mu + Z95 * se_count) / row[:population] * scale
-  { expected: rate, lower: lower, upper: upper }
+  lower95 = [0.0, mu - Z95 * se_count].max / row[:population] * scale
+  upper95 = (mu + Z95 * se_count) / row[:population] * scale
+  lower99 = include_99 ? [0.0, mu - Z99 * se_count].max / row[:population] * scale : nil
+  upper99 = include_99 ? (mu + Z99 * se_count) / row[:population] * scale : nil
+  { expected: rate, lower: lower95, upper: upper95, lower99: lower99, upper99: upper99 }
 end
 
 def poisson_random(random, lambda)
@@ -810,7 +813,9 @@ end
 def cache_key(rows, calculator_type)
   canonical_value(
     cache_schema: CACHE_SCHEMA,
-    algorithm: 'poisson-linear-trend-dual-cache-v2',
+    # 日本語: 99%準ポアソン区間を持たない旧cacheとはkeyを分離する。
+    # English: Separate cache keys from older entries without 99% quasi-Poisson intervals.
+    algorithm: 'poisson-linear-trend-dual-cache-v3-quasi-pi99',
     period: { type: $mortyear_period, aggregation_version: 2 },
     calculator_type: calculator_type,
     simulations: POISSON_SIMULATIONS,
@@ -1270,10 +1275,16 @@ def weekly_baseline_analysis(rows, method:, baseline:, metric:)
           item[:upper].to_f * DAYS_PER_YEAR * 100_000.0 / (7.0 * item[:population]) * item[:weight]
         end
       end
+      lower99 = nil
+      upper99 = nil
       if variance
-        margin = 1.96 * Math.sqrt([variance, 0.0].max)
-        lower = [expected - margin, 0.0].max
-        upper = expected + margin
+        se = Math.sqrt([variance, 0.0].max)
+        margin95 = Z95 * se
+        margin99 = Z99 * se
+        lower = [expected - margin95, 0.0].max
+        upper = expected + margin95
+        lower99 = [expected - margin99, 0.0].max
+        upper99 = expected + margin99
       end
       observed = row[:observed].to_f
       outside_deviation = if observed > upper
@@ -1284,6 +1295,7 @@ def weekly_baseline_analysis(rows, method:, baseline:, metric:)
                             0.0
                           end
       { series: series, date: row[:date], expected: expected, lower: lower, upper: upper,
+        lower99: lower99, upper99: upper99,
         excess: observed - expected,
         outside_deviation: outside_deviation,
         excess_lower: [observed - upper, 0.0].max,
@@ -1633,12 +1645,15 @@ def compute_analytic_scenarios(rows, series_key, label)
     %w[poisson quasi_poisson].flat_map do |model|
       variance_scale = model == 'quasi_poisson' ? [fit[:dispersion].to_f, 1.0].max : 1.0
       rows.map do |row|
-        prediction = poisson_prediction(row, fit, variance_scale)
+        prediction = poisson_prediction(row, fit, variance_scale, include_99: model == 'quasi_poisson')
         {
           series: series_key, label: label, model: model, train_to: cutoff,
           year: row[:year], season: row[:season], observed: row[:observed],
           expected: prediction[:expected], pi_lower: prediction[:lower],
-          pi_upper: prediction[:upper], outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
+          pi_upper: prediction[:upper],
+          pi99_lower: model == 'quasi_poisson' ? prediction[:lower99] : nil,
+          pi99_upper: model == 'quasi_poisson' ? prediction[:upper99] : nil,
+          outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
           period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
           dispersion: fit[:dispersion]&.round(4), deaths: row[:deaths].round(2),
           population: row[:population].round, src_url: row[:src_url]
@@ -1736,7 +1751,9 @@ def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
                   upper: expected + Z95 * poisson_se }
       quasi_se = Math.sqrt([dispersion.to_f, 1.0].max * poisson_variance)
       quasi = { expected: expected, lower: [0.0, expected - Z95 * quasi_se].max,
-                upper: expected + Z95 * quasi_se }
+                upper: expected + Z95 * quasi_se,
+                lower99: [0.0, expected - Z99 * quasi_se].max,
+                upper99: expected + Z99 * quasi_se }
       [row[:year], { poisson: poisson, quasi_poisson: quasi }]
     end
 
@@ -1747,6 +1764,8 @@ def compute_stratified_asr_analytic_scenarios(rows, series_key, label)
           series: series_key, label: label, model: model, train_to: cutoff,
           year: row[:year], season: row[:season], observed: row[:observed], expected: prediction[:expected],
           pi_lower: prediction[:lower], pi_upper: prediction[:upper],
+          pi99_lower: model == 'quasi_poisson' ? prediction[:lower99] : nil,
+          pi99_upper: model == 'quasi_poisson' ? prediction[:upper99] : nil,
           outside_pi: row[:observed] < prediction[:lower] || row[:observed] > prediction[:upper],
           period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
           dispersion: dispersion&.round(4), deaths: row[:deaths].round(2),
@@ -1804,7 +1823,8 @@ def compute_stratified_asr_simulation_scenarios(rows, series_key, label)
       {
         series: series_key, label: label, model: 'poisson', train_to: cutoff,
         year: row[:year], season: row[:season], observed: row[:observed], expected: expected,
-        pi_lower: lower, pi_upper: upper, outside_pi: row[:observed] < lower || row[:observed] > upper,
+        pi_lower: lower, pi_upper: upper,
+        outside_pi: row[:observed] < lower || row[:observed] > upper,
         period: row[:year].between?($mortyear_training_start, cutoff) ? 'training' : row[:year] < $mortyear_training_start ? 'historical' : 'prediction',
         dispersion: nil, deaths: row[:deaths].round(2), population: row[:population].round,
         src_url: row[:src_url]
@@ -2389,7 +2409,7 @@ end
 
 # 日本語: 週次表示では、死亡数に新型コロナ死亡、超過死亡の推移にワクチン全体接種を重ねる。
 # English: In weekly views, overlay COVID-19 deaths on death counts and all vaccine doses on the excess trend.
-overlay_source = %w[loc yearweek category dcode type date year week sex age_all]
+overlay_source = %w[loc yearweek category dcode type date year week sex age_all src_url]
 covid_overlay_eligible = selected_period == 'weekly' && %w[deaths crude_rate].include?(selected_metric) &&
                            selected_ages == ['age_all'] && selected_sex == 'both'
 overlay_rows = if selected_period != 'weekly'
@@ -2451,6 +2471,7 @@ overlay_values = overlay_rows.filter_map do |row|
   next if row[:age_all].nil?
 
   { loc: row[:loc].to_s.downcase, date: row[:date], value: row[:age_all].to_f,
+    category: row[:category], dcode: row[:dcode], sex: row[:sex], src_url: row[:src_url],
     overlay: row[:category] == 'vaxx' ? 'vaxx' : 'covid' }
 end
 
@@ -2644,7 +2665,10 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
            annual_by_dataset.fetch(dataset).select { |row| row[:loc] == loc && row[:dcode] == cause }
          end
   build_scenarios(rows, series_key, label,
-                  use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1')
+                  use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1').map do |row|
+    row.merge(loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
+              dcode: cause, sex: selected_sex, ages: age.join('~'))
+  end
 end
 
 start_week = selected_period == 'flu27' ? 27 : 36
@@ -2793,9 +2817,11 @@ if opts[:summary]
       years: values.map { |row| row[:year] }.uniq.minmax,
       training_cutoffs: values.map { |row| row[:train_to] }.uniq.sort,
       complete_years: values.map { |row| row[:year] }.uniq.length,
-      poisson: poisson_latest && poisson_latest.slice(:train_to, :year, :observed, :expected, :pi_lower, :pi_upper),
+      poisson: poisson_latest && poisson_latest.slice(:train_to, :year, :observed, :expected,
+                                                       :pi_lower, :pi_upper),
       poisson_simulations: POISSON_SIMULATIONS,
-      latest_quasi_poisson: latest && latest.slice(:year, :observed, :expected, :pi_lower, :pi_upper, :dispersion),
+      latest_quasi_poisson: latest && latest.slice(:year, :observed, :expected,
+                                                   :pi_lower, :pi_upper, :pi99_lower, :pi99_upper, :dispersion),
       source_urls: values.flat_map { |row| row[:src_url] }.uniq
     }]
   end
@@ -2850,9 +2876,9 @@ puts <<~HTML
     #age-range-slider input::-moz-range-thumb { pointer-events:auto; width:16px; height:16px; border:1px solid #666; border-radius:50%; background:#687080; }
     .location-region-toggle { margin-left:.55em; vertical-align:middle; }
     .mortyear-note { text-align:left; background:#f5f7f8; padding:.8em 1em; }
-    #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
-    #mortyear-vis .vega-embed, #mortyear-vis .vega-embed > div { width:100%; max-width:100%; }
-    #mortyear-vis svg { display:block; max-width:100%; height:auto; }
+    #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow-x:auto; overflow-y:hidden; }
+    #mortyear-vis .vega-embed { width:100%; max-width:100%; }
+    #mortyear-vis svg { display:block; }
     #train-to-slider { width:50px; }
     .mortyear-loading { min-height:12em; display:flex; align-items:center; justify-content:center; font-size:1.2em; font-weight:bold; }
   </style>
@@ -3887,6 +3913,11 @@ else
       const weeklyValues = #{JSON.generate(weekly_context)};
       const overlayValues = #{JSON.generate(overlay_values)};
       const detailSeries = #{JSON.generate(detail_series)};
+      const mortyearVis = document.getElementById("mortyear-vis");
+      // 日本語: 両Y軸のextentを確保し、狭い画面でもplot本体を320px以上残す。
+      // English: Reserve both Y-axis extents and retain at least 320px for the plot.
+      const requestedPanelWidth = width => Math.max(320, width - 168);
+      const initialPlotWidth = requestedPanelWidth(mortyearVis.parentElement.clientWidth);
       const displayStartDefault = #{default_start_year};
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
@@ -3936,7 +3967,7 @@ else
       const predictionTransforms = [...annualTransforms, {filter: "datum.year >= training_start"}];
       const panelSpecs = panels.map(([key, label, panelLoc]) => ({
         title: {text: label, anchor: "start"},
-        width: "container", height: 260,
+        width: initialPlotWidth, height: 260,
         transform: [
           {filter: `datum.series == '${key}'`}
         ],
@@ -3969,7 +4000,7 @@ else
       }));
       const excessPanelSpec = (key, cumulative) => ({
         title:{text:{expr:cumulative ? "include_deficit ? deficit_cumulative_title : excess_cumulative_title" : "include_deficit ? deficit_trend_title : excess_trend_title"},anchor:"start",fontSize:15},
-        width:"container",height:115,
+        width:initialPlotWidth,height:115,
         data:{values:weeklyValues},
         transform:[
           {filter:`datum.series == '${key}'`},
@@ -4030,12 +4061,22 @@ else
           {name:"detail_series", value:detailSeries}
         ],
         vconcat: chartSpecs,
-        autosize: {type:"fit-x", contains:"padding", resize:true},
+        // 日本語: vconcat各段の軸余白をfit-xで重複控除しない。
+        // English: Avoid fit-x repeatedly subtracting axis space for every vconcat child.
+        autosize: {type:"pad", contains:"padding"},
         resolve: {scale: {y: "independent"}},
         config: {view:{stroke:null}, axis:{labelFontSize:15,titleFontSize:17}, axisY:{minExtent:84,maxExtent:84}, title:{fontSize:19}}
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         window.mortyearView = result.view;
+        let resizeTimer;
+        window.addEventListener("resize", () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            const width = requestedPanelWidth(mortyearVis.parentElement.clientWidth);
+            if (Math.abs(result.view.width() - width) > 1) result.view.width(width).runAsync();
+          }, 300);
+        });
         const slider = document.getElementById("train-to-slider");
         const startSlider = document.getElementById("start-year-slider");
         const startOutput = document.getElementById("start-year-output");
@@ -4163,6 +4204,161 @@ else
           document.getElementById("train-to-hidden").value = value;
         });
       }).catch(console.warn);
+    </script>
+    <p class="mortyear-downloads" style="text-align:center">
+      <button id="mortyear-download-csv" type="button">#{ $l == :ja ? 'CSVをダウンロード' : 'Download CSV' }</button>
+      <button id="mortyear-download-json" type="button">JSON</button>
+      <button id="mortyear-download-ndjson" type="button">NDJSON</button>
+    </p>
+    <script>
+      (() => {
+        const primaryPeriod = #{JSON.generate(selected_period)};
+        const primaryMetric = #{JSON.generate(selected_metric)};
+        const selectedAges = #{JSON.generate(selected_ages.join('~'))};
+        const selectedSex = #{JSON.generate(selected_sex)};
+        const csvColumns = [
+          "loc", "category", "dcode", "sex", "ages", "label",
+          "date", "year", "yearweek", "season",
+          "period", "metric", "method", "baseline", "model", "train_to", "interval_method",
+          "observed", "expected", "reference_lower", "reference_upper",
+          "pi95_lower", "pi95_upper", "pi99_lower", "pi99_upper",
+          "difference_from_expected", "difference_outside_pi95",
+          "cumulative_difference", "cumulative_outside_pi95",
+          "deaths", "population", "dispersion", "src_url"
+        ];
+        const finiteOrNull = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
+        const currentStartYear = () => Number(document.getElementById("start-year-slider").value);
+        const currentTrainTo = () => Number(document.getElementById("train-to-slider").value);
+        const seriesLabel = key => panels.find(panel => panel[0] === key)?.[1] || key;
+        const exportAnnualRows = () => {
+          const start = currentStartYear();
+          const trainTo = currentTrainTo();
+          return values.filter(row =>
+            row.year >= start && row.train_to === trainTo &&
+            row.model === "quasi_poisson" && row.interval_method === "analytic"
+          ).map(row => ({
+            loc: row.loc, category: row.category, dcode: row.dcode, sex: row.sex,
+            ages: row.ages, label: row.label, date: row.plot_date,
+            year: row.year, yearweek: null, season: row.season, period: primaryPeriod,
+            metric: primaryMetric, method: null, baseline: null, model: row.model,
+            train_to: row.train_to, interval_method: row.interval_method,
+            observed: finiteOrNull(row.observed), expected: finiteOrNull(row.expected),
+            reference_lower: null, reference_upper: null,
+            pi95_lower: finiteOrNull(row.pi_lower), pi95_upper: finiteOrNull(row.pi_upper),
+            pi99_lower: finiteOrNull(row.pi99_lower), pi99_upper: finiteOrNull(row.pi99_upper),
+            difference_from_expected: finiteOrNull(row.observed) == null || finiteOrNull(row.expected) == null ? null : Number(row.observed) - Number(row.expected),
+            difference_outside_pi95: null, cumulative_difference: null, cumulative_outside_pi95: null,
+            deaths: finiteOrNull(row.deaths), population: finiteOrNull(row.population),
+            dispersion: finiteOrNull(row.dispersion),
+            src_url: row.src_url || []
+          }));
+        };
+        const exportWeeklyRows = () => {
+          const startDate = new Date(`${currentStartYear()}-01-01T00:00:00Z`);
+          const includeDeficit = document.getElementById("deficit-checkbox")?.checked || false;
+          const groups = new Map();
+          weeklyValues.forEach(row => {
+            if (!row.date || new Date(`${row.date}T00:00:00Z`) < startDate) return;
+            if (row.observed == null && row.expected == null) return;
+            const match = row.series.match(/^(.*)--(five_year|farrington|euromomo)--(fixed_2015_2019|fixed_2016_2020|rolling)$/);
+            if (!match) return;
+            const [, baseSeries, method, baseline] = match;
+            const key = `${row.series}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push({row, baseSeries, method, baseline});
+          });
+          const exported = [];
+          groups.forEach(entries => {
+            let cumulative = 0;
+            let cumulativeOutside = 0;
+            entries.sort((left, right) => left.row.date.localeCompare(right.row.date)).forEach(({row, baseSeries, method, baseline}) => {
+              const year = Number(row.date.slice(0, 4));
+              const hasEstimate = finiteOrNull(row.expected) != null;
+              const difference = hasEstimate ? finiteOrNull(row.excess) : null;
+              const outside = hasEstimate ? finiteOrNull(row.outside_deviation) : null;
+              if (hasEstimate && year >= excessCumulativeStart) {
+                cumulative += (includeDeficit ? Number(row.excess) : Number(row.excess_upper)) * excessRateWeekFactor;
+                cumulativeOutside += (includeDeficit ? Number(row.outside_deviation) : Number(row.excess_lower)) * excessRateWeekFactor;
+              }
+              exported.push({
+                loc: String(row.loc || baseSeries.split("--")[0]).toLowerCase(),
+                category: row.category || "death", dcode: row.dcode || null,
+                sex: row.sex || selectedSex, ages: selectedAges,
+                label: seriesLabel(row.series), date: row.date,
+                year, yearweek: row.yearweek || null, season: null, period: primaryPeriod,
+                metric: primaryMetric, method, baseline, model: null, train_to: null,
+                interval_method: method === "five_year" ? "reference_range" : "analytic",
+                observed: finiteOrNull(row.observed), expected: finiteOrNull(row.expected),
+                reference_lower: method === "five_year" ? finiteOrNull(row.lower) : null,
+                reference_upper: method === "five_year" ? finiteOrNull(row.upper) : null,
+                pi95_lower: method === "five_year" ? null : finiteOrNull(row.lower),
+                pi95_upper: method === "five_year" ? null : finiteOrNull(row.upper),
+                pi99_lower: method === "five_year" ? null : finiteOrNull(row.lower99),
+                pi99_upper: method === "five_year" ? null : finiteOrNull(row.upper99),
+                difference_from_expected: difference, difference_outside_pi95: outside,
+                cumulative_difference: hasEstimate && year >= excessCumulativeStart ? cumulative : null,
+                cumulative_outside_pi95: hasEstimate && year >= excessCumulativeStart ? cumulativeOutside : null,
+                deaths: null, population: null, dispersion: null,
+                src_url: row.src_url || []
+              });
+            });
+          });
+          const selectedLocs = new Set(panels.map(panel => panel[2]));
+          const covid = document.getElementById("covid-overlay-checkbox")?.checked || false;
+          const vaxx = document.getElementById("vaxx-overlay-checkbox")?.checked || false;
+          overlayValues.forEach(row => {
+            if (!selectedLocs.has(row.loc) || !row.date || new Date(`${row.date}T00:00:00Z`) < startDate) return;
+            if ((row.overlay === "covid" && !covid) || (row.overlay === "vaxx" && !vaxx)) return;
+            exported.push({
+              loc: row.loc, category: row.category, dcode: row.dcode,
+              sex: row.sex || "both", ages: "age_all",
+              label: row.overlay, date: row.date, year: Number(row.date.slice(0, 4)),
+              yearweek: row.yearweek || null, season: null, period: primaryPeriod,
+              metric: row.overlay === "vaxx" ? "doses" : primaryMetric,
+              method: null, baseline: null, model: null, train_to: null,
+              interval_method: null, observed: finiteOrNull(row.value), expected: null, reference_lower: null,
+              reference_upper: null, pi95_lower: null, pi95_upper: null, pi99_lower: null,
+              pi99_upper: null, difference_from_expected: null, difference_outside_pi95: null,
+              cumulative_difference: null, cumulative_outside_pi95: null, deaths: null,
+              population: null, dispersion: null, src_url: row.src_url || []
+            });
+          });
+          return exported.sort((left, right) => left.date.localeCompare(right.date) ||
+            String(left.loc).localeCompare(String(right.loc)) ||
+            String(left.dcode).localeCompare(String(right.dcode)) ||
+            String(left.method).localeCompare(String(right.method)) ||
+            String(left.baseline).localeCompare(String(right.baseline)));
+        };
+        const exportRows = () => primaryPeriod === "weekly" ? exportWeeklyRows() : exportAnnualRows();
+        const scalar = value => Array.isArray(value) ? JSON.stringify(value) : value;
+        const csvCell = value => {
+          if (value == null) return "";
+          const text = String(scalar(value));
+          return /[",\\r\\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+        };
+        const download = (extension, mime, content) => {
+          const stamp = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+          const name = `morttr-${primaryPeriod}-${primaryMetric}-${stamp}.${extension}`;
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(new Blob([content], {type:mime}));
+          link.download = name;
+          document.body.appendChild(link);
+          link.click();
+          URL.revokeObjectURL(link.href);
+          link.remove();
+        };
+        document.getElementById("mortyear-download-csv").addEventListener("click", () => {
+          const rows = exportRows();
+          const lines = [csvColumns.join(","), ...rows.map(row => csvColumns.map(column => csvCell(row[column])).join(","))];
+          download("csv", "text/csv;charset=utf-8", `\uFEFF${lines.join("\\r\\n")}\\r\\n`);
+        });
+        document.getElementById("mortyear-download-json").addEventListener("click", () => {
+          download("json", "application/json;charset=utf-8", `${JSON.stringify(exportRows(), null, 2)}\\n`);
+        });
+        document.getElementById("mortyear-download-ndjson").addEventListener("click", () => {
+          download("ndjson", "application/x-ndjson;charset=utf-8", `${exportRows().map(row => JSON.stringify(row)).join("\\n")}\\n`);
+        });
+      })();
     </script>
     <p class="mortyear-note">
       #{ interval_note + ' ' + unit_note + (selected_metric == 'std_deaths' ? ($l == :ja ? ' 日本の週次派生系列を完全な暦年へ集計し、年境界週の死亡数は日数按分しています。' : ' Japanese derived weekly series are aggregated into complete calendar years, and boundary weeks are prorated by days.') : '') + approximation_note }
