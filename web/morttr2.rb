@@ -2409,7 +2409,7 @@ end
 
 # 日本語: 週次表示では、死亡数に新型コロナ死亡、超過死亡の推移にワクチン全体接種を重ねる。
 # English: In weekly views, overlay COVID-19 deaths on death counts and all vaccine doses on the excess trend.
-overlay_source = %w[loc yearweek category dcode type date year week sex age_all]
+overlay_source = %w[loc yearweek category dcode type date year week sex age_all src_url]
 covid_overlay_eligible = selected_period == 'weekly' && %w[deaths crude_rate].include?(selected_metric) &&
                            selected_ages == ['age_all'] && selected_sex == 'both'
 overlay_rows = if selected_period != 'weekly'
@@ -2471,6 +2471,7 @@ overlay_values = overlay_rows.filter_map do |row|
   next if row[:age_all].nil?
 
   { loc: row[:loc].to_s.downcase, date: row[:date], value: row[:age_all].to_f,
+    category: row[:category], dcode: row[:dcode], sex: row[:sex], src_url: row[:src_url],
     overlay: row[:category] == 'vaxx' ? 'vaxx' : 'covid' }
 end
 
@@ -2664,7 +2665,10 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
            annual_by_dataset.fetch(dataset).select { |row| row[:loc] == loc && row[:dcode] == cause }
          end
   build_scenarios(rows, series_key, label,
-                  use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1')
+                  use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1').map do |row|
+    row.merge(loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
+              dcode: cause, sex: selected_sex, ages: age.join('~'))
+  end
 end
 
 start_week = selected_period == 'flu27' ? 27 : 36
@@ -2873,8 +2877,8 @@ puts <<~HTML
     .location-region-toggle { margin-left:.55em; vertical-align:middle; }
     .mortyear-note { text-align:left; background:#f5f7f8; padding:.8em 1em; }
     #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
-    #mortyear-vis .vega-embed, #mortyear-vis .vega-embed > div { width:100%; max-width:100%; }
-    #mortyear-vis svg { display:block; max-width:100%; height:auto; }
+    #mortyear-vis .vega-embed { width:100%; max-width:100%; }
+    #mortyear-vis svg { display:block; }
     #train-to-slider { width:50px; }
     .mortyear-loading { min-height:12em; display:flex; align-items:center; justify-content:center; font-size:1.2em; font-weight:bold; }
   </style>
@@ -4195,14 +4199,17 @@ else
       (() => {
         const primaryPeriod = #{JSON.generate(selected_period)};
         const primaryMetric = #{JSON.generate(selected_metric)};
+        const selectedAges = #{JSON.generate(selected_ages.join('~'))};
+        const selectedSex = #{JSON.generate(selected_sex)};
         const csvColumns = [
-          "record_kind", "loc", "series", "label", "date", "year", "yearweek", "season",
+          "loc", "category", "dcode", "sex", "ages", "label",
+          "date", "year", "yearweek", "season",
           "period", "metric", "method", "baseline", "model", "train_to", "interval_method",
           "observed", "expected", "reference_lower", "reference_upper",
           "pi95_lower", "pi95_upper", "pi99_lower", "pi99_upper",
           "difference_from_expected", "difference_outside_pi95",
           "cumulative_difference", "cumulative_outside_pi95",
-          "deaths", "population", "dispersion", "overlay", "value", "src_url"
+          "deaths", "population", "dispersion", "src_url"
         ];
         const finiteOrNull = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
         const currentStartYear = () => Number(document.getElementById("start-year-slider").value);
@@ -4215,8 +4222,8 @@ else
             row.year >= start && row.train_to === trainTo &&
             row.model === "quasi_poisson" && row.interval_method === "analytic"
           ).map(row => ({
-            record_kind: "series", loc: row.series.split("--")[0].toLowerCase(),
-            series: row.series, label: row.label, date: row.plot_date,
+            loc: row.loc, category: row.category, dcode: row.dcode, sex: row.sex,
+            ages: row.ages, label: row.label, date: row.plot_date,
             year: row.year, yearweek: null, season: row.season, period: primaryPeriod,
             metric: primaryMetric, method: null, baseline: null, model: row.model,
             train_to: row.train_to, interval_method: row.interval_method,
@@ -4227,7 +4234,7 @@ else
             difference_from_expected: finiteOrNull(row.observed) == null || finiteOrNull(row.expected) == null ? null : Number(row.observed) - Number(row.expected),
             difference_outside_pi95: null, cumulative_difference: null, cumulative_outside_pi95: null,
             deaths: finiteOrNull(row.deaths), population: finiteOrNull(row.population),
-            dispersion: finiteOrNull(row.dispersion), overlay: null, value: null,
+            dispersion: finiteOrNull(row.dispersion),
             src_url: row.src_url || []
           }));
         };
@@ -4259,8 +4266,10 @@ else
                 cumulativeOutside += (includeDeficit ? Number(row.outside_deviation) : Number(row.excess_lower)) * excessRateWeekFactor;
               }
               exported.push({
-                record_kind: "series", loc: baseSeries.split("--")[0].toLowerCase(),
-                series: row.series, label: seriesLabel(row.series), date: row.date,
+                loc: String(row.loc || baseSeries.split("--")[0]).toLowerCase(),
+                category: row.category || "death", dcode: row.dcode || null,
+                sex: row.sex || selectedSex, ages: selectedAges,
+                label: seriesLabel(row.series), date: row.date,
                 year, yearweek: row.yearweek || null, season: null, period: primaryPeriod,
                 metric: primaryMetric, method, baseline, model: null, train_to: null,
                 interval_method: method === "five_year" ? "reference_range" : "analytic",
@@ -4274,7 +4283,7 @@ else
                 difference_from_expected: difference, difference_outside_pi95: outside,
                 cumulative_difference: hasEstimate && year >= excessCumulativeStart ? cumulative : null,
                 cumulative_outside_pi95: hasEstimate && year >= excessCumulativeStart ? cumulativeOutside : null,
-                deaths: null, population: null, dispersion: null, overlay: null, value: null,
+                deaths: null, population: null, dispersion: null,
                 src_url: row.src_url || []
               });
             });
@@ -4286,19 +4295,24 @@ else
             if (!selectedLocs.has(row.loc) || !row.date || new Date(`${row.date}T00:00:00Z`) < startDate) return;
             if ((row.overlay === "covid" && !covid) || (row.overlay === "vaxx" && !vaxx)) return;
             exported.push({
-              record_kind: "overlay", loc: row.loc, series: `${row.loc}--${row.overlay}`,
+              loc: row.loc, category: row.category, dcode: row.dcode,
+              sex: row.sex || "both", ages: "age_all",
               label: row.overlay, date: row.date, year: Number(row.date.slice(0, 4)),
               yearweek: row.yearweek || null, season: null, period: primaryPeriod,
-              metric: primaryMetric, method: null, baseline: null, model: null, train_to: null,
-              interval_method: null, observed: null, expected: null, reference_lower: null,
+              metric: row.overlay === "vaxx" ? "doses" : primaryMetric,
+              method: null, baseline: null, model: null, train_to: null,
+              interval_method: null, observed: finiteOrNull(row.value), expected: null, reference_lower: null,
               reference_upper: null, pi95_lower: null, pi95_upper: null, pi99_lower: null,
               pi99_upper: null, difference_from_expected: null, difference_outside_pi95: null,
               cumulative_difference: null, cumulative_outside_pi95: null, deaths: null,
-              population: null, dispersion: null, overlay: row.overlay,
-              value: finiteOrNull(row.value), src_url: row.src_url || []
+              population: null, dispersion: null, src_url: row.src_url || []
             });
           });
-          return exported.sort((left, right) => left.date.localeCompare(right.date) || left.series.localeCompare(right.series));
+          return exported.sort((left, right) => left.date.localeCompare(right.date) ||
+            String(left.loc).localeCompare(String(right.loc)) ||
+            String(left.dcode).localeCompare(String(right.dcode)) ||
+            String(left.method).localeCompare(String(right.method)) ||
+            String(left.baseline).localeCompare(String(right.baseline)));
         };
         const exportRows = () => primaryPeriod === "weekly" ? exportWeeklyRows() : exportAnnualRows();
         const scalar = value => Array.isArray(value) ? JSON.stringify(value) : value;
