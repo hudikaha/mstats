@@ -2876,7 +2876,7 @@ puts <<~HTML
     #age-range-slider input::-moz-range-thumb { pointer-events:auto; width:16px; height:16px; border:1px solid #666; border-radius:50%; background:#687080; }
     .location-region-toggle { margin-left:.55em; vertical-align:middle; }
     .mortyear-note { text-align:left; background:#f5f7f8; padding:.8em 1em; }
-    #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow:hidden; }
+    #mortyear-vis { width:100%; max-width:100%; box-sizing:border-box; overflow-x:auto; overflow-y:hidden; }
     #mortyear-vis .vega-embed { width:100%; max-width:100%; }
     #mortyear-vis svg { display:block; }
     #train-to-slider { width:50px; }
@@ -3913,6 +3913,11 @@ else
       const weeklyValues = #{JSON.generate(weekly_context)};
       const overlayValues = #{JSON.generate(overlay_values)};
       const detailSeries = #{JSON.generate(detail_series)};
+      const mortyearVis = document.getElementById("mortyear-vis");
+      // 日本語: 両Y軸のextentを確保し、狭い画面でもplot本体を320px以上残す。
+      // English: Reserve both Y-axis extents and retain at least 320px for the plot.
+      const requestedPanelWidth = width => Math.max(320, width - 168);
+      const initialPlotWidth = requestedPanelWidth(mortyearVis.parentElement.clientWidth);
       const displayStartDefault = #{default_start_year};
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
@@ -3962,7 +3967,7 @@ else
       const predictionTransforms = [...annualTransforms, {filter: "datum.year >= training_start"}];
       const panelSpecs = panels.map(([key, label, panelLoc]) => ({
         title: {text: label, anchor: "start"},
-        width: "container", height: 260,
+        width: initialPlotWidth, height: 260,
         transform: [
           {filter: `datum.series == '${key}'`}
         ],
@@ -3995,7 +4000,7 @@ else
       }));
       const excessPanelSpec = (key, cumulative) => ({
         title:{text:{expr:cumulative ? "include_deficit ? deficit_cumulative_title : excess_cumulative_title" : "include_deficit ? deficit_trend_title : excess_trend_title"},anchor:"start",fontSize:15},
-        width:"container",height:115,
+        width:initialPlotWidth,height:115,
         data:{values:weeklyValues},
         transform:[
           {filter:`datum.series == '${key}'`},
@@ -4056,14 +4061,22 @@ else
           {name:"detail_series", value:detailSeries}
         ],
         vconcat: chartSpecs,
-        // 日本語: 初回はcontainer幅へ合わせるが、tooltip表示ごとの再計測は行わない。
-        // English: Fit the initial container width without remeasuring on tooltip DOM changes.
-        autosize: {type:"fit-x", contains:"padding"},
+        // 日本語: vconcat各段の軸余白をfit-xで重複控除しない。
+        // English: Avoid fit-x repeatedly subtracting axis space for every vconcat child.
+        autosize: {type:"pad", contains:"padding"},
         resolve: {scale: {y: "independent"}},
         config: {view:{stroke:null}, axis:{labelFontSize:15,titleFontSize:17}, axisY:{minExtent:84,maxExtent:84}, title:{fontSize:19}}
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         window.mortyearView = result.view;
+        let resizeTimer;
+        window.addEventListener("resize", () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            const width = requestedPanelWidth(mortyearVis.parentElement.clientWidth);
+            if (Math.abs(result.view.width() - width) > 1) result.view.width(width).runAsync();
+          }, 300);
+        });
         const slider = document.getElementById("train-to-slider");
         const startSlider = document.getElementById("start-year-slider");
         const startOutput = document.getElementById("start-year-output");
