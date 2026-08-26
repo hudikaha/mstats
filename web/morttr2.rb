@@ -4056,7 +4056,9 @@ else
           {name:"detail_series", value:detailSeries}
         ],
         vconcat: chartSpecs,
-        autosize: {type:"fit-x", contains:"padding", resize:true},
+        // 日本語: 初回はcontainer幅へ合わせるが、tooltip表示ごとの再計測は行わない。
+        // English: Fit the initial container width without remeasuring on tooltip DOM changes.
+        autosize: {type:"fit-x", contains:"padding"},
         resolve: {scale: {y: "independent"}},
         config: {view:{stroke:null}, axis:{labelFontSize:15,titleFontSize:17}, axisY:{minExtent:84,maxExtent:84}, title:{fontSize:19}}
       };
