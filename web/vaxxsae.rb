@@ -37,6 +37,7 @@ html = <<~'HTMLDOC'
 #chartWrap { position:relative;width:100%;height:1050px; }
 #chartWrap canvas { width:100% !important;height:100% !important; }
 .legend { display:flex;justify-content:center;gap:16px 28px;flex-wrap:wrap;margin:4px 0 12px;font-size:18px; }
+.period-summary { margin:2px 0 12px;text-align:center;font-size:19px;font-weight:600;color:#222; }
 .legend-item { display:flex;align-items:center;gap:8px; }
 .swatch { width:22px;height:15px;box-sizing:border-box; }
 .manufacturer { background:#2a78d6; }
@@ -69,13 +70,13 @@ __MENU__
       <button id="btnEn" type="button">English</button>
     </div>
   </div>
+  <p id="periodNote" class="period-summary"></p>
   <div class="legend" aria-label="凡例">
     <span class="legend-item"><span class="swatch manufacturer"></span><span id="legendManufacturer"></span></span>
     <span class="legend-item"><span class="swatch medical"></span><span id="legendMedical"></span></span>
   </div>
   <div id="chartWrap"><canvas id="chart" role="img"></canvas></div>
   <div class="notes">
-    <p id="periodNote"></p>
     <p id="denominatorNote"></p>
     <p id="duplicateNote"></p>
     <p id="unavailableNote"></p>
@@ -139,7 +140,7 @@ const I18N = {
     title:'ワクチン別 重篤な副反応疑い報告頻度（接種可能のべ人数10万当たり）',
     manufacturer:'製造販売業者からの報告（全件重篤）', medical:'医療機関からの報告（うち重篤）', showExcluded:'1万以下または算出不可も表示',
     axis:'接種可能のべ人数10万当たりの報告頻度', unavailable:'算出不可', cases:'件', people:'接種可能のべ人数',
-    period:'※ 2025-04-01〜2025-09-30の報告を合算しています。',
+    period:'集計期間：2025-04-01〜2025-09-30',
     denominator:'※ 分母は納入数量から推定された「接種可能のべ人数」で、実際の接種者数ではありません。',
     duplicate:'※ 製造販売業者報告は全件が重篤です。同一症例が両方から報告された場合は、医療機関報告として計上されています。',
     unavailableNote:'※ 接種可能のべ人数が1万以下または算出不可のワクチンは、初期表示から除外しています。',
@@ -150,7 +151,7 @@ const I18N = {
     title:'Serious suspected adverse-event reports by vaccine (per 100,000 possible vaccinations)',
     manufacturer:'Reports from manufacturers (all serious)', medical:'Reports from medical institutions (serious)', showExcluded:'Also show ≤10,000 or not calculable',
     axis:'Reports per 100,000 possible vaccinations', unavailable:'Not calculable', cases:'reports', people:'Possible vaccinations',
-    period:'* Reports from 2025-04-01 through 2025-09-30 are combined.',
+    period:'Period: 2025-04-01–2025-09-30',
     denominator:'* The denominator is possible vaccinations estimated from shipments, not the actual number vaccinated.',
     duplicate:'* All manufacturer reports are serious. Cases reported by both sources are counted under medical-institution reports.',
     unavailableNote:'* Vaccines with 10,000 or fewer possible vaccinations, or without a calculable denominator, are hidden initially.',
