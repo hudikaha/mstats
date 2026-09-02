@@ -44,6 +44,7 @@ html = <<~'HTMLDOC'
 .notes { margin:14px 0 24px;font-size:16px;line-height:1.65;color:#4d4d4d; }
 .notes p { margin:.35em 0; }
 .source { margin-top:20px;padding-top:14px;border-top:1px solid #ddd;font-size:17px;line-height:1.6; }
+.source-page { display:block;width:95%;height:auto;margin:20px auto;border:1px solid #ddd; }
 @media (max-width:750px) {
   #chartWrap { height:1120px; }
   .segmented button { font-size:16px; }
@@ -60,7 +61,7 @@ __MENU__
     <a class="site-title-qr" href="https://medicalfacts.info/vaxxsae.rb"><img id="pageQr" src="qr/vaxxsae.rb.svg" alt=""></a>
   </div>
   <div class="controls">
-    <label><input id="showHpv2" type="checkbox"><span id="showHpv2Label"></span></label>
+    <label><input id="showExcluded" type="checkbox"><span id="showExcludedLabel"></span></label>
     <div class="segmented">
       <button id="btnJa" type="button">日本語</button>
       <button id="btnEn" type="button">English</button>
@@ -81,6 +82,20 @@ __MENU__
     <strong id="sourceHeading"></strong><br>
     <span id="sourceTitle"></span><br>
     <a href="https://www.mhlw.go.jp/content/11120000/001666661.pdf" target="_blank" rel="noopener">https://www.mhlw.go.jp/content/11120000/001666661.pdf</a>
+    <div id="sourcePages">
+      <img class="source-page" src="vaxxsae-src/page-01.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-02.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-03.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-04.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-05.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-06.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-07.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-08.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-09.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-10.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-11.jpg" alt="">
+      <img class="source-page" src="vaxxsae-src/page-12.jpg" alt="">
+    </div>
   </section>
 </main>
 </div>
@@ -113,42 +128,42 @@ const rows = [
   {ja:'経口弱毒生ヒトロタウイルスワクチン',en:'Rotavirus (monovalent)',d:421407,m:29,h:14},
   {ja:'5価経口弱毒生ロタウイルスワクチン',en:'Rotavirus (5-valent)',d:338888,m:21,h:11},
   {ja:'乾燥弱毒生麻しんワクチン',en:'Measles',d:null,m:0,h:0},
-  {ja:'ジフテリアトキソイド',en:'Diphtheria toxoid',d:null,m:0,h:0},
+  {ja:'ジフテリアトキソイド',en:'Diphtheria toxoid',d:0,m:0,h:0},
   {ja:'沈降13価肺炎球菌結合型ワクチン',en:'Pneumococcal conjugate (13-valent)',d:null,m:8,h:0}
 ];
 
 const I18N = {
   ja: {
     title:'ワクチン別 重篤な副反応疑い報告数（10万接種可能延べ人数当たり）',
-    manufacturer:'製造販売業者からの報告（全件重篤）', medical:'医療機関からの報告（うち重篤）', showHpv2:'2価HPVワクチンを表示',
+    manufacturer:'製造販売業者からの報告（全件重篤）', medical:'医療機関からの報告（うち重篤）', showExcluded:'1万以下または算出不可も表示',
     axis:'10万接種可能延べ人数当たり報告数', unavailable:'算出不可', cases:'件', people:'接種可能延べ人数',
     period:'※ 2025-04-01〜2025-09-30の報告を合算しています。',
     denominator:'※ 分母は納入数量から推定された「接種可能延べ人数」で、実際の接種者数ではありません。',
     duplicate:'※ 製造販売業者報告は全件が重篤です。同一症例が両方から報告された場合は、医療機関報告として計上されています。',
-    unavailableNote:'※ 接種可能延べ人数を得られない3ワクチンは、末尾に「算出不可」と表示しています。',
+    unavailableNote:'※ 接種可能延べ人数が1万以下または算出不可のワクチンは、初期表示から除外しています。',
     sourceHeading:'出典', sourceTitle:'厚生労働省「各ワクチンの報告状況」（9〜12ページ）',
-    qr:'このページのQRコード'
+    qr:'このページのQRコード', sourcePage:n=>'出典資料 '+n+'ページ'
   },
   en: {
     title:'Serious suspected adverse-event reports by vaccine (per 100,000 possible vaccinations)',
-    manufacturer:'Reports from manufacturers (all serious)', medical:'Reports from medical institutions (serious)', showHpv2:'Show 2-valent HPV vaccine',
+    manufacturer:'Reports from manufacturers (all serious)', medical:'Reports from medical institutions (serious)', showExcluded:'Also show ≤10,000 or not calculable',
     axis:'Reports per 100,000 possible vaccinations', unavailable:'Not calculable', cases:'reports', people:'Possible vaccinations',
     period:'* Reports from 2025-04-01 through 2025-09-30 are combined.',
     denominator:'* The denominator is possible vaccinations estimated from shipments, not the actual number vaccinated.',
     duplicate:'* All manufacturer reports are serious. Cases reported by both sources are counted under medical-institution reports.',
-    unavailableNote:'* Three vaccines without an available denominator are shown as not calculable at the bottom.',
+    unavailableNote:'* Vaccines with 10,000 or fewer possible vaccinations, or without a calculable denominator, are hidden initially.',
     sourceHeading:'Source', sourceTitle:'Ministry of Health, Labour and Welfare, “Reports by vaccine” (pp. 9–12)',
-    qr:'QR code for this page'
+    qr:'QR code for this page', sourcePage:n=>'Source page '+n
   }
 };
 
 rows.forEach(r => { r.mRate = r.d ? r.m / r.d * 100000 : null; r.hRate = r.d ? r.h / r.d * 100000 : null; });
 rows.sort((a,b) => {
-  if (a.d === null) return b.d === null ? 0 : 1;
-  if (b.d === null) return -1;
+  if (!a.d) return !b.d ? 0 : 1;
+  if (!b.d) return -1;
   return (b.mRate + b.hRate) - (a.mRate + a.hRate);
 });
-let displayedRows = rows.filter(r => r.en !== 'HPV (2-valent)');
+let displayedRows = rows.filter(r => r.d !== null && r.d > 10000);
 
 let lang = new URLSearchParams(location.search).get('l') === 'en' ? 'en' : '__LANG__';
 Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
@@ -163,7 +178,7 @@ const endLabels = {
     ctx.save(); ctx.font='bold 14px '+Chart.defaults.font.family; ctx.textBaseline='middle';
     displayedRows.forEach((r,i) => {
       const yy=y.getPixelForValue(i);
-      if (r.d === null) { ctx.fillStyle='#777'; ctx.textAlign='left'; ctx.fillText(t.unavailable,x.left+5,yy); return; }
+      if (!r.d) { ctx.fillStyle='#777'; ctx.textAlign='left'; ctx.fillText(t.unavailable,x.left+5,yy); return; }
       const total=r.mRate+r.hRate;
       const xx=x.getPixelForValue(total);
       ctx.fillStyle='#333'; ctx.textAlign=xx > x.right-62 ? 'right' : 'left';
@@ -201,7 +216,7 @@ function render() {
   document.getElementById('heading').textContent=t.title;
   document.getElementById('legendManufacturer').textContent=t.manufacturer;
   document.getElementById('legendMedical').textContent=t.medical;
-  document.getElementById('showHpv2Label').textContent=t.showHpv2;
+  document.getElementById('showExcludedLabel').textContent=t.showExcluded;
   document.getElementById('periodNote').textContent=t.period;
   document.getElementById('denominatorNote').textContent=t.denominator;
   document.getElementById('duplicateNote').textContent=t.duplicate;
@@ -212,19 +227,20 @@ function render() {
   document.getElementById('btnJa').classList.toggle('active',lang==='ja');
   document.getElementById('btnEn').classList.toggle('active',lang==='en');
   if (window.updateSiteMenu) window.updateSiteMenu(lang);
-  displayedRows=rows.filter(r=>document.getElementById('showHpv2').checked || r.en !== 'HPV (2-valent)');
-  chart.data.labels=displayedRows.map(r=>r[lang]);
+  displayedRows=rows.filter(r=>document.getElementById('showExcluded').checked || (r.d !== null && r.d > 10000));
+  chart.data.labels=displayedRows.map(r=>r[lang]+' ('+(r.m+r.h).toLocaleString()+'/'+(r.d===null?t.unavailable:r.d.toLocaleString())+')');
   chart.data.datasets[0].label=t.manufacturer;
   chart.data.datasets[0].data=displayedRows.map(r=>r.mRate);
   chart.data.datasets[1].label=t.medical;
   chart.data.datasets[1].data=displayedRows.map(r=>r.hRate);
   chart.options.scales.x.title.text=t.axis;
   chart.update();
+  document.querySelectorAll('.source-page').forEach((img,i)=>{img.alt=t.sourcePage(i+1);});
   const u=new URL(location.href); u.searchParams.set('l',lang); history.replaceState(null,'',u);
 }
 document.getElementById('btnJa').addEventListener('click',()=>{lang='ja';render();});
 document.getElementById('btnEn').addEventListener('click',()=>{lang='en';render();});
-document.getElementById('showHpv2').addEventListener('change',render);
+document.getElementById('showExcluded').addEventListener('change',render);
 render();
 </script>
 </body>
