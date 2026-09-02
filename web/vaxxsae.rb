@@ -44,11 +44,13 @@ html = <<~'HTMLDOC'
 .notes { margin:14px 0 24px;font-size:16px;line-height:1.65;color:#4d4d4d; }
 .notes p { margin:.35em 0; }
 .source { margin-top:20px;padding-top:14px;border-top:1px solid #ddd;font-size:17px;line-height:1.6; }
-.source-page { display:block;width:95%;height:auto;margin:20px auto;border:1px solid #ddd; }
+#sourcePages { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:20px; }
+.source-page { display:block;width:100%;height:auto;border:1px solid #ddd;box-sizing:border-box; }
 @media (max-width:750px) {
   #chartWrap { height:1120px; }
   .segmented button { font-size:16px; }
   .legend { font-size:16px; }
+  #sourcePages { grid-template-columns:1fr;gap:16px; }
 }
 </style>
 </head>
