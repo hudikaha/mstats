@@ -642,7 +642,7 @@ function titleFromFirst(items){
 var chartAll = new Chart(document.getElementById('chartAll'), {
   type:'line',
   data:{ datasets:[
-    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:4, pointStyle:'star', borderDash:[] },
+    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:6, pointHoverRadius:8, pointStyle:'star', borderDash:[] },
     { label:'', data:ninteiByAge[20], borderColor:'#e34948', backgroundColor:'#e34948', borderWidth:2.5, pointRadius:5, pointStyle:'circle', borderDash:[] },
     { label:'', data:rikanByAge[20], borderColor:'#eda100', backgroundColor:'#eda100', borderWidth:2.5, pointRadius:6, pointStyle:'rectRot', borderDash:[6,3] },
     { label:'', data:shiboByAge[20], borderColor:'#444441', backgroundColor:'#444441', borderWidth:2.5, pointRadius:5, pointStyle:'rect', borderDash:[1,3] },
@@ -664,7 +664,7 @@ var chartAll = new Chart(document.getElementById('chartAll'), {
 var chartZoom = new Chart(document.getElementById('chartZoom'), {
   type:'line',
   data:{ datasets:[
-    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:4, pointStyle:'star', borderDash:[] },
+    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:6, pointHoverRadius:8, pointStyle:'star', borderDash:[] },
     { label:'', data:ninteiByAge[20], borderColor:'#e34948', backgroundColor:'#e34948', borderWidth:2.5, pointRadius:5, pointStyle:'circle', borderDash:[] },
     { label:'', data:rikanByAge[20], borderColor:'#eda100', backgroundColor:'#eda100', borderWidth:2.5, pointRadius:6, pointStyle:'rectRot', borderDash:[6,3] },
     { label:'', data:shiboByAge[20], borderColor:'#444441', backgroundColor:'#444441', borderWidth:2.5, pointRadius:5, pointStyle:'rect', borderDash:[1,3] }
@@ -788,7 +788,7 @@ function legendKey(color,dash,marker){
 function renderSeriesLegends(age){
   var t = I18N[CURRENT_LANG];
   var items=[
-    ['#2a78d6',[],'circle',t.legendShinryo],
+    ['#2a78d6',[],'star',t.legendShinryo],
     ['#e34948',[],'circle',t.legendNintei(age)],
     ['#eda100',[6,3],'rectRot',t.legendRikan(age)],
     ['#444441',[1,3],'rect',t.legendShibo(age)],
