@@ -136,13 +136,13 @@ const rows = [
 
 const I18N = {
   ja: {
-    title:'ワクチン別 重篤な副反応疑い報告数（10万接種可能延べ人数当たり）',
+    title:'ワクチン別 重篤な副反応疑い報告頻度（接種可能のべ人数10万当たり）',
     manufacturer:'製造販売業者からの報告（全件重篤）', medical:'医療機関からの報告（うち重篤）', showExcluded:'1万以下または算出不可も表示',
-    axis:'10万接種可能延べ人数当たり報告数', unavailable:'算出不可', cases:'件', people:'接種可能延べ人数',
+    axis:'接種可能のべ人数10万当たりの報告頻度', unavailable:'算出不可', cases:'件', people:'接種可能のべ人数',
     period:'※ 2025-04-01〜2025-09-30の報告を合算しています。',
-    denominator:'※ 分母は納入数量から推定された「接種可能延べ人数」で、実際の接種者数ではありません。',
+    denominator:'※ 分母は納入数量から推定された「接種可能のべ人数」で、実際の接種者数ではありません。',
     duplicate:'※ 製造販売業者報告は全件が重篤です。同一症例が両方から報告された場合は、医療機関報告として計上されています。',
-    unavailableNote:'※ 接種可能延べ人数が1万以下または算出不可のワクチンは、初期表示から除外しています。',
+    unavailableNote:'※ 接種可能のべ人数が1万以下または算出不可のワクチンは、初期表示から除外しています。',
     sourceHeading:'出典', sourceTitle:'厚生労働省「各ワクチンの報告状況」（9〜12ページ）',
     qr:'このページのQRコード', sourcePage:n=>'出典資料 '+n+'ページ'
   },
@@ -206,7 +206,7 @@ const chart = new Chart(document.getElementById('chart'), {
     }}},
     scales:{
       x:{stacked:true,beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:14}}},
-      y:{stacked:true,ticks:{autoSkip:false,font:{size:14}}}
+      y:{stacked:true,ticks:{autoSkip:false,color:'#111',font:{size:17,weight:'600'}}}
     }
   }
 });
