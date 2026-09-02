@@ -788,7 +788,7 @@ function legendKey(color,dash,marker){
 function renderSeriesLegends(age){
   var t = I18N[CURRENT_LANG];
   var items=[
-    ['#2a78d6',[],'star',t.legendShinryo],
+    ['#2a78d6',[],'circle',t.legendShinryo],
     ['#e34948',[],'circle',t.legendNintei(age)],
     ['#eda100',[6,3],'rectRot',t.legendRikan(age)],
     ['#444441',[1,3],'rect',t.legendShibo(age)],
