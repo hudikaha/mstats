@@ -639,10 +639,27 @@ function titleFromFirst(items){
   return t.tooltipTitle(year, month);
 }
 
+// 受診者系列は、凡例と同じ塗りつぶし五芒星を使う。
+// Use the same filled five-point star as the legend for the visit series.
+function makeVisitPointStyle(){
+  var canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+  canvas.width=16;canvas.height=16;
+  ctx.beginPath();
+  for(var i=0;i<10;i++){
+    var angle=-Math.PI/2+i*Math.PI/5;
+    var radius=i%2===0 ? 7 : 3;
+    var x=8+Math.cos(angle)*radius,y=8+Math.sin(angle)*radius;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();ctx.fillStyle='#2a78d6';ctx.fill();
+  return canvas;
+}
+var visitPointStyle=makeVisitPointStyle();
+
 var chartAll = new Chart(document.getElementById('chartAll'), {
   type:'line',
   data:{ datasets:[
-    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:6, pointHoverRadius:8, pointStyle:'star', borderDash:[] },
+    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:6, pointHoverRadius:8, pointStyle:visitPointStyle, borderDash:[] },
     { label:'', data:ninteiByAge[20], borderColor:'#e34948', backgroundColor:'#e34948', borderWidth:2.5, pointRadius:5, pointStyle:'circle', borderDash:[] },
     { label:'', data:rikanByAge[20], borderColor:'#eda100', backgroundColor:'#eda100', borderWidth:2.5, pointRadius:6, pointStyle:'rectRot', borderDash:[6,3] },
     { label:'', data:shiboByAge[20], borderColor:'#444441', backgroundColor:'#444441', borderWidth:2.5, pointRadius:5, pointStyle:'rect', borderDash:[1,3] },
@@ -664,7 +681,7 @@ var chartAll = new Chart(document.getElementById('chartAll'), {
 var chartZoom = new Chart(document.getElementById('chartZoom'), {
   type:'line',
   data:{ datasets:[
-    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:6, pointHoverRadius:8, pointStyle:'star', borderDash:[] },
+    { label:'', data:visitData(), borderColor:'#2a78d6', backgroundColor:'#2a78d6', borderWidth:3, pointRadius:6, pointHoverRadius:8, pointStyle:visitPointStyle, borderDash:[] },
     { label:'', data:ninteiByAge[20], borderColor:'#e34948', backgroundColor:'#e34948', borderWidth:2.5, pointRadius:5, pointStyle:'circle', borderDash:[] },
     { label:'', data:rikanByAge[20], borderColor:'#eda100', backgroundColor:'#eda100', borderWidth:2.5, pointRadius:6, pointStyle:'rectRot', borderDash:[6,3] },
     { label:'', data:shiboByAge[20], borderColor:'#444441', backgroundColor:'#444441', borderWidth:2.5, pointRadius:5, pointStyle:'rect', borderDash:[1,3] }
@@ -781,7 +798,7 @@ function legendKey(color,dash,marker){
   if(marker==='circle') markerSvg='<circle cx="16" cy="8" r="4.5" fill="'+color+'"/>';
   else if(marker==='rectRot') markerSvg='<rect x="11.5" y="3.5" width="9" height="9" fill="'+color+'" transform="rotate(45 16 8)"/>';
   else if(marker==='rect') markerSvg='<rect x="11.5" y="3.5" width="9" height="9" fill="'+color+'"/>';
-  else if(marker==='star') markerSvg='<g stroke="'+color+'" stroke-width="2.2" stroke-linecap="round"><line x1="16" y1="2" x2="16" y2="14"/><line x1="10" y1="8" x2="22" y2="8"/><line x1="11.8" y1="3.8" x2="20.2" y2="12.2"/><line x1="20.2" y1="3.8" x2="11.8" y2="12.2"/></g>';
+  else if(marker==='star') markerSvg='<polygon points="16,2 17.7,7 23,7 18.7,10.2 20.3,15.2 16,12 11.7,15.2 13.3,10.2 9,7 14.3,7" fill="'+color+'"/>';
   return '<svg width="32" height="16" aria-hidden="true"><line x1="2" y1="8" x2="30" y2="8" stroke="'+color+'" stroke-width="2.5" stroke-dasharray="'+(dash.length ? dash.join(',') : '0')+'"/>'+markerSvg+'</svg>';
 }
 
