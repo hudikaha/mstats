@@ -50,7 +50,7 @@ html = <<~'HTMLDOC'
 .swatch { width:22px;height:15px;box-sizing:border-box; }
 .manufacturer { background:#2a78d6; }
 .medical { background:#e07b39; }
-.aluminum { background:#6b8e23; }
+.adjuvant { background:#6b8e23; }
 .notes { margin:14px 0 24px;font-size:16px;line-height:1.65;color:#4d4d4d; }
 .notes p { margin:.35em 0; }
 .source { margin-top:20px;padding-top:14px;border-top:1px solid #ddd;font-size:17px;line-height:1.6; }
@@ -92,7 +92,7 @@ __MENU__
   <div class="legend" aria-label="凡例">
     <span class="legend-item"><span class="swatch manufacturer"></span><span id="legendManufacturer"></span></span>
     <span class="legend-item"><span class="swatch medical"></span><span id="legendMedical"></span></span>
-    <span id="legendAluminumItem" class="legend-item"><span class="swatch aluminum"></span><span id="legendAluminum"></span></span>
+    <span id="legendAdjuvantItem" class="legend-item"><span class="swatch adjuvant"></span><span id="legendAdjuvant"></span></span>
   </div>
   <div id="chartWrap">
     <div id="barCharts">
@@ -131,60 +131,60 @@ __MENU__
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const rows = [
-  {ja:'帯状疱疹（組換え）',en:'Zoster (recombinant)',d:2178394,m:118,h:22,al:0},
-  {ja:'23価肺炎球菌',en:'Pneumococcal (23-valent)',d:326272,m:8,h:3,al:0},
-  {ja:'9価HPV',en:'HPV (9-valent)',d:382371,m:76,h:28,al:0.5},
-  {ja:'4価HPV',en:'HPV (4-valent)',d:16720,m:17,h:2,al:0.225},
-  {ja:'2価HPV',en:'HPV (2-valent)',d:398,m:3,h:0,al:0.5},
-  {ja:'MR（麻しん・風しん）',en:'MR (measles-rubella)',d:1027205,m:7,h:8,al:0},
-  {ja:'風しん',en:'Rubella',d:46720,m:0,h:0,al:0},
-  {ja:'おたふくかぜ',en:'Mumps',d:696133,m:6,h:7,al:0},
-  {ja:'水痘',en:'Varicella',d:1169412,m:9,h:10,al:0},
-  {ja:'DPT',en:'DPT',d:94312,m:1,h:0,al:0.1},
-  {ja:'DT（ジフテリア・破傷風）',en:'DT',d:436689,m:0,h:3,al:0.1},
-  {ja:'破傷風トキソイド',en:'Tetanus toxoid',d:266893,m:3,h:0,al:0.1},
-  {ja:'不活化ポリオ',en:'Inactivated polio',d:30678,m:0,h:0,al:0},
-  {ja:'DPT-IPV',en:'DPT-IPV',d:298378,m:1,h:3,al:0.1},
-  {ja:'DPT-IPV-Hib',en:'DPT-IPV-Hib',d:1293879,m:28,h:19,al:0.1},
-  {ja:'Hib',en:'Hib',d:32474,m:3,h:1,al:0},
-  {ja:'20価肺炎球菌',en:'Pneumococcal (20-valent)',d:1139876,m:31,h:19,al:0.125},
-  {ja:'15価肺炎球菌',en:'Pneumococcal (15-valent)',d:205122,m:8,h:1,al:0.125},
-  {ja:'BCG',en:'BCG',d:334215,m:16,h:8,al:0},
-  {ja:'日本脳炎',en:'Japanese encephalitis',d:1672722,m:0,h:3,al:0},
-  {ja:'B型肝炎',en:'Hepatitis B',d:1979969,m:29,h:15,al:0.5},
-  {ja:'RSV（アレックスビー）',en:'RSV (Arexvy)',d:6835,m:2,h:0,al:0},
-  {ja:'RSV（アブリスボ）',en:'RSV (Abrysvo)',d:63457,m:32,h:0,al:0},
-  {ja:'1価ロタ',en:'Rotavirus (monovalent)',d:421407,m:29,h:14,al:0},
-  {ja:'5価ロタ',en:'Rotavirus (5-valent)',d:338888,m:21,h:11,al:0},
-  {ja:'麻しん',en:'Measles',d:null,m:0,h:0,al:0},
-  {ja:'ジフテリアトキソイド',en:'Diphtheria toxoid',d:0,m:0,h:0,al:0.1},
-  {ja:'13価肺炎球菌',en:'Pneumococcal (13-valent)',d:null,m:8,h:0,al:0.125}
+  {ja:'帯状疱疹（組換え）',en:'Zoster (recombinant)',d:2178394,m:118,h:22,adj:0.1},
+  {ja:'23価肺炎球菌',en:'Pneumococcal (23-valent)',d:326272,m:8,h:3,adj:0},
+  {ja:'9価HPV',en:'HPV (9-valent)',d:382371,m:76,h:28,adj:0.5},
+  {ja:'4価HPV',en:'HPV (4-valent)',d:16720,m:17,h:2,adj:0.225},
+  {ja:'2価HPV',en:'HPV (2-valent)',d:398,m:3,h:0,adj:0.55},
+  {ja:'MR（麻しん・風しん）',en:'MR (measles-rubella)',d:1027205,m:7,h:8,adj:0},
+  {ja:'風しん',en:'Rubella',d:46720,m:0,h:0,adj:0},
+  {ja:'おたふくかぜ',en:'Mumps',d:696133,m:6,h:7,adj:0},
+  {ja:'水痘',en:'Varicella',d:1169412,m:9,h:10,adj:0},
+  {ja:'DPT',en:'DPT',d:94312,m:1,h:0,adj:0.1},
+  {ja:'DT（ジフテリア・破傷風）',en:'DT',d:436689,m:0,h:3,adj:0.1},
+  {ja:'破傷風トキソイド',en:'Tetanus toxoid',d:266893,m:3,h:0,adj:0.1},
+  {ja:'不活化ポリオ',en:'Inactivated polio',d:30678,m:0,h:0,adj:0},
+  {ja:'DPT-IPV',en:'DPT-IPV',d:298378,m:1,h:3,adj:0.1},
+  {ja:'DPT-IPV-Hib',en:'DPT-IPV-Hib',d:1293879,m:28,h:19,adj:0.1},
+  {ja:'Hib',en:'Hib',d:32474,m:3,h:1,adj:0},
+  {ja:'20価肺炎球菌',en:'Pneumococcal (20-valent)',d:1139876,m:31,h:19,adj:0.125},
+  {ja:'15価肺炎球菌',en:'Pneumococcal (15-valent)',d:205122,m:8,h:1,adj:0.125},
+  {ja:'BCG',en:'BCG',d:334215,m:16,h:8,adj:0},
+  {ja:'日本脳炎',en:'Japanese encephalitis',d:1672722,m:0,h:3,adj:0},
+  {ja:'B型肝炎',en:'Hepatitis B',d:1979969,m:29,h:15,adj:0.5},
+  {ja:'RSV（アレックスビー）',en:'RSV (Arexvy)',d:6835,m:2,h:0,adj:0.05},
+  {ja:'RSV（アブリスボ）',en:'RSV (Abrysvo)',d:63457,m:32,h:0,adj:0},
+  {ja:'1価ロタ',en:'Rotavirus (monovalent)',d:421407,m:29,h:14,adj:0},
+  {ja:'5価ロタ',en:'Rotavirus (5-valent)',d:338888,m:21,h:11,adj:0},
+  {ja:'麻しん',en:'Measles',d:null,m:0,h:0,adj:0},
+  {ja:'ジフテリアトキソイド',en:'Diphtheria toxoid',d:0,m:0,h:0,adj:0.1},
+  {ja:'13価肺炎球菌',en:'Pneumococcal (13-valent)',d:null,m:8,h:0,adj:0.125}
 ];
 
 const I18N = {
   ja: {
-    title:'ワクチン別 重篤な副反応疑い報告頻度とアルミニウムアジュバント量（試作）',
-    manufacturer:'製造販売業者からの報告（「重篤」として報告）', medical:'医療機関からの報告（うち重篤）', aluminum:'アルミニウム', showExcluded:'1万以下または算出不可も表示',
-    viewLabel:'表示', serious:'重篤報告', withAluminum:'重篤報告＋アルミ', scatter:'散布図',
+    title:'ワクチン別 重篤な副反応疑い報告頻度とアジュバント量（試作）',
+    manufacturer:'製造販売業者からの報告（「重篤」として報告）', medical:'医療機関からの報告（うち重篤）', adjuvant:'アジュバント量', showExcluded:'1万以下または算出不可も表示',
+    viewLabel:'表示', serious:'重篤報告', withAluminum:'重篤報告＋アジュバント', scatter:'散布図',
     axis:'接種可能のべ人数10万当たりの報告頻度', unavailable:'算出不可', cases:'件', people:'接種可能のべ人数',
     period:'集計期間：2025-04-01〜2025-09-30',
     denominator:'※ 分母は納入数量から推定された「接種可能のべ人数」で、実際の接種者数ではありません。',
     duplicate:'※ 製造販売業者報告は全件が重篤です。同一症例が両方から報告された場合は、医療機関報告として計上されています。',
     unavailableNote:'※ 接種可能のべ人数が1万以下または算出不可のワクチンは、初期表示から除外しています。',
-    aluminumAxis:'元素Al換算量（mg／1回接種）', aluminumNote:'※ アルミニウム量は、国内製品の1回接種当たり元素Al換算量の最大値です。製品・接種量によって異なる場合があります。',
+    adjuvantAxis:'アジュバント量（mg／1回接種）', adjuvantNote:'※ アジュバント量は、1回接種当たりの添付文書記載量を単純合計しています。異なる成分間で作用の強さを揃える正規化はしていません。製品・接種量によって異なる場合は国内製品の最大値です。',
     sourceHeading:'出典', sourceTitle:'厚生労働省「各ワクチンの報告状況」（9〜12ページ）',
     qr:'このページのQRコード', sourcePage:n=>'出典資料 '+n+'ページ'
   },
   en: {
-    title:'Serious suspected adverse-event report frequency and aluminum adjuvant amount by vaccine (draft)',
-    manufacturer:'Manufacturer reports (reported as serious)', medical:'Medical-institution reports (serious)', aluminum:'Aluminum', showExcluded:'Also show ≤10,000 or not calculable',
-    viewLabel:'View', serious:'Serious reports', withAluminum:'Reports + aluminum', scatter:'Scatter plot',
+    title:'Serious suspected adverse-event report frequency and adjuvant amount by vaccine (draft)',
+    manufacturer:'Manufacturer reports (reported as serious)', medical:'Medical-institution reports (serious)', adjuvant:'Adjuvant amount', showExcluded:'Also show ≤10,000 or not calculable',
+    viewLabel:'View', serious:'Serious reports', withAluminum:'Reports + adjuvant', scatter:'Scatter plot',
     axis:'Reports per 100,000 possible vaccinations', unavailable:'Not calculable', cases:'reports', people:'Possible vaccinations',
     period:'Period: 2025-04-01–2025-09-30',
     denominator:'* The denominator is possible vaccinations estimated from shipments, not the actual number vaccinated.',
     duplicate:'* All manufacturer reports are serious. Cases reported by both sources are counted under medical-institution reports.',
     unavailableNote:'* Vaccines with 10,000 or fewer possible vaccinations, or without a calculable denominator, are hidden initially.',
-    aluminumAxis:'Elemental Al equivalent (mg/dose)', aluminumNote:'* Aluminum is the maximum elemental-Al-equivalent amount per dose among Japanese products; it may vary by product and dose.',
+    adjuvantAxis:'Adjuvant amount (mg/dose)', adjuvantNote:'* Amounts listed per dose are simply summed without normalizing potency across different ingredients. The maximum among Japanese products is used where products or doses differ.',
     sourceHeading:'Source', sourceTitle:'Ministry of Health, Labour and Welfare, “Reports by vaccine” (pp. 9–12)',
     qr:'QR code for this page', sourcePage:n=>'Source page '+n
   }
@@ -243,8 +243,21 @@ const chart = new Chart(document.getElementById('chart'), {
   }
 });
 
+// アジュバントがない行も欠損に見えないよう、全行に数値を表示する。
+// Label every row so zero-adjuvant vaccines are not mistaken for missing data.
+const adjuvantLabels = {
+  id:'adjuvantLabels',
+  afterDatasetsDraw(chart){
+    const ctx=chart.ctx,x=chart.scales.x,y=chart.scales.y;
+    ctx.save();ctx.font='bold 14px '+Chart.defaults.font.family;ctx.fillStyle='#333';ctx.textBaseline='middle';ctx.textAlign='left';
+    displayedRows.forEach((r,i)=>{const xx=x.getPixelForValue(r.adj);ctx.fillText(r.adj.toFixed(3).replace(/0+$/,'').replace(/\.$/,''),xx+5,y.getPixelForValue(i));});
+    ctx.restore();
+  }
+};
+
 const aluminumChart = new Chart(document.getElementById('aluminumChart'), {
   type:'bar',
+  plugins:[adjuvantLabels],
   data:{labels:[],datasets:[{label:'',data:[],backgroundColor:'#6b8e23',borderWidth:0}]},
   options:{
     indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:500},
@@ -266,7 +279,7 @@ const scatterChart = new Chart(document.getElementById('scatterChart'), {
     responsive:true,maintainAspectRatio:false,animation:{duration:500},
     plugins:{legend:{display:false},tooltip:{callbacks:{
       title(items){return items[0].raw.label;},
-      label(c){const t=I18N[lang];return [t.aluminumAxis+': '+c.raw.x.toFixed(3),t.axis+': '+c.raw.y.toFixed(2)];}
+      label(c){const t=I18N[lang];return [t.adjuvantAxis+': '+c.raw.x.toFixed(3),t.axis+': '+c.raw.y.toFixed(2)];}
     }}},
     scales:{
       x:{beginAtZero:true,title:{display:true,text:'',font:{size:18}},ticks:{font:{size:14}}},
@@ -282,7 +295,7 @@ function render() {
   document.getElementById('heading').textContent=t.title;
   document.getElementById('legendManufacturer').textContent=t.manufacturer;
   document.getElementById('legendMedical').textContent=t.medical;
-  document.getElementById('legendAluminum').textContent=t.aluminum;
+  document.getElementById('legendAdjuvant').textContent=t.adjuvant;
   document.getElementById('showExcludedLabel').textContent=t.showExcluded;
   document.getElementById('viewLabel').textContent=t.viewLabel;
   document.getElementById('btnSerious').textContent=t.serious;
@@ -292,7 +305,7 @@ function render() {
   document.getElementById('denominatorNote').textContent=t.denominator;
   document.getElementById('duplicateNote').textContent=t.duplicate;
   document.getElementById('unavailableNote').textContent=t.unavailableNote;
-  document.getElementById('aluminumNote').textContent=t.aluminumNote;
+  document.getElementById('aluminumNote').textContent=t.adjuvantNote;
   document.getElementById('sourceHeading').textContent=t.sourceHeading;
   document.getElementById('sourceTitle').textContent=t.sourceTitle;
   document.getElementById('pageQr').alt=t.qr;
@@ -303,7 +316,7 @@ function render() {
   document.getElementById('btnScatter').classList.toggle('active',view==='scatter');
   document.getElementById('barCharts').classList.toggle('with-aluminum',view==='aluminum');
   document.getElementById('chartWrap').classList.toggle('scatter-mode',view==='scatter');
-  document.getElementById('legendAluminumItem').style.display=view==='serious'?'none':'flex';
+  document.getElementById('legendAdjuvantItem').style.display=view==='serious'?'none':'flex';
   if (window.updateSiteMenu) window.updateSiteMenu(lang);
   displayedRows=rows.filter(r=>document.getElementById('showExcluded').checked || (r.d !== null && r.d > 10000));
   chart.data.labels=displayedRows.map(r=>r[lang]+' ('+(r.m+r.h).toLocaleString()+'/'+(r.d===null?t.unavailable:r.d.toLocaleString())+')');
@@ -314,13 +327,13 @@ function render() {
   chart.options.scales.x.title.text=t.axis;
   chart.update();
   aluminumChart.data.labels=displayedRows.map(r=>r[lang]);
-  aluminumChart.data.datasets[0].label=t.aluminum;
-  aluminumChart.data.datasets[0].data=displayedRows.map(r=>r.al);
-  aluminumChart.options.scales.x.title.text=t.aluminumAxis;
+  aluminumChart.data.datasets[0].label=t.adjuvant;
+  aluminumChart.data.datasets[0].data=displayedRows.map(r=>r.adj);
+  aluminumChart.options.scales.x.title.text=t.adjuvantAxis;
   aluminumChart.update();
-  scatterChart.data.datasets[0].label=t.aluminum;
-  scatterChart.data.datasets[0].data=displayedRows.filter(r=>r.d).map(r=>({x:r.al,y:r.mRate+r.hRate,label:r[lang]+' ('+(r.m+r.h).toLocaleString()+'/'+r.d.toLocaleString()+')'}));
-  scatterChart.options.scales.x.title.text=t.aluminumAxis;
+  scatterChart.data.datasets[0].label=t.adjuvant;
+  scatterChart.data.datasets[0].data=displayedRows.filter(r=>r.d).map(r=>({x:r.adj,y:r.mRate+r.hRate,label:r[lang]+' ('+(r.m+r.h).toLocaleString()+'/'+r.d.toLocaleString()+')'}));
+  scatterChart.options.scales.x.title.text=t.adjuvantAxis;
   scatterChart.options.scales.y.title.text=t.axis;
   scatterChart.update();
   document.querySelectorAll('.source-page').forEach((img,i)=>{img.alt=t.sourcePage(i+1);});
