@@ -137,7 +137,7 @@ __MENU__
 <section id="sourceSection">
   <h2 id="sourceHeading"></h2>
   <p><span id="sourceTitle"></span><br>
-  <a target="_blank" rel="noopener" href="https://www.mhlw.go.jp/content/11120000/001650654.pdf">https://www.mhlw.go.jp/content/11120000/001650654.pdf</a></p>
+  <a target="_blank" rel="noopener" href="https://www.mhlw.go.jp/content/11120000/001727329.pdf">https://www.mhlw.go.jp/content/11120000/001727329.pdf</a></p>
   <div id="sourcePages">
     <img class="source-page" src="hpvvhvt-src/page-1.jpg" alt="">
     <img class="source-page" src="hpvvhvt-src/page-2.jpg" alt="">
@@ -147,6 +147,7 @@ __MENU__
     <img class="source-page" src="hpvvhvt-src/page-6.jpg" alt="">
     <img class="source-page" src="hpvvhvt-src/page-7.jpg" alt="">
     <img class="source-page" src="hpvvhvt-src/page-8.jpg" alt="">
+    <img class="source-page" src="hpvvhvt-src/page-9.jpg" alt="">
   </div>
 </section>
 </div>
@@ -167,7 +168,7 @@ var I18N = {
     acknowledgement:'※ 隈本邦彦先生（元NHK記者・江戸川大学名誉教授）の講演資料によりデータの存在を知り、本グラフの着想を得ました。深く感謝いたします。',
     scatterPoints:'月ごとの値', regressionLine:'回帰直線',
     sourceHeading:'出典',
-    sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第110回副反応検討部会 資料3-4、2026年2月4日）',
+    sourceTitle:'厚生労働省「HPVワクチンの安全性に関するフォローアップ研究」（第112回副反応検討部会 資料3-3、2026年7月24日）',
     sourcePage:function(n){return '出典資料 '+n+'ページ';},
     qrAlt:'このページのQRコード',
     month:function(key){return key;}
@@ -184,7 +185,7 @@ var I18N = {
     acknowledgement:'* I learned of these data and conceived this graph through lecture materials by Professor Kunihiko Kumamoto (former NHK reporter and Professor Emeritus at Edogawa University). I am deeply grateful.',
     scatterPoints:'Monthly values', regressionLine:'Regression line',
     sourceHeading:'Source',
-    sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (110th Adverse Reaction Review Committee, Document 3-4, February 4, 2026)',
+    sourceTitle:'MHLW, Follow-up Study on HPV Vaccine Safety (112th Adverse Reaction Review Committee, Document 3-3, July 24, 2026)',
     sourcePage:function(n){return 'Source document, page '+n;},
     qrAlt:'QR code for this page',
     month:function(key){return key;}
@@ -205,11 +206,12 @@ var monthlyRaw = [
   [2023,7,143566,10],[2023,8,210165,12],[2023,9,120944,21],[2023,10,124802,5],
   [2023,11,120015,18],[2023,12,108001,19],[2024,1,109953,9],[2024,2,114705,9],
   [2024,3,216544,9],[2024,4,175445,12],[2024,5,123566,12],[2024,6,176133,25],
-  [2024,7,280804,21],[2024,8,571426,25],[2024,9,550013,43],[2024,10,552795,61],
-  [2024,11,597151,56],[2024,12,550555,31],[2025,1,25010,25],[2025,2,15038,12],
+  [2024,7,280804,21],[2024,8,571426,25],[2024,9,550013,45],[2024,10,552795,60],
+  [2024,11,597151,56],[2024,12,550555,31],[2025,1,25010,26],[2025,2,15038,12],
   [2025,3,640306,14],[2025,4,70127,33],[2025,5,33482,23],[2025,6,37612,12],
   [2025,7,53460,13],[2025,8,104073,11],[2025,9,103787,15],[2025,10,126839,15],
-  [2025,11,65652,6]
+  [2025,11,65652,7],[2025,12,75293,7],[2026,1,200679,2],[2026,2,92927,5],
+  [2026,3,9050,9],[2026,4,70127,7],[2026,5,33482,7]
 ];
 
 function monthIndex(year,month){ return year*12+month-1; }
@@ -271,7 +273,7 @@ function chartData(data){
   ];
 }
 function xScale(showTicks){
-  return {type:'linear',min:monthIndex(2022,3),max:monthIndex(2025,11),offset:false,ticks:{display:showTicks,stepSize:4,maxRotation:0,font:{size:16},callback:function(value){return Number.isInteger(value)?I18N[CURRENT_LANG].month(monthKey(value)):'';}},grid:{display:false}};
+  return {type:'linear',min:monthIndex(2022,3),max:monthIndex(2026,5),offset:false,ticks:{display:showTicks,stepSize:4,maxRotation:0,font:{size:16},callback:function(value){return Number.isInteger(value)?I18N[CURRENT_LANG].month(monthKey(value)):'';}},grid:{display:false}};
 }
 function tooltipOptions(){
   return {titleFont:{size:17},bodyFont:{size:17},callbacks:{title:function(items){
