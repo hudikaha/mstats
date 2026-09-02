@@ -43,7 +43,7 @@ button { font-family:inherit; }
 #chartMeta { display:flex;align-items:center;justify-content:center;gap:10px 26px;flex-wrap:wrap;margin:2px 0 12px; }
 #seriesLegend { display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap; }
 .legend-item { display:flex;align-items:center;gap:8px;font-size:18px; }
-.legend-bar { width:19px;height:14px;background:rgba(196,78,82,0.72);border:1px solid #c44e52;box-sizing:border-box; }
+.legend-bar { width:19px;height:14px;background:#c44e52;border:1px solid #c44e52;box-sizing:border-box; }
 .legend-bar.scatter-key { width:12px;height:12px;border-radius:50%; }
 .legend-line { position:relative;width:42px;height:16px; }
 .legend-line::before { content:'';position:absolute;left:0;right:0;top:7px;border-top:3px solid #2a78d6; }
@@ -268,7 +268,7 @@ function chartData(data){
   var t=I18N[CURRENT_LANG],minX=data.visits[0].x,maxX=data.visits[data.visits.length-1].x;
   var visibleShipments=data.shipments.filter(function(p){return p.x>=minX && p.x<=maxX;});
   return [
-    {type:'bar',label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'rgba(196,78,82,0.72)',yAxisID:'yVisits',borderWidth:1,order:2},
+    {type:'bar',label:t.visits,data:data.visits,borderColor:'#c44e52',backgroundColor:'#c44e52',yAxisID:'yVisits',borderWidth:1,order:2},
     {type:'line',label:t.shipments,data:visibleShipments,borderColor:'#2a78d6',backgroundColor:'#2a78d6',pointBackgroundColor:'#2a78d6',pointBorderColor:'#2a78d6',pointBorderWidth:0,yAxisID:'yShipments',tension:0.15,pointRadius:5,pointHoverRadius:7,borderWidth:3,order:1}
   ];
 }
