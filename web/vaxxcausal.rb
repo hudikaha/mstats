@@ -125,8 +125,8 @@ __MENU__
     <p class="case-meta">40歳女性・2回目接種後に死亡（症例 No.1808／一覧 No.22258）</p>
     <div class="record-grid">
       <section class="record-cell"><h3>基本情報・症状・転帰</h3>40歳女性／2回目<br>2021-09-13接種<br>2022-02-27死亡<br><b>症状：</b>下肢腫脹・疼痛、肺動脈血栓塞栓症、突然死<br><b>転帰：</b>死亡</section>
-      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「ワクチン接種により下肢に血栓が発現し、血栓が肺にとび、肺動脈につまり急死」<a class="evidence-link" href="src/vaxcausal/pages/001125524-p808.png" data-full="src/vaxcausal/pages/001125524-p808.png" data-box="34,25,62,73" data-page-label="元PDF 808ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1808-medical.png" alt="報告医がワクチンによる血栓と判断し、肺動脈に血栓所見を認めた原文"></a></section>
-      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>肺動脈血栓は認めるが、接種から3か月以上経過し、臨床経過や血栓症リスクの情報が十分でない。</p><a class="evidence-link" href="src/vaxcausal/pages/001161432-p289.png" data-full="src/vaxcausal/pages/001161432-p289.png" data-box="2.5,73.5,95,17" data-page-label="元PDF 289ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1808-eval.png" alt="症例No.1808の専門家評価理由"></a></section>
+      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「ワクチン接種により下肢に血栓が発現し、血栓が肺にとび、肺動脈につまり急死」<a class="evidence-link" href="src/vaxcausal/pages/001125524-p808.png" data-full="src/vaxcausal/pages/001125524-p808.png" data-box="34,25,62,73" data-page-label="元PDF 808ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1808-medical.png?v=4" alt="報告医がワクチンによる血栓と判断し、肺動脈に血栓所見を認めた原文"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>肺動脈血栓は認めるが、接種から3か月以上経過し、臨床経過や血栓症リスクの情報が十分でない。</p><a class="evidence-link" href="src/vaxcausal/pages/001161432-p289.png" data-full="src/vaxcausal/pages/001161432-p289.png" data-box="2.5,73.5,95,17" data-page-label="元PDF 289ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1808-eval.png?v=4" alt="症例No.1808の専門家評価理由"></a></section>
     </div>
     <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener">元PDF（808/2363ページ）</a>・<a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">専門家評価の元PDF（289/456ページ）</a></p>
   </article>
@@ -219,19 +219,25 @@ __MENU__
   const viewerInner = viewer.querySelector('.page-viewer-inner');
   // 切抜き画像と赤枠は同じPDF座標から作る。 / Derive displayed crops and red boxes from the same PDF coordinates.
   const cropBoxes = {
-    'no15-medical.png': '49.1,31.2,44.7,60.6',
-    'no15-eval.png': '75.0,7.0,8.9,2.3',
-    'no1808-medical.png': '39.0,24.0,54.8,69.5',
-    'no185-medical.png': '21.9,52.8,18.5,15.7', 'no185-eval.png': '78.7,52.8,12.3,15.7',
-    'no862-medical.png': '21.9,55.5,18.5,9.7', 'no862-eval.png': '78.7,55.5,12.3,9.7',
-    'no1260-medical.png': '21.9,15.5,18.5,13.4', 'no1260-eval.png': '78.7,15.5,12.3,13.4',
-    'no1332-medical.png': '21.9,53.0,18.5,9.9', 'no1332-eval.png': '78.7,53.0,12.3,9.9',
-    'no1737-medical.png': '21.9,15.5,18.5,16.9', 'no1737-eval.png': '78.7,15.5,12.3,16.9',
-    'no1762-medical.png': '21.9,26.3,18.5,13.8', 'no1762-eval.png': '78.7,26.3,12.3,13.8',
-    'no1790-row.png': '21.84,44.87,10.81,16.97;78.82,44.87,11.86,16.97',
-    'no1790-eval.png': '21.84,44.87,10.81,16.97;78.82,44.87,11.86,16.97',
-    'no1808-eval.png': '62.5,73.6,12.3,15.3',
-    'no101-medical.png': '21.9,47.4,18.5,9.0',
+    'no15-medical.png': '49.75,38.91,42.70,5.52;49.75,51.74,42.70,5.61;49.75,68.92,42.70,7.66',
+    'no15-eval.png': '75.51,6.42,7.80,3.13',
+    'no1808-medical.png': '39.04,47.55,53.65,9.71;39.04,86.02,53.65,3.29',
+    'no185-medical.png': '32.64,58.67,7.43,5.16;47.50,58.67,3.82,5.16;51.32,58.67,6.94,5.16;78.73,58.30,12.04,5.97',
+    'no185-eval.png': '32.64,58.67,7.43,5.16;47.50,58.67,3.82,5.16;51.32,58.67,6.94,5.16;78.73,58.30,12.04,5.97',
+    'no862-medical.png': '32.64,60.04,7.43,1.99;47.50,60.04,3.82,1.99;51.32,60.04,6.94,1.99;78.73,58.42,11.99,5.22',
+    'no862-eval.png': '32.64,60.04,7.43,1.99;47.50,60.04,3.82,1.99;51.32,60.04,6.94,1.99;78.73,58.42,11.99,5.22',
+    'no1260-medical.png': '32.64,22.37,7.43,1.99;47.50,22.37,3.82,1.99;51.32,22.37,6.94,1.99;78.73,19.20,11.95,8.33',
+    'no1260-eval.png': '32.64,22.37,7.43,1.99;47.50,22.37,3.82,1.99;51.32,22.37,6.94,1.99;78.73,19.20,11.95,8.33',
+    'no1332-medical.png': '32.64,57.61,7.43,1.24;47.50,57.61,3.82,1.24;51.32,57.61,6.94,1.24;78.73,53.70,12.08,9.14',
+    'no1332-eval.png': '32.64,57.61,7.43,1.24;47.50,57.61,3.82,1.24;51.32,57.61,6.94,1.24;78.73,53.70,12.08,9.14',
+    'no1737-medical.png': '21.75,17.90,11.03,16.97;78.73,21.81,12.08,9.14',
+    'no1737-eval.png': '21.75,17.90,11.03,16.97;78.73,21.81,12.08,9.14',
+    'no1762-medical.png': '21.75,33.50,10.98,5.16;78.73,33.87,12.04,4.41',
+    'no1762-eval.png': '21.75,33.50,10.98,5.16;78.73,33.87,12.04,4.41',
+    'no1790-row.png': '21.75,45.68,10.98,15.35;78.73,49.16,12.04,8.33',
+    'no1790-eval.png': '21.75,45.68,10.98,15.35;78.73,49.16,12.04,8.33',
+    'no1808-eval.png': '62.61,75.33,11.86,12.18',
+    'no101-medical.png': '21.70,48.10,12.65,7.52',
     'alpha-14.png': '78.7,65.9,12.3,5.6',
     'alpha-42.png': '83.0,50.8,14.7,5.1'
   };
@@ -263,4 +269,5 @@ __MENU__
 </html>
 HTMLDOC
 
-puts html.sub('__MENU__', menu_out.string)
+rendered_html = html.sub('__MENU__', menu_out.string)
+puts rendered_html.gsub(%r{(src/vaxcausal/(?:no|alpha)[^"?]+\.png)(?:\?v=\d+)?}, '\1?v=5')
