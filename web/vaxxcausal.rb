@@ -164,7 +164,7 @@ __MENU__
   <article class="case"><h2>「行政解剖の結果、心筋炎を伴う急性循環不全」</h2><p class="case-meta">19歳男性・症例 No.1762</p><div class="record-grid">
     <section class="record-cell"><h3>基本情報・症状・転帰</h3>19歳男性／3回目<br>2022-07-29接種<br>2022-08-01死亡<br><b>症状：</b>心筋炎、急性循環不全<br><b>転帰：</b>死亡</section>
     <section class="record-cell doctor-cell"><h3>報告医所見・行政解剖</h3><b>関連あり／他要因なし</b><br>行政解剖で心筋炎を伴う急性循環不全と判断。<a class="evidence-link" href="src/vaxcausal/pages/001161432-p280.png" data-full="src/vaxcausal/pages/001161432-p280.png" data-box="2.5,26,95,14" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1762-medical.png" alt="症例No.1762の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>パルボウイルスB19を検出。心筋の情報は不明。</p></section>
+    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>パルボウイルスB19を検出。心筋の情報は不明。</p><a class="evidence-link" href="src/vaxcausal/pages/001161432-p280.png" data-full="src/vaxcausal/pages/001161432-p280.png" data-box="0,0,0,0" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1762-eval.png" alt="症例No.1762の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（280/456ページ）</a></p></article>
 
   <article class="case"><h2>「時間経過よりコミナティが死亡原因」</h2><p class="case-meta">70歳男性・2価ワクチン症例 No.101</p><div class="record-grid">
@@ -217,11 +217,29 @@ __MENU__
   const viewer = document.getElementById('page-viewer');
   const pageImage = viewer.querySelector('img');
   const box = viewer.querySelector('.crop-box');
+  // 切抜き画像と赤枠は同じPDF座標から作る。 / Derive displayed crops and red boxes from the same PDF coordinates.
+  const cropBoxes = {
+    'no15-medical.png': '49.1,31.2,44.7,60.6',
+    'no15-eval.png': '75.0,7.0,8.9,2.3',
+    'no1808-medical.png': '39.0,24.0,54.8,69.5',
+    'no185-medical.png': '21.9,52.8,18.5,15.7', 'no185-eval.png': '78.7,52.8,12.3,15.7',
+    'no862-medical.png': '21.9,55.5,18.5,9.7', 'no862-eval.png': '78.7,55.5,12.3,9.7',
+    'no1260-medical.png': '21.9,15.5,18.5,13.4', 'no1260-eval.png': '78.7,15.5,12.3,13.4',
+    'no1332-medical.png': '21.9,53.0,18.5,9.9', 'no1332-eval.png': '78.7,53.0,12.3,9.9',
+    'no1737-medical.png': '21.9,15.5,18.5,16.9', 'no1737-eval.png': '78.7,15.5,12.3,16.9',
+    'no1762-medical.png': '21.9,26.3,18.5,13.8', 'no1762-eval.png': '78.7,26.3,12.3,13.8',
+    'no1790-row.png': '21.9,45.1,18.5,15.3', 'no1790-eval.png': '78.7,45.1,12.3,15.3',
+    'no1808-eval.png': '62.5,73.6,12.3,15.3',
+    'no101-medical.png': '21.9,47.4,18.5,9.0',
+    'alpha-14.png': '78.7,59.0,12.3,13.1',
+    'alpha-42.png': '83.0,20.1,14.7,36.2'
+  };
   const close = () => { viewer.classList.remove('open'); document.body.style.overflow = ''; };
   document.querySelectorAll('.evidence-link').forEach(link => {
     link.addEventListener('click', event => {
       event.preventDefault();
-      const values = link.dataset.box.split(',');
+      const imageName = link.querySelector('img').src.split('/').pop();
+      const values = cropBoxes[imageName].split(',');
       pageImage.src = link.dataset.full;
       pageImage.alt = link.dataset.pageLabel;
       [box.style.left, box.style.top, box.style.width, box.style.height] = values.map(value => `${value}%`);
