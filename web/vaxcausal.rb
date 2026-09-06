@@ -41,6 +41,8 @@ html = <<~'HTMLDOC'
 .verdict { display:inline-block;padding:2px 12px;border-radius:999px;background:#c94444;color:#fff;font-size:23px;font-weight:bold; }
 .alpha .verdict { background:#2878c8; }
 .source-image { display:block;width:100%;height:auto;margin-top:18px;border:1px solid #bbb;box-sizing:border-box; }
+.source-image.narrow { width:min(100%,820px);margin-left:auto;margin-right:auto; }
+.evidence-grid { display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start;margin-top:18px; }
 .source-note { margin:7px 0 0;color:#555;font-size:15px;line-height:1.55; }
 .source-note a { overflow-wrap:anywhere; }
 .compact-cases { display:grid;grid-template-columns:1fr 1fr;gap:18px; }
@@ -56,7 +58,7 @@ html = <<~'HTMLDOC'
   .right-column * { box-sizing:border-box; }
   .site-title h1 { font-size:30px;overflow-wrap:anywhere; }
   .lead { font-size:18px; }
-  .definition,.comparison,.compact-cases { grid-template-columns:1fr; }
+  .definition,.comparison,.compact-cases,.evidence-grid { grid-template-columns:1fr; }
   .case { padding:16px; }
   .case h2,.takeaway h2 { font-size:23px; }
   .opinion { font-size:17px; }
@@ -71,7 +73,7 @@ __MENU__
     <h1 align="center">医師が「関連あり」と報告しても<br>専門家評価はγ</h1>
   </div>
 
-  <p class="lead">新型コロナワクチン接種後の死亡報告では、報告した医師の因果関係評価と、国の審議会に示される専門家評価は同じではありません。厚生労働省の原資料で、医師の記載と最終的なα・γ判定を見比べます。</p>
+  <p class="lead">剖検所見を踏まえて報告医がワクチンとの因果関係を「関連あり」と評価しても、国の審議会に示される専門家評価がγとなった死亡報告があります。厚生労働省の原文を、報告医の判断と専門家評価が読める大きさで切り出しました。</p>
 
   <div class="definition" aria-label="因果関係評価の区分">
     <div><b>α</b>ワクチンと死亡との因果関係が否定できないもの</div>
@@ -80,45 +82,65 @@ __MENU__
   </div>
 
   <article class="case">
-    <h2>「臨床的には因果関係があるとしか思えない」</h2>
-    <p class="case-meta">73歳女性・1回目接種当日に死亡（資料上の症例 No.170／一覧 No.4252）</p>
+    <h2>「患者は心筋炎で急死したと考えられる」</h2>
+    <p class="case-meta">55歳女性・4回目接種2日後に死亡（一覧 No.22710）</p>
     <div class="comparison">
       <section class="opinion doctor">
-        <h3>報告医の意見</h3>
-        「ワクチンが心肺機能に何らかの影響を及ぼしたのではないか」「最後のトリガーになった可能性がある」「臨床的には因果関係があるとしか思えない」
+        <h3>報告医・剖検所見</h3>
+        「事象とBNT162b2との因果関係は関連あり」「他要因（他の疾患等）の可能性はなかった」「患者は心筋炎で急死したと考えられる」。剖検では「心筋に広くリンパ球マクロファージ浸潤を認めた」。
       </section>
       <section class="opinion expert">
         <h3>専門家評価</h3>
         <span class="verdict">γ</span>
-        <p>「これまで全く健康」との記載に対し、糖尿病・高血圧症の既往や内服薬を示唆する記載もあるとして、患者背景は不詳、接種と死亡の因果関係は評価できないとされた。</p>
+        <p>ブライトン分類1。「剖検上は心筋炎で矛盾しない」。</p>
       </section>
     </div>
-    <a href="https://www.mhlw.go.jp/content/10601000/000823365.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no170-report.png" alt="厚生労働省資料に掲載された症例No.170の報告医意見"></a>
-    <p class="source-note">上：厚生労働省資料（PDF 580ページ）の抜粋。</p>
-    <a href="https://www.mhlw.go.jp/content/10601000/001010964.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no170-eval.png" alt="厚生労働省資料に掲載された症例一覧No.4252の専門家評価"></a>
-    <p class="source-note">上：専門家評価を掲載した別資料（PDF 60ページ）の抜粋。</p>
+    <div class="evidence-grid">
+      <a href="https://www.mhlw.go.jp/content/10601000/001039711.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-doctor.png" alt="報告医が関連あり、他要因なしと評価した原文"></a>
+      <a href="https://www.mhlw.go.jp/content/10601000/001039711.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-autopsy.png" alt="剖検で心筋の炎症所見を認めた原文"></a>
+    </div>
+    <div class="evidence-grid">
+      <a href="https://www.mhlw.go.jp/content/10601000/001125548.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-row.png" alt="症例No.22710の基本情報"></a>
+      <a href="https://www.mhlw.go.jp/content/10601000/001125548.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-eval.png" alt="症例No.22710の専門家評価γと剖検所見"></a>
+    </div>
+    <p class="source-note">報告医原文：PDF 1647ページ。専門家評価：別資料 PDF 38ページ。</p>
   </article>
 
-  <div class="compact-cases">
-    <article class="case">
-      <h2>急性間質性肺炎</h2>
-      <p class="case-meta">85歳男性・症例 No.203</p>
-      <section class="opinion doctor"><h3>報告医評価</h3><b>関連あり</b><br>他要因：無</section>
-      <section class="opinion expert"><h3>専門家評価</h3><span class="verdict">γ</span><p>接種との因果関係は不明で、その他の原因による急性間質性肺炎も否定できないとされた。</p></section>
-    </article>
-    <article class="case">
-      <h2>脳静脈洞血栓症・血小板減少</h2>
-      <p class="case-meta">72歳男性・症例 No.204</p>
-      <section class="opinion doctor"><h3>報告医評価</h3><b>関連あり</b><br>他要因：無</section>
-      <section class="opinion expert"><h3>専門家評価</h3><span class="verdict">γ</span><p>脳静脈血栓症が致死的だったか判別できず、接種との因果関係は不明とされた。</p></section>
-    </article>
-  </div>
-  <a href="https://www.mhlw.go.jp/content/10601000/000846547.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no203-204.png" alt="厚生労働省資料に掲載された症例No.203とNo.204"></a>
-  <p class="source-note">厚生労働省資料（PDF 30ページ）の抜粋。横長の原表を掲載。</p>
+  <article class="case">
+    <h2>「血栓症による心室細動と考える」</h2>
+    <p class="case-meta">73歳女性・2回目接種後に死亡（症例 No.1790）</p>
+    <div class="comparison">
+      <section class="opinion doctor"><h3>報告医・剖検所見</h3>「剖検の結果、微小梗塞が認められた。血栓症による心室細動と考える」。因果関係は「関連あり」、他要因は「無」。</section>
+      <section class="opinion expert"><h3>専門家評価</h3><span class="verdict">γ</span><p>病理学的診断で微小血栓症を確認し、ブライトン分類1。一方、DICを除く鑑別診断に必要な情報不足のため、接種との因果関係は「否定も肯定もできません」。</p></section>
+    </div>
+    <div class="evidence-grid">
+      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1790-row.png" alt="剖検で微小梗塞を認め、報告医が関連ありとした症例No.1790"></a>
+      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1790-eval.png" alt="症例No.1790の専門家評価γ"></a>
+    </div>
+    <p class="source-note">厚生労働省資料 PDF 285ページの同じ行を、左右に分けて掲載。</p>
+  </article>
+
+  <article class="case">
+    <h2>「ワクチン接種により下肢に血栓が発現」</h2>
+    <p class="case-meta">40歳女性・2回目接種後に死亡（症例 No.1808／一覧 No.22258）</p>
+    <div class="comparison">
+      <section class="opinion doctor"><h3>報告医・剖検所見</h3>「ワクチン接種により下肢に血栓が発現し、血栓が肺にとび、肺動脈につまり急死したと考えられた」。病理学的検査で肺動脈の血栓所見。因果関係は「関連あり」、他要因は「無」。</section>
+      <section class="opinion expert"><h3>専門家評価</h3><span class="verdict">γ</span><p>肺動脈血栓は認めるが、接種から3か月以上経過し、臨床経過や血栓症リスクの情報が十分でないとされた。</p></section>
+    </div>
+    <div class="evidence-grid">
+      <a href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-doctor.png" alt="肺動脈血栓症についての報告医意見"></a>
+      <a href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-autopsy.png" alt="肺動脈に血栓所見を認めた病理学的検査の原文"></a>
+    </div>
+    <div class="evidence-grid">
+      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-row.png" alt="症例No.1808の報告医評価関連あり、他要因なし"></a>
+      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-eval.png" alt="症例No.1808の専門家評価γ"></a>
+    </div>
+    <p class="source-note">報告医原文：PDF 808ページ。専門家評価：別資料 PDF 289ページ。</p>
+  </article>
 
   <div class="takeaway">
     <h2>γは「医師が関連なしと判断した症例」ではない</h2>
-    報告医が「関連あり」と評価しても、専門家が死亡との因果関係を確定できなければγになります。したがって、γの件数だけから因果関係の有無を結論づけることはできません。一方で、報告医の所見だけで因果関係が確定するわけでもありません。
+    剖検が行われ、報告医が「関連あり」と評価した症例もγに含まれます。γは「剖検なし」「医師も原因とは考えていない」症例だけを意味しません。一方、報告医の判断や剖検所見だけで、ワクチンとの因果関係が確定するわけでもありません。
   </div>
 
   <h2>では、αになった死亡報告は何か</h2>
