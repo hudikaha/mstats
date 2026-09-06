@@ -52,6 +52,7 @@ html = <<~'HTMLDOC'
 .source-note { margin:7px 0 0;color:#555;font-size:15px;line-height:1.55; }
 .source-note a { overflow-wrap:anywhere; }
 .evidence-link { display:block;cursor:zoom-in; }
+.evidence-number { display:block;margin:14px 0 5px;padding:5px 10px;background:#222;color:#fff;font-size:18px;font-weight:bold;line-height:1.4; }
 .source-link { font-weight:bold; }
 .page-viewer { position:fixed;inset:0;z-index:10000;display:none;background:rgba(0,0,0,.86);padding:24px;overflow:auto; }
 .page-viewer.open { display:block; }
@@ -235,7 +236,13 @@ __MENU__
     'alpha-42.png': '83.0,50.8,14.7,5.1'
   };
   const close = () => { viewer.classList.remove('open'); document.body.style.overflow = ''; };
-  document.querySelectorAll('.evidence-link').forEach(link => {
+  document.querySelectorAll('.evidence-link').forEach((link, index) => {
+    const kind = link.closest('.doctor-cell') ? '報告医原文' :
+      (link.closest('.expert-cell') ? '専門家判定理由' : 'α判定の専門家意見');
+    const label = document.createElement('span');
+    label.className = 'evidence-number';
+    label.textContent = `画像${index + 1}（${kind}）`;
+    link.insertBefore(label, link.firstChild);
     link.addEventListener('click', event => {
       event.preventDefault();
       const imageName = link.querySelector('img').src.split('/').pop().split('?')[0];
