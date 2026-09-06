@@ -55,9 +55,9 @@ html = <<~'HTMLDOC'
 .source-link { font-weight:bold; }
 .page-viewer { position:fixed;inset:0;z-index:10000;display:none;background:rgba(0,0,0,.86);padding:24px;overflow:auto; }
 .page-viewer.open { display:block; }
-.page-viewer-inner { position:relative;width:max-content;max-width:96vw;margin:auto;background:#fff; }
+.page-viewer-inner { position:relative;width:max-content;margin:auto;background:#fff; }
 .page-viewer img { display:block;max-width:94vw;height:auto; }
-.crop-box { position:absolute;border:6px solid #e00000;box-shadow:0 0 0 2px #fff;pointer-events:none; }
+.crop-box { position:absolute;outline:5px solid #e00000;outline-offset:2px;pointer-events:none; }
 .page-viewer-close { position:fixed;right:18px;top:12px;z-index:10001;width:52px;height:52px;border:2px solid #fff;border-radius:50%;background:#111;color:#fff;font-size:34px;line-height:42px;cursor:pointer; }
 .compact-cases { display:grid;grid-template-columns:1fr 1fr;gap:18px; }
 .compact-cases .case { margin:0; }
@@ -78,7 +78,7 @@ html = <<~'HTMLDOC'
   .opinion { font-size:17px; }
   .page-viewer { padding:62px 4px 12px; }
   .page-viewer img { max-width:98vw; }
-  .crop-box { border-width:4px; }
+  .crop-box { outline-width:4px; }
 }
 </style>
 </head>
@@ -219,45 +219,60 @@ __MENU__
   const viewerInner = viewer.querySelector('.page-viewer-inner');
   // 切抜き画像と赤枠は同じPDF座標から作る。 / Derive displayed crops and red boxes from the same PDF coordinates.
   const cropBoxes = {
-    'no15-medical.png': '49.75,38.91,42.70,5.52;49.75,51.74,42.70,5.61;49.75,68.92,42.70,7.66',
-    'no15-eval.png': '75.51,6.42,7.80,3.13',
-    'no1808-medical.png': '39.04,47.55,53.65,9.71;39.04,86.02,53.65,3.29',
-    'no185-medical.png': '32.64,58.67,7.43,5.16;47.50,58.67,3.82,5.16;51.32,58.67,6.94,5.16;78.73,58.30,12.04,5.97',
-    'no185-eval.png': '32.64,58.67,7.43,5.16;47.50,58.67,3.82,5.16;51.32,58.67,6.94,5.16;78.73,58.30,12.04,5.97',
-    'no862-medical.png': '32.64,60.04,7.43,1.99;47.50,60.04,3.82,1.99;51.32,60.04,6.94,1.99;78.73,58.42,11.99,5.22',
-    'no862-eval.png': '32.64,60.04,7.43,1.99;47.50,60.04,3.82,1.99;51.32,60.04,6.94,1.99;78.73,58.42,11.99,5.22',
-    'no1260-medical.png': '32.64,22.37,7.43,1.99;47.50,22.37,3.82,1.99;51.32,22.37,6.94,1.99;78.73,19.20,11.95,8.33',
-    'no1260-eval.png': '32.64,22.37,7.43,1.99;47.50,22.37,3.82,1.99;51.32,22.37,6.94,1.99;78.73,19.20,11.95,8.33',
-    'no1332-medical.png': '32.64,57.61,7.43,1.24;47.50,57.61,3.82,1.24;51.32,57.61,6.94,1.24;78.73,53.70,12.08,9.14',
-    'no1332-eval.png': '32.64,57.61,7.43,1.24;47.50,57.61,3.82,1.24;51.32,57.61,6.94,1.24;78.73,53.70,12.08,9.14',
-    'no1737-medical.png': '21.75,17.90,11.03,16.97;78.73,21.81,12.08,9.14',
-    'no1737-eval.png': '21.75,17.90,11.03,16.97;78.73,21.81,12.08,9.14',
-    'no1762-medical.png': '21.75,33.50,10.98,5.16;78.73,33.87,12.04,4.41',
-    'no1762-eval.png': '21.75,33.50,10.98,5.16;78.73,33.87,12.04,4.41',
-    'no1790-row.png': '21.75,45.68,10.98,15.35;78.73,49.16,12.04,8.33',
-    'no1790-eval.png': '21.75,45.68,10.98,15.35;78.73,49.16,12.04,8.33',
-    'no1808-eval.png': '62.61,75.33,11.86,12.18',
-    'no101-medical.png': '21.70,48.10,12.65,7.52',
-    'alpha-14.png': '78.7,65.9,12.3,5.6',
-    'alpha-42.png': '83.0,50.8,14.7,5.1'
+    'no15-medical.png': '395,437,339,62;395,581,339,63;395,774,339,86',
+    'no15-eval.png': '1606,193,166,94',
+    'no1808-medical.png': '310,534,426,109;310,966,426,37',
+    'no185-medical.png': '743,944,169,83;1081,944,87,83;1168,944,158,83;1792,938,274,96',
+    'no185-eval.png': '743,944,169,83;1081,944,87,83;1168,944,158,83;1792,938,274,96',
+    'no862-medical.png': '743,966,169,32;1081,966,87,32;1168,966,158,32;1792,940,273,84',
+    'no862-eval.png': '743,966,169,32;1081,966,87,32;1168,966,158,32;1792,940,273,84',
+    'no1260-medical.png': '743,360,169,32;1081,360,87,32;1168,360,158,32;1792,309,272,134',
+    'no1260-eval.png': '743,360,169,32;1081,360,87,32;1168,360,158,32;1792,309,272,134',
+    'no1332-medical.png': '743,927,169,20;1081,927,87,20;1168,927,158,20;1792,864,275,147',
+    'no1332-eval.png': '743,927,169,20;1081,927,87,20;1168,927,158,20;1792,864,275,147',
+    'no1737-medical.png': '495,288,251,273;1792,351,275,147',
+    'no1737-eval.png': '495,288,251,273;1792,351,275,147',
+    'no1762-medical.png': '495,539,250,83;1792,545,274,71',
+    'no1762-eval.png': '495,539,250,83;1792,545,274,71',
+    'no1790-row.png': '495,735,250,247;1792,791,274,134',
+    'no1790-eval.png': '495,735,250,247;1792,791,274,134',
+    'no1808-eval.png': '1425,1212,270,196',
+    'no101-medical.png': '494,774,288,121',
+    'alpha-14.png': '1792,1060,280,90',
+    'alpha-42.png': '1185,513,210,51'
   };
   const close = () => { viewer.classList.remove('open'); document.body.style.overflow = ''; };
   document.querySelectorAll('.evidence-link').forEach(link => {
     link.addEventListener('click', event => {
       event.preventDefault();
       const imageName = link.querySelector('img').src.split('/').pop().split('?')[0];
-      pageImage.src = link.dataset.full;
+      const drawBoxes = () => {
+        if (!pageImage.naturalWidth || !pageImage.clientWidth) return;
+        const imageWidth = pageImage.clientWidth;
+        const imageHeight = pageImage.clientHeight;
+        viewerInner.style.width = `${imageWidth}px`;
+        viewerInner.style.height = `${imageHeight}px`;
+        viewerInner.querySelectorAll('.crop-box').forEach(oldBox => oldBox.remove());
+        cropBoxes[imageName].split(';').forEach(boxValue => {
+          const [left, top, width, height] = boxValue.split(',').map(Number);
+          const scaleX = imageWidth / pageImage.naturalWidth;
+          const scaleY = imageHeight / pageImage.naturalHeight;
+          const newBox = document.createElement('span');
+          newBox.className = 'crop-box';
+          newBox.style.left = `${left * scaleX}px`;
+          newBox.style.top = `${top * scaleY}px`;
+          newBox.style.width = `${width * scaleX}px`;
+          newBox.style.height = `${height * scaleY}px`;
+          viewerInner.appendChild(newBox);
+        });
+      };
+      const drawAfterLayout = () => requestAnimationFrame(drawBoxes);
+      pageImage.onload = drawAfterLayout;
       pageImage.alt = link.dataset.pageLabel;
-      viewerInner.querySelectorAll('.crop-box').forEach(oldBox => oldBox.remove());
-      cropBoxes[imageName].split(';').forEach(boxValue => {
-        const values = boxValue.split(',');
-        const newBox = document.createElement('span');
-        newBox.className = 'crop-box';
-        [newBox.style.left, newBox.style.top, newBox.style.width, newBox.style.height] = values.map(value => `${value}%`);
-        viewerInner.appendChild(newBox);
-      });
       viewer.classList.add('open');
       document.body.style.overflow = 'hidden';
+      pageImage.src = link.dataset.full;
+      if (pageImage.complete) drawAfterLayout();
     });
   });
   viewer.querySelector('.page-viewer-close').addEventListener('click', close);
