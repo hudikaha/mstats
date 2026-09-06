@@ -43,6 +43,12 @@ html = <<~'HTMLDOC'
 .source-image { display:block;width:100%;height:auto;margin-top:18px;border:1px solid #bbb;box-sizing:border-box; }
 .source-image.narrow { width:min(100%,820px);margin-left:auto;margin-right:auto; }
 .evidence-grid { display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start;margin-top:18px; }
+.record-grid { display:grid;grid-template-columns:minmax(190px,.7fr) minmax(360px,1.45fr) minmax(330px,1fr);gap:14px;align-items:start; }
+.record-cell { min-width:0;padding:16px;border-radius:8px;background:#f6f6f4;font-size:17px;line-height:1.65; }
+.record-cell h3 { margin:0 0 8px;font-size:20px; }
+.record-cell.doctor-cell { background:#eef5ff;border-top:6px solid #2878c8; }
+.record-cell.expert-cell { background:#fff1f0;border-top:6px solid #c94444; }
+.record-cell .source-image { margin-top:12px;background:#fff; }
 .source-note { margin:7px 0 0;color:#555;font-size:15px;line-height:1.55; }
 .source-note a { overflow-wrap:anywhere; }
 .compact-cases { display:grid;grid-template-columns:1fr 1fr;gap:18px; }
@@ -58,7 +64,7 @@ html = <<~'HTMLDOC'
   .right-column * { box-sizing:border-box; }
   .site-title h1 { font-size:30px;overflow-wrap:anywhere; }
   .lead { font-size:18px; }
-  .definition,.comparison,.compact-cases,.evidence-grid { grid-template-columns:1fr; }
+  .definition,.comparison,.compact-cases,.evidence-grid,.record-grid { grid-template-columns:1fr; }
   .case { padding:16px; }
   .case h2,.takeaway h2 { font-size:23px; }
   .opinion { font-size:17px; }
@@ -84,24 +90,10 @@ __MENU__
   <article class="case">
     <h2>「患者は心筋炎で急死したと考えられる」</h2>
     <p class="case-meta">55歳女性・4回目接種2日後に死亡（一覧 No.22710）</p>
-    <div class="comparison">
-      <section class="opinion doctor">
-        <h3>報告医・剖検所見</h3>
-        「事象とBNT162b2との因果関係は関連あり」「他要因（他の疾患等）の可能性はなかった」「患者は心筋炎で急死したと考えられる」。剖検では「心筋に広くリンパ球マクロファージ浸潤を認めた」。
-      </section>
-      <section class="opinion expert">
-        <h3>専門家評価</h3>
-        <span class="verdict">γ</span>
-        <p>ブライトン分類1。「剖検上は心筋炎で矛盾しない」。</p>
-      </section>
-    </div>
-    <div class="evidence-grid">
-      <a href="https://www.mhlw.go.jp/content/10601000/001039711.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-doctor.png" alt="報告医が関連あり、他要因なしと評価した原文"></a>
-      <a href="https://www.mhlw.go.jp/content/10601000/001039711.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-autopsy.png" alt="剖検で心筋の炎症所見を認めた原文"></a>
-    </div>
-    <div class="evidence-grid">
-      <a href="https://www.mhlw.go.jp/content/10601000/001125548.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-row.png" alt="症例No.22710の基本情報"></a>
-      <a href="https://www.mhlw.go.jp/content/10601000/001125548.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-eval.png" alt="症例No.22710の専門家評価γと剖検所見"></a>
+    <div class="record-grid">
+      <section class="record-cell"><h3>基本情報・症状・転帰</h3>55歳女性／4回目<br>2022-11-20接種<br>2022-11-22死亡<br><b>症状：</b>突然死、心肺停止、心筋炎、腹痛、嘔吐、倦怠感<br><b>転帰：</b>死亡</section>
+      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「患者は心筋炎で急死したと考えられる」<a href="https://www.mhlw.go.jp/content/10601000/001039711.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-medical.png" alt="報告医が関連あり、他要因なしと評価し、剖検で心筋炎所見を認めた原文"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>ブライトン分類1。「剖検上は心筋炎で矛盾しない」。</p><a href="https://www.mhlw.go.jp/content/10601000/001125548.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no15-eval.png" alt="症例No.22710の専門家評価γと剖検所見"></a></section>
     </div>
     <p class="source-note">報告医原文：PDF 1647ページ。専門家評価：別資料 PDF 38ページ。</p>
   </article>
@@ -109,13 +101,10 @@ __MENU__
   <article class="case">
     <h2>「血栓症による心室細動と考える」</h2>
     <p class="case-meta">73歳女性・2回目接種後に死亡（症例 No.1790）</p>
-    <div class="comparison">
-      <section class="opinion doctor"><h3>報告医・剖検所見</h3>「剖検の結果、微小梗塞が認められた。血栓症による心室細動と考える」。因果関係は「関連あり」、他要因は「無」。</section>
-      <section class="opinion expert"><h3>専門家評価</h3><span class="verdict">γ</span><p>病理学的診断で微小血栓症を確認し、ブライトン分類1。一方、DICを除く鑑別診断に必要な情報不足のため、接種との因果関係は「否定も肯定もできません」。</p></section>
-    </div>
-    <div class="evidence-grid">
-      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1790-row.png" alt="剖検で微小梗塞を認め、報告医が関連ありとした症例No.1790"></a>
-      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1790-eval.png" alt="症例No.1790の専門家評価γ"></a>
+    <div class="record-grid">
+      <section class="record-cell"><h3>基本情報・症状・転帰</h3>73歳女性／2回目<br>2021-08-06接種<br>2021-09-07死亡<br><b>症状：</b>心室細動、血栓症、血小板減少症、腎不全、多臓器不全等<br><b>転帰：</b>死亡</section>
+      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「剖検の結果、微小梗塞が認められた。血栓症による心室細動と考える」<a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1790-row.png" alt="剖検で微小梗塞を認め、報告医が関連ありとした症例No.1790"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>微小血栓症を確認しブライトン分類1。DICを除く鑑別情報が不足し「否定も肯定もできません」。</p><a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1790-eval.png" alt="症例No.1790の専門家評価γ"></a></section>
     </div>
     <p class="source-note">厚生労働省資料 PDF 285ページの同じ行を、左右に分けて掲載。</p>
   </article>
@@ -123,17 +112,10 @@ __MENU__
   <article class="case">
     <h2>「ワクチン接種により下肢に血栓が発現」</h2>
     <p class="case-meta">40歳女性・2回目接種後に死亡（症例 No.1808／一覧 No.22258）</p>
-    <div class="comparison">
-      <section class="opinion doctor"><h3>報告医・剖検所見</h3>「ワクチン接種により下肢に血栓が発現し、血栓が肺にとび、肺動脈につまり急死したと考えられた」。病理学的検査で肺動脈の血栓所見。因果関係は「関連あり」、他要因は「無」。</section>
-      <section class="opinion expert"><h3>専門家評価</h3><span class="verdict">γ</span><p>肺動脈血栓は認めるが、接種から3か月以上経過し、臨床経過や血栓症リスクの情報が十分でないとされた。</p></section>
-    </div>
-    <div class="evidence-grid">
-      <a href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-doctor.png" alt="肺動脈血栓症についての報告医意見"></a>
-      <a href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-autopsy.png" alt="肺動脈に血栓所見を認めた病理学的検査の原文"></a>
-    </div>
-    <div class="evidence-grid">
-      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-row.png" alt="症例No.1808の報告医評価関連あり、他要因なし"></a>
-      <a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-eval.png" alt="症例No.1808の専門家評価γ"></a>
+    <div class="record-grid">
+      <section class="record-cell"><h3>基本情報・症状・転帰</h3>40歳女性／2回目<br>2021-09-13接種<br>2022-02-27死亡<br><b>症状：</b>下肢腫脹・疼痛、肺動脈血栓塞栓症、突然死<br><b>転帰：</b>死亡</section>
+      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「ワクチン接種により下肢に血栓が発現し、血栓が肺にとび、肺動脈につまり急死」<a href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-medical.png" alt="報告医がワクチンによる血栓と判断し、肺動脈に血栓所見を認めた原文"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>肺動脈血栓は認めるが、接種から3か月以上経過し、臨床経過や血栓症リスクの情報が十分でない。</p><a href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener"><img class="source-image" src="src/vaxcausal/no1808-eval.png" alt="症例No.1808の専門家評価γと判定理由"></a></section>
     </div>
     <p class="source-note">報告医原文：PDF 808ページ。専門家評価：別資料 PDF 289ページ。</p>
   </article>
