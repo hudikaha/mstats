@@ -52,7 +52,6 @@ html = <<~'HTMLDOC'
 .source-note { margin:7px 0 0;color:#555;font-size:15px;line-height:1.55; }
 .source-note a { overflow-wrap:anywhere; }
 .evidence-link { display:block;cursor:zoom-in; }
-.evidence-number { display:block;margin:14px 0 5px;padding:5px 10px;background:#222;color:#fff;font-size:18px;font-weight:bold;line-height:1.4; }
 .source-link { font-weight:bold; }
 .page-viewer { position:fixed;inset:0;z-index:10000;display:none;background:rgba(0,0,0,.86);padding:24px;overflow:auto; }
 .page-viewer.open { display:block; }
@@ -115,8 +114,8 @@ __MENU__
     <p class="case-meta">73歳女性・2回目接種後に死亡（症例 No.1790）</p>
     <div class="record-grid">
       <section class="record-cell"><h3>基本情報・症状・転帰</h3>73歳女性／2回目<br>2021-08-06接種<br>2021-09-07死亡<br><b>症状：</b>心室細動、血栓症、血小板減少症、腎不全、多臓器不全等<br><b>転帰：</b>死亡</section>
-      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「剖検の結果、微小梗塞が認められた。血栓症による心室細動と考える」<a class="evidence-link" href="src/vaxcausal/pages/001161432-p285.png" data-full="src/vaxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1790-row.png" alt="剖検で微小梗塞を認め、報告医が関連ありとした症例No.1790"></a></section>
-      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>微小血栓症を確認しブライトン分類1。DICを除く鑑別情報が不足し「否定も肯定もできません」。</p><a class="evidence-link" href="src/vaxcausal/pages/001161432-p285.png" data-full="src/vaxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1790-eval.png" alt="症例No.1790の専門家評価理由"></a></section>
+      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「剖検の結果、微小梗塞が認められた。血栓症による心室細動と考える」<a class="evidence-link" href="src/vaxcausal/pages/001161432-p285.png" data-full="src/vaxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1790-row.png?v=3" alt="剖検で微小梗塞を認め、報告医が関連ありとした症例No.1790"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>微小血栓症を確認しブライトン分類1。DICを除く鑑別情報が不足し「否定も肯定もできません」。</p><a class="evidence-link" href="src/vaxcausal/pages/001161432-p285.png" data-full="src/vaxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/no1790-eval.png?v=3" alt="症例No.1790の専門家評価理由"></a></section>
     </div>
     <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（285/456ページ）</a>の同じ行を、左右に分けて掲載。</p>
   </article>
@@ -211,13 +210,13 @@ __MENU__
 </div>
 <div class="page-viewer" id="page-viewer" role="dialog" aria-modal="true" aria-label="元PDFページと切抜き範囲">
   <button class="page-viewer-close" type="button" aria-label="閉じる">×</button>
-  <div class="page-viewer-inner"><img alt="元PDFの該当ページ"><span class="crop-box"></span></div>
+  <div class="page-viewer-inner"><img alt="元PDFの該当ページ"></div>
 </div>
 <script>
 (() => {
   const viewer = document.getElementById('page-viewer');
   const pageImage = viewer.querySelector('img');
-  const box = viewer.querySelector('.crop-box');
+  const viewerInner = viewer.querySelector('.page-viewer-inner');
   // 切抜き画像と赤枠は同じPDF座標から作る。 / Derive displayed crops and red boxes from the same PDF coordinates.
   const cropBoxes = {
     'no15-medical.png': '49.1,31.2,44.7,60.6',
@@ -229,27 +228,28 @@ __MENU__
     'no1332-medical.png': '21.9,53.0,18.5,9.9', 'no1332-eval.png': '78.7,53.0,12.3,9.9',
     'no1737-medical.png': '21.9,15.5,18.5,16.9', 'no1737-eval.png': '78.7,15.5,12.3,16.9',
     'no1762-medical.png': '21.9,26.3,18.5,13.8', 'no1762-eval.png': '78.7,26.3,12.3,13.8',
-    'no1790-row.png': '21.9,45.1,18.5,15.3', 'no1790-eval.png': '78.7,45.1,12.3,15.3',
+    'no1790-row.png': '21.84,44.87,10.81,16.97;78.82,44.87,11.86,16.97',
+    'no1790-eval.png': '21.84,44.87,10.81,16.97;78.82,44.87,11.86,16.97',
     'no1808-eval.png': '62.5,73.6,12.3,15.3',
     'no101-medical.png': '21.9,47.4,18.5,9.0',
     'alpha-14.png': '78.7,65.9,12.3,5.6',
     'alpha-42.png': '83.0,50.8,14.7,5.1'
   };
   const close = () => { viewer.classList.remove('open'); document.body.style.overflow = ''; };
-  document.querySelectorAll('.evidence-link').forEach((link, index) => {
-    const kind = link.closest('.doctor-cell') ? '報告医原文' :
-      (link.closest('.expert-cell') ? '専門家判定理由' : 'α判定の専門家意見');
-    const label = document.createElement('span');
-    label.className = 'evidence-number';
-    label.textContent = `画像${index + 1}（${kind}）`;
-    link.insertBefore(label, link.firstChild);
+  document.querySelectorAll('.evidence-link').forEach(link => {
     link.addEventListener('click', event => {
       event.preventDefault();
       const imageName = link.querySelector('img').src.split('/').pop().split('?')[0];
-      const values = cropBoxes[imageName].split(',');
       pageImage.src = link.dataset.full;
       pageImage.alt = link.dataset.pageLabel;
-      [box.style.left, box.style.top, box.style.width, box.style.height] = values.map(value => `${value}%`);
+      viewerInner.querySelectorAll('.crop-box').forEach(oldBox => oldBox.remove());
+      cropBoxes[imageName].split(';').forEach(boxValue => {
+        const values = boxValue.split(',');
+        const newBox = document.createElement('span');
+        newBox.className = 'crop-box';
+        [newBox.style.left, newBox.style.top, newBox.style.width, newBox.style.height] = values.map(value => `${value}%`);
+        viewerInner.appendChild(newBox);
+      });
       viewer.classList.add('open');
       document.body.style.overflow = 'hidden';
     });
