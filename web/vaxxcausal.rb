@@ -185,7 +185,7 @@ __MENU__
       <p class="case-meta">3回目接種45時間後に死亡・症例 No.1809</p>
       <p><span class="verdict">α</span></p>
       <p>剖検で心筋・心膜の炎症所見があり、他のウイルス検査は陰性。専門家は、心筋炎から不整脈を生じ死亡に至ったとの判断は、得られた情報と矛盾しないとした。</p>
-      <a class="evidence-link" href="src/vaxcausal/pages/001161432-p290.png" data-full="src/vaxcausal/pages/001161432-p290.png" data-box="2.5,14,95,31" data-page-label="元PDF 290ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/alpha-14.png" alt="14歳女性のα評価症例を掲載した厚生労働省資料"></a>
+      <a class="evidence-link" href="src/vaxcausal/pages/001161432-p290.png" data-full="src/vaxcausal/pages/001161432-p290.png" data-box="2.5,14,95,31" data-page-label="元PDF 290ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/alpha-14.png?v=2" alt="14歳女性のα評価症例を掲載した厚生労働省資料"></a>
       <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（290/456ページ）</a></p>
     </article>
     <article class="case">
@@ -193,7 +193,7 @@ __MENU__
       <p class="case-meta">接種直後に心肺停止・一覧 No.23198</p>
       <p><span class="verdict">α</span></p>
       <p>専門家は、画像所見等の範囲ではワクチン以外の原因として死因となる具体的異常所見が同定されず、接種と死亡との直接的因果関係は否定できないとした。</p>
-      <a class="evidence-link" href="src/vaxcausal/pages/001197724-p40.png" data-full="src/vaxcausal/pages/001197724-p40.png" data-box="4,10,92,42" data-page-label="元PDF 40ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/alpha-42.png" alt="42歳女性のα評価症例を掲載した厚生労働省資料"></a>
+      <a class="evidence-link" href="src/vaxcausal/pages/001197724-p40.png" data-full="src/vaxcausal/pages/001197724-p40.png" data-box="4,10,92,42" data-page-label="元PDF 40ページと切抜き範囲"><img class="source-image" src="src/vaxcausal/alpha-42.png?v=2" alt="42歳女性のα評価症例を掲載した厚生労働省資料"></a>
       <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001197724.pdf" target="_blank" rel="noopener">元PDF（40/52ページ）</a></p>
     </article>
   </div>
@@ -231,14 +231,14 @@ __MENU__
     'no1790-row.png': '21.9,45.1,18.5,15.3', 'no1790-eval.png': '78.7,45.1,12.3,15.3',
     'no1808-eval.png': '62.5,73.6,12.3,15.3',
     'no101-medical.png': '21.9,47.4,18.5,9.0',
-    'alpha-14.png': '78.7,59.0,12.3,13.1',
-    'alpha-42.png': '83.0,20.1,14.7,36.2'
+    'alpha-14.png': '78.7,65.9,12.3,5.6',
+    'alpha-42.png': '83.0,50.8,14.7,5.1'
   };
   const close = () => { viewer.classList.remove('open'); document.body.style.overflow = ''; };
   document.querySelectorAll('.evidence-link').forEach(link => {
     link.addEventListener('click', event => {
       event.preventDefault();
-      const imageName = link.querySelector('img').src.split('/').pop();
+      const imageName = link.querySelector('img').src.split('/').pop().split('?')[0];
       const values = cropBoxes[imageName].split(',');
       pageImage.src = link.dataset.full;
       pageImage.alt = link.dataset.pageLabel;
