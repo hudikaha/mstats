@@ -54,18 +54,23 @@ async function evaluate(socket, expression) {
       socket.addEventListener("error", reject, {once:true});
     });
     let state;
+    const phases = [];
     while (Date.now() < deadline) {
       state = await evaluate(socket, `(() => ({
         text:document.getElementById("morttr-calculation-status")?.textContent || "",
         comparison:window.morttrCalculationComparison || null,
+        phase:window.morttrCalculationPhase || null,
         rendered:!!document.querySelector("#mortyear-vis canvas, #mortyear-vis svg")
       }))()`);
+      if (state.phase && phases.at(-1) !== state.phase) phases.push(state.phase);
       if (state.text.includes("切り替えました") || state.text.includes("Switched to browser") || state.text.includes("Ruby計算結果")) break;
-      await delay(500);
+      await delay(50);
     }
+    state.phases = phases;
     console.log(JSON.stringify(state));
     if (!state.rendered || !(state.text.includes("切り替えました") || state.text.includes("Switched to browser"))) process.exitCode = 1;
     if (state.comparison && state.comparison.mismatches) process.exitCode = 1;
+    if (!phases.includes("observations") || phases.at(-1) !== "complete") process.exitCode = 1;
     socket.close();
   } finally {
     chrome.kill("SIGTERM");

@@ -868,7 +868,12 @@ def cached_scenarios(rows, calculator_type, analytic_calculator)
 
   queue_path = cache_file(digest, queue: true)
   queued = cache_entry(queue_path, key)
-  return [queued[:analytic], []] if queued
+  if queued
+    # 日本語: queueはRuby近似値を持っていても未完成cacheなので、browser計算経路を継続する。
+    # English: A queued entry remains incomplete even with Ruby approximations; keep using the browser path.
+    $mortyear_cache_miss = true
+    return [queued[:analytic], []]
+  end
 
   $mortyear_cache_miss = true
   analytic = analytic_calculator.call(rows, '', '')
@@ -3945,7 +3950,19 @@ else
       const calculationInputs = #{JSON.generate(calculation_inputs)};
       const calculationEngine = #{JSON.generate(calculation_engine)};
       const verifyBrowserCalculation = #{calculation_request == 'js' ? 'true' : 'false'};
-      let values = rubyValues;
+      // 日本語: browser計算時は予測値を初期Vega dataへ渡さず、観測線を最初のframeで描く。
+      // English: For browser calculation, omit predictions from initial Vega data so observations paint first.
+      const observationOnlyValues = rows => rows.map(row => ({
+        ...row,
+        expected: null,
+        pi_lower: null,
+        pi_upper: null,
+        pi99_lower: null,
+        pi99_upper: null,
+        outside_pi: false
+      }));
+      let values = calculationEngine === "js" ? observationOnlyValues(rubyValues) : rubyValues;
+      window.morttrCalculationPhase = calculationEngine === "js" ? "observations" : "cached";
       let weeklyValues = #{JSON.generate(weekly_context)};
       const weeklyCalculationInputs = #{JSON.generate(weekly_calculation_inputs)};
       const weeklyCalculationCombinations = #{JSON.generate(weekly_combinations)};
@@ -4114,6 +4131,7 @@ else
           status.textContent = #{JSON.generate($l == :ja ? 'ブラウザで予測区間を計算しています…' : 'Calculating prediction intervals in the browser…')};
           const calculateInBrowser = () => {
             try {
+              window.morttrCalculationPhase = "calculating";
               const primaryWeekly = #{selected_period == 'weekly' ? 'true' : 'false'};
               window.morttrCalc.missingLabel = #{JSON.generate($l == :ja ? '欠測' : 'Missing')};
               const jsValues = primaryWeekly ?
@@ -4152,14 +4170,22 @@ else
                 values = jsValues;
                 result.view.change("morttr_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
               }
+              window.morttrCalculationPhase = "complete";
               status.textContent = #{JSON.generate($l == :ja ? 'ブラウザ計算へ切り替えました。' : 'Switched to browser calculation.')};
             } catch (error) {
               console.warn(error);
+              window.morttrCalculationPhase = "error";
               status.textContent = #{JSON.generate($l == :ja ? 'ブラウザ計算を検証できなかったため、Ruby計算結果を表示しています。' : 'Browser calculation could not be verified; showing Ruby results.')};
             }
           };
-          if (window.requestIdleCallback) requestIdleCallback(calculateInBrowser, {timeout:500});
-          else setTimeout(calculateInBrowser, 0);
+          // 日本語: Vegaの初期描画を二frame確定してから、予測値計算をidle taskへ渡す。
+          // English: Let Vega paint observations for two frames before scheduling prediction work as an idle task.
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            setTimeout(() => {
+              if (window.requestIdleCallback) requestIdleCallback(calculateInBrowser, {timeout:500});
+              else calculateInBrowser();
+            }, 250);
+          }));
         }
         let resizeTimer;
         window.addEventListener("resize", () => {

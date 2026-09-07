@@ -46,7 +46,7 @@ Dir.mktmpdir('morttr-cache-test-') do |cache_dir|
   queue_digest = Digest::SHA256.file(cold_queue.first).hexdigest
 
   queued = run_command(env, *command)
-  raise 'queued request did not reuse Ruby analytic cache' unless calculation_engine(queued) == 'ruby'
+  raise 'queued request did not retain JavaScript calculation' unless calculation_engine(queued) == 'js'
   queued_files = Dir.glob(File.join(cache_dir, 'queue', '*', '*.json.gz'))
   raise 'queued request duplicated or removed the job' unless queued_files == cold_queue
   raise 'queued request rewrote the cache entry' unless Digest::SHA256.file(queued_files.first).hexdigest == queue_digest
@@ -67,7 +67,7 @@ Dir.mktmpdir('morttr-cache-test-') do |cache_dir|
   raise "cache verification failed: #{verification['errors'].inspect}" unless verification['errors'].empty?
   raise 'cache verifier did not inspect one file' unless verification['files'] == 1 && verification['entries'] == 1
 
-  puts JSON.generate(cold: 'js', queued: 'ruby', warm: 'ruby', cache_files: completed.length,
+  puts JSON.generate(cold: 'js', queued: 'js', warm: 'ruby', cache_files: completed.length,
                      analytic_rows: cold_values.length,
                      simulation_rows: warm_values.count { |row| row['interval_method'] == 'simulation' })
 end
