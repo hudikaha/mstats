@@ -82,7 +82,7 @@ CODEX ?= codex
 .PHONY: help all location-config fetch fetch-pop fetch-death fetch-stmf fetch-exdeaths fetch-wpp fetch-un-monthly fetch-owid check csv rebuild-all-csv schema-csv mort-csv stmf-csv exdeaths-sample-csv exdeaths-csv covid-vaxx-weekly-csv confirmed-sample-csv confirmed-csv canonical-weekly-csv japan-mortality-csv \
   yearly-csv jp-yearly-csv jp-infant-yearly-csv us-yearly-csv oecd-infant-yearly-csv wpp-yearly-csv un-monthly-csv ncc-python ncc-cancer-sample-csv ncc-cancer-csv validate-csv upload-official \
   upload-hmd upload-wpp upload-oecd upload-un-monthly upload-confirmed upload-yearly logstash-official logstash-hmd logstash-wpp logstash-oecd logstash-un-monthly logstash-confirmed \
-	upload-exdeaths-sample upload-exdeaths upload-ncc upload-covid-vaxx upload-japan-mortality upload-mstats-all check-latest-id-collisions morttr-catalog-csv mortyear-catalog-csv morttr-qr morttr-check reset-mstats-index clone-mstats-index check-mstats-index delete-ncc-index-records replace-ncc-index delete-japan-mortality-index-records replace-japan-mortality-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-covid-vaxx logstash-japan-monthly logstash-japan-weekly logstash-japan-yearly logstash-japan-mortality logstash-all cod codtr
+	upload-exdeaths-sample upload-exdeaths upload-ncc upload-covid-vaxx upload-japan-mortality upload-mstats-all check-latest-id-collisions morttr-catalog-csv mortyear-catalog-csv morttr-qr morttr-check morttr-calc-check reset-mstats-index clone-mstats-index check-mstats-index delete-ncc-index-records replace-ncc-index delete-japan-mortality-index-records replace-japan-mortality-index switch-mstats-alias upload logstash logstash-exdeaths-sample logstash-exdeaths logstash-ncc logstash-covid-vaxx logstash-japan-monthly logstash-japan-weekly logstash-japan-yearly logstash-japan-mortality logstash-all cod codtr
 
 define VALIDATE_MONTHS
 validate_months() { \
@@ -191,6 +191,7 @@ help:
 	@echo 'make morttr-catalog-csv YEARLY_INDEX=mstats20260819 最新CSVからmorttr catalogを生成'
 	@echo 'make morttr-qr morttr.rbの正式URLを指すQR SVGを再生成'
 	@echo 'make morttr-check morttr.rbの構文と代表Web検査MY01・MY31〜MY33を実行'
+	@echo 'make morttr-calc-check Rubyと同じschemaを作るbrowser計算の構文・固定data検査を実行'
 	@echo 'make reset-mstats-index YEARLY_INDEX=mstats20260816 指定物理indexだけを削除・新規作成'
 	@echo 'make clone-mstats-index SOURCE_INDEX=mstats20260818 YEARLY_INDEX=mstats20260819 mapping作成後に全recordを複製'
 	@echo 'make replace-ncc-index YEARLY_INDEX=mstats20260819 NCC CSVを生成・検査・転送後、指定物理indexの旧NCC系列を削除して再投入'
@@ -796,6 +797,12 @@ morttr-check:
 	@ruby "$(ROOT)/bin/test-web.rb" --ids MY01,MY31,MY32,MY33
 	@node "$(ROOT)/bin/test-web-dom.js" --ids MY01,MY31,MY32,MY33
 	@node "$(ROOT)/bin/test-web-actions.js" --ids MY31
+
+morttr-calc-check:
+	@node --check "$(ROOT)/../web/morttr-calc.js"
+	@node --check "$(ROOT)/test/morttr-calc-test.js"
+	@node --check "$(ROOT)/test/morttr-browser-calc-test.js"
+	@node "$(ROOT)/test/morttr-calc-test.js"
 
 reset-mstats-index:
 	@[[ "$(YEARLY_INDEX)" == mstats<-> ]] || { echo 'YEARLY_INDEXはmstatsに年月日等を続けた物理index名に限定します。'; exit 1; }; \

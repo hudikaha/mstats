@@ -252,6 +252,8 @@ $l = if requested_language.match?(/^(en|english)/i) ||
        :ja
      end
 mode = cgi['mode'] == 'series' ? 'series' : 'country'
+calculation_request = %w[ruby js].include?(cgi['calc']) ? cgi['calc'] : 'auto'
+$mortyear_cache_miss = false
 # 日本語: 公開URLではdatasetを選ばせず、人口動態死亡と癌統計を同じ画面で扱う。
 # English: Do not expose a dataset URL parameter; combine vital and cancer series on one screen.
 selected_dataset = 'vital'
@@ -868,6 +870,7 @@ def cached_scenarios(rows, calculator_type, analytic_calculator)
   queued = cache_entry(queue_path, key)
   return [queued[:analytic], []] if queued
 
+  $mortyear_cache_miss = true
   analytic = analytic_calculator.call(rows, '', '')
   begin
     write_queue_entry(queue_path, {
@@ -1860,6 +1863,7 @@ def build_scenarios(rows, series_key, label, use_cache:)
   stratified = rows.first&.key?(:strata)
   analytic_calculator = stratified ? method(:compute_stratified_asr_analytic_scenarios) : method(:compute_analytic_scenarios)
   unless use_cache
+    $mortyear_cache_miss = true
     analytic = analytic_calculator.call(rows, series_key, label)
     return scenario_display_rows(analytic, series_key, label, 'analytic', true)
   end
@@ -2657,6 +2661,7 @@ annual_source_fields = %w[id loc category rate dcode algo date year sex src_url 
 annual_records = selected_metric == 'birth_rate' ? annual_records_all : []
 special_rows = birth_rate_rows(annual_records)
 
+calculation_inputs = []
 chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
   loc = mode == 'country' ? series_key : selected_locations.first
   rows = if SPECIAL_CAUSES.key?(cause)
@@ -2664,12 +2669,22 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
          else
            annual_by_dataset.fetch(dataset).select { |row| row[:loc] == loc && row[:dcode] == cause }
          end
+  calculation_inputs << {
+    series: series_key, label: label, period: selected_period, rows: rows,
+    metadata: { loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
+                dcode: cause, sex: selected_sex, ages: age.join('~') }
+  }
   build_scenarios(rows, series_key, label,
                   use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1').map do |row|
     row.merge(loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
               dcode: cause, sex: selected_sex, ages: age.join('~'))
   end
 end
+calculation_engine = if calculation_request == 'auto'
+                       selected_period == 'weekly' || $mortyear_cache_miss ? 'js' : 'ruby'
+                     else
+                       calculation_request
+                     end
 
 start_week = selected_period == 'flu27' ? 27 : 36
 chart_data.each do |row|
@@ -2742,11 +2757,21 @@ else
   end
 end
 weekly_combinations = weekly_methods.product(weekly_baselines)
+weekly_calculation_inputs = weekly_context.map do |row|
+  row.merge(model_strata: Array(row[:model_strata]).map(&:dup))
+end
 if selected_period == 'weekly'
   base_weekly_context = weekly_context
   weekly_context = weekly_combinations.flat_map do |method, baseline|
-    analysis = weekly_baseline_analysis(base_weekly_context, method: method,
-                                        baseline: baseline, metric: selected_metric)
+    # 日本語: 通常経路は観測値を先に返し、基準線と区間をbrowserで補う。明示指定時だけRubyを参照実行する。
+    # English: The normal path returns observations first; only an explicit mode runs Ruby as the reference.
+    analysis = if calculation_request == 'auto'
+                 $mortyear_cache_miss = true
+                 []
+               else
+                 weekly_baseline_analysis(base_weekly_context, method: method,
+                                           baseline: baseline, metric: selected_metric)
+               end
     analysis_by_key = analysis.to_h { |row| [[row[:series], row[:date]], row] }
     base_weekly_context.map do |row|
       result = analysis_by_key[[row[:series], row[:date]]]
@@ -2884,6 +2909,7 @@ puts <<~HTML
   </style>
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
+    #{calculation_request == 'auto' ? '' : %(<input type="hidden" name="calc" value="#{calculation_request}">)}
     <input id="train-to-hidden" type="hidden" name="train_to" value="#{default_cutoff}">
     <input id="start-year-hidden" type="hidden" name="start_year" value="#{default_start_year}">
     <p>
@@ -3908,9 +3934,17 @@ else
       </label>
     </p>
     <div id="mortyear-vis"></div>
+    <p id="morttr-calculation-status" role="status" style="text-align:center;display:none"></p>
+    <script src="morttr-calc.js"></script>
     <script>
-      const values = #{JSON.generate(chart_data)};
-      const weeklyValues = #{JSON.generate(weekly_context)};
+      const rubyValues = #{JSON.generate(chart_data)};
+      const calculationInputs = #{JSON.generate(calculation_inputs)};
+      const calculationEngine = #{JSON.generate(calculation_engine)};
+      const verifyBrowserCalculation = #{calculation_request == 'js' ? 'true' : 'false'};
+      let values = rubyValues;
+      let weeklyValues = #{JSON.generate(weekly_context)};
+      const weeklyCalculationInputs = #{JSON.generate(weekly_calculation_inputs)};
+      const weeklyCalculationCombinations = #{JSON.generate(weekly_combinations)};
       const overlayValues = #{JSON.generate(overlay_values)};
       const detailSeries = #{JSON.generate(detail_series)};
       const mortyearVis = document.getElementById("mortyear-vis");
@@ -3985,10 +4019,10 @@ else
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base || show_covid_overlay"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#111", strokeWidth: 2.6, point: {filled:true,size:55}, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#174a73", strokeDash:[7,4], strokeWidth:2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"expected",type:"quantitative"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#111", strokeWidth:2.2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.observed)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"point", opacity:0, size:260, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:weeklyTooltip}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#174a73", strokeDash:[7,4], strokeWidth:2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"expected",type:"quantitative"}}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#111", strokeWidth:2.2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.observed)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"point", opacity:0, size:260, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:weeklyTooltip}},
           {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
           {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"!primary_weekly"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
@@ -4001,7 +4035,7 @@ else
       const excessPanelSpec = (key, cumulative) => ({
         title:{text:{expr:cumulative ? "include_deficit ? deficit_cumulative_title : excess_cumulative_title" : "include_deficit ? deficit_trend_title : excess_trend_title"},anchor:"start",fontSize:15},
         width:initialPlotWidth,height:115,
-        data:{values:weeklyValues},
+        data:{name:"morttr_weekly_values"},
         transform:[
           {filter:`datum.series == '${key}'`},
           {filter:"isValid(datum.excess_upper)"},
@@ -4036,7 +4070,8 @@ else
       });
       const spec = {
         $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-        data: {values},
+        data: {name:"morttr_values", values},
+        datasets: {morttr_weekly_values:weeklyValues},
         params: [
           {name:"display_start", value:displayStartDefault},
           {name:"display_start_date", value:displayStartDate(displayStartDefault)},
@@ -4069,6 +4104,59 @@ else
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         window.mortyearView = result.view;
+        if (calculationEngine === "js" && window.morttrCalc) {
+          const status = document.getElementById("morttr-calculation-status");
+          status.style.display = "";
+          status.textContent = #{JSON.generate($l == :ja ? 'ブラウザで予測区間を計算しています…' : 'Calculating prediction intervals in the browser…')};
+          const calculateInBrowser = () => {
+            try {
+              const primaryWeekly = #{selected_period == 'weekly' ? 'true' : 'false'};
+              window.morttrCalc.missingLabel = #{JSON.generate($l == :ja ? '欠測' : 'Missing')};
+              const jsValues = primaryWeekly ?
+                window.morttrCalc.calculateWeekly(weeklyCalculationInputs, weeklyCalculationCombinations, #{JSON.generate(selected_metric)}) :
+                window.morttrCalc.calculateAnnual(calculationInputs, {
+                  trainingStart: #{$mortyear_training_start},
+                  quasiLabel: #{JSON.generate($l == :ja ? '準ポアソン近似' : 'Quasi-Poisson approximation')},
+                  poissonLabel: #{JSON.generate($l == :ja ? 'ポアソン近似' : 'Poisson approximation')}
+                });
+              const numericFields = primaryWeekly ?
+                ["observed", "expected", "lower", "upper", "lower99", "upper99", "excess", "outside_deviation", "excess_lower", "excess_upper"] :
+                ["observed", "expected", "pi_lower", "pi_upper", "pi99_lower", "pi99_upper", "dispersion"];
+              const keyFor = primaryWeekly ? row => [row.series, row.date].join("|") :
+                row => [row.series, row.model, row.train_to, row.year, row.interval_method].join("|");
+              const referenceValues = primaryWeekly ? weeklyValues : rubyValues.filter(row => row.interval_method === "analytic");
+              const rubyByKey = new Map(referenceValues.map(row => [keyFor(row), row]));
+              let compared = 0, mismatches = 0, maximumDifference = 0;
+              if (verifyBrowserCalculation) jsValues.forEach(row => {
+                const reference = rubyByKey.get(keyFor(row));
+                if (!reference) { mismatches += 1; return; }
+                compared += 1;
+                numericFields.forEach(field => {
+                  if (row[field] == null && reference[field] == null) return;
+                  const difference = Math.abs(Number(row[field]) - Number(reference[field]));
+                  maximumDifference = Math.max(maximumDifference, difference);
+                  const scale = Math.max(1, Math.abs(Number(reference[field])));
+                  if (!Number.isFinite(difference) || difference > 1e-7 * scale) mismatches += 1;
+                });
+              });
+              window.morttrCalculationComparison = {compared, mismatches, maximumDifference};
+              if (!jsValues.length || (verifyBrowserCalculation && mismatches)) throw new Error(`Ruby/JS mismatch: ${mismatches}, max=${maximumDifference}`);
+              if (primaryWeekly) {
+                weeklyValues = jsValues;
+                result.view.change("morttr_weekly_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
+              } else {
+                values = jsValues;
+                result.view.change("morttr_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
+              }
+              status.textContent = #{JSON.generate($l == :ja ? 'ブラウザ計算へ切り替えました。' : 'Switched to browser calculation.')};
+            } catch (error) {
+              console.warn(error);
+              status.textContent = #{JSON.generate($l == :ja ? 'ブラウザ計算を検証できなかったため、Ruby計算結果を表示しています。' : 'Browser calculation could not be verified; showing Ruby results.')};
+            }
+          };
+          if (window.requestIdleCallback) requestIdleCallback(calculateInBrowser, {timeout:500});
+          else setTimeout(calculateInBrowser, 0);
+        }
         let resizeTimer;
         window.addEventListener("resize", () => {
           clearTimeout(resizeTimer);
