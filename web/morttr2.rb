@@ -3946,8 +3946,12 @@ else
         #{ $l == :ja ? 'シミュレーション区間を表示（未計算時は近似区間。1分以上待って再読込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and resubmit)' }
       </label>
     </p>
+    <p id="morttr-calculation-status" role="status" style="text-align:center">#{
+      calculation_engine == 'js' ?
+        ($l == :ja ? '観測値描画中(推測値等は観測値の後に表示されます)……' : 'Rendering observations (predictions and intervals will appear afterward)…') :
+        ($l == :ja ? '描画中……' : 'Rendering…')
+    }</p>
     <div id="mortyear-vis"></div>
-    <p id="morttr-calculation-status" role="status" style="text-align:center;display:none"></p>
     <script src="morttr-calc.js"></script>
     <script>
       const rubyValues = #{JSON.generate(chart_data)};
@@ -3974,10 +3978,6 @@ else
       const detailSeries = #{JSON.generate(detail_series)};
       const mortyearVis = document.getElementById("mortyear-vis");
       const calculationStatus = document.getElementById("morttr-calculation-status");
-      calculationStatus.style.display = "";
-      calculationStatus.textContent = calculationEngine === "js" ?
-        #{JSON.generate($l == :ja ? '観測値描画中（予測値等は観測値の後に表示されます）……' : 'Rendering observations (predictions and intervals will appear afterward)…')} :
-        #{JSON.generate($l == :ja ? '描画中……' : 'Rendering…')};
       // 日本語: 両Y軸のextentを確保し、狭い画面でもplot本体を320px以上残す。
       // English: Reserve both Y-axis extents and retain at least 320px for the plot.
       const requestedPanelWidth = width => Math.max(320, width - 168);
