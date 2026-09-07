@@ -102,7 +102,7 @@ __MENU__
   </div>
 
   <article class="case">
-    <h2>剖検で心筋炎、報告医「関連あり」――専門家も「心筋炎で矛盾しない」としつつ、理由を示さずγ</h2>
+    <h2>剖検で心筋炎、報告医「関連あり、他要因の可能性無し」――専門家も「心筋炎で矛盾しない」としつつ、理由を示さずγ</h2>
     <p class="case-meta">55歳女性・4回目接種2日後に死亡（一覧 No.22710）</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>55歳女性／4回目</span><span>2022-11-20接種</span><span>2022-11-22死亡</span><span><b>症状：</b>突然死、心肺停止、心筋炎、腹痛、嘔吐、倦怠感</span><span><b>転帰：</b>死亡</span></section>
     <div class="record-grid">
@@ -113,7 +113,7 @@ __MENU__
   </article>
 
   <article class="case">
-    <h2>剖検で微小梗塞、「血栓症による心室細動」――DICを除く鑑別診断に必要な情報が不足としてγ</h2>
+    <h2>剖検で微小梗塞、「血栓症による心室細動」、報告医「関連あり、他要因の可能性無し」――DICを除く鑑別診断に必要な情報が不足としてγ</h2>
     <p class="case-meta">73歳女性・2回目接種後に死亡（症例 No.1790）</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>73歳女性／2回目</span><span>2021-08-06接種</span><span>2021-09-07死亡</span><span><b>症状：</b>心室細動、血栓症、血小板減少症、腎不全、多臓器不全等</span><span><b>転帰：</b>死亡</span></section>
     <div class="record-grid">
@@ -124,7 +124,7 @@ __MENU__
   </article>
 
   <article class="case">
-    <h2>下肢血栓が肺動脈に詰まり急死と報告――3か月後で臨床経過・接種前の血栓リスクが不明としてγ</h2>
+    <h2>下肢血栓が肺動脈に詰まり急死、報告医「関連あり、他要因の可能性無し」――3か月後で臨床経過・接種前の血栓リスクが不明としてγ</h2>
     <p class="case-meta">40歳女性・2回目接種後に死亡（症例 No.1808／一覧 No.22258）</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>40歳女性／2回目</span><span>2021-09-13接種</span><span>2022-02-27死亡</span><span><b>症状：</b>下肢腫脹・疼痛、肺動脈血栓塞栓症、突然死</span><span><b>転帰：</b>死亡</span></section>
     <div class="record-grid">
@@ -134,37 +134,37 @@ __MENU__
     <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener">元PDF（808/2363ページ）</a>・<a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">専門家評価の元PDF（289/456ページ）</a></p>
   </article>
 
-  <article class="case"><h2>解剖で右冠動脈に新しい血栓――心筋梗塞のリスク因子が複数あるとしてγ</h2><p class="case-meta">80歳女性・症例 No.185</p>
+  <article class="case"><h2>解剖で右冠動脈に新しい血栓、報告医「関連あり、他要因の可能性無し」――心筋梗塞のリスク因子が複数あるとしてγ</h2><p class="case-meta">80歳女性・症例 No.185</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>80歳女性／1回目</span><span>2021-06-01接種</span><span>2021-06-03死亡</span><span><b>症状：</b>右冠動脈の心筋梗塞、完全閉塞</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
     <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p31.png" data-full="src/vaxxcausal/pages/001161432-p31.png" data-box="2.5,52.8,95,15.7" data-page-label="元PDF 31ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no185-medical.png" alt="症例No.185の報告内容"></a></section>
     <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p31.png" data-full="src/vaxxcausal/pages/001161432-p31.png" data-box="2.5,52.8,95,15.7" data-page-label="元PDF 31ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no185-eval.png" alt="症例No.185の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（31/456ページ）</a></p></article>
 
-  <article class="case"><h2>薬剤性肺障害の可能性、報告医「関連あり」――詳細な臨床データと病理所見が必要としてγ</h2><p class="case-meta">80歳男性・症例 No.862</p>
+  <article class="case"><h2>薬剤性肺障害の可能性、報告医「関連あり、他要因の可能性無し」――詳細な臨床データと病理所見が必要としてγ</h2><p class="case-meta">80歳男性・症例 No.862</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>80歳男性／1回目</span><span>2021-07-09接種</span><span>2021-07-23死亡</span><span><b>症状：</b>間質性肺疾患</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
     <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p114.png" data-full="src/vaxxcausal/pages/001161432-p114.png" data-box="2.5,55.5,95,9.7" data-page-label="元PDF 114ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no862-medical.png" alt="症例No.862の報告内容"></a></section>
     <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p114.png" data-full="src/vaxxcausal/pages/001161432-p114.png" data-box="2.5,55.5,95,9.7" data-page-label="元PDF 114ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no862-eval.png" alt="症例No.862の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（114/456ページ）</a></p></article>
 
-  <article class="case"><h2>解剖で急性心筋炎・多量の心嚢水――白血病治療中で感染症も疑われ、情報不十分としてγ</h2><p class="case-meta">43歳男性・症例 No.1260</p>
+  <article class="case"><h2>解剖で急性心筋炎・多量の心嚢水、報告医「関連あり、他要因の可能性無し」――白血病治療中で感染症も疑われ、情報不十分としてγ</h2><p class="case-meta">43歳男性・症例 No.1260</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>43歳男性／2回目</span><span>2021-08-30接種</span><span>2021-09-08死亡</span><span><b>症状：</b>急性心筋炎、心停止、心嚢水</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
     <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p172.png" data-full="src/vaxxcausal/pages/001161432-p172.png" data-box="2.5,14,95,15" data-page-label="元PDF 172ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1260-medical.png" alt="症例No.1260の報告内容"></a></section>
     <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p172.png" data-full="src/vaxxcausal/pages/001161432-p172.png" data-box="2.5,14,95,15" data-page-label="元PDF 172ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1260-eval.png" alt="症例No.1260の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（172/456ページ）</a></p></article>
 
-  <article class="case"><h2>剖検で急性心筋炎――剖検の具体的所見と心機能低下等の客観的所見が不足としてγ</h2><p class="case-meta">36歳男性・症例 No.1332</p>
+  <article class="case"><h2>剖検で急性心筋炎、報告医「関連あり、他要因の可能性無し」――剖検の具体的所見と心機能低下等の客観的所見が不足としてγ</h2><p class="case-meta">36歳男性・症例 No.1332</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>36歳男性／2回目</span><span>2021-08-28接種</span><span>2021-08-31死亡</span><span><b>症状：</b>急性心筋炎、突然死</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
     <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p183.png" data-full="src/vaxxcausal/pages/001161432-p183.png" data-box="2.5,53,95,10" data-page-label="元PDF 183ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1332-medical.png" alt="症例No.1332の報告内容"></a></section>
     <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p183.png" data-full="src/vaxxcausal/pages/001161432-p183.png" data-box="2.5,53,95,10" data-page-label="元PDF 183ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1332-eval.png" alt="症例No.1332の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（183/456ページ）</a></p></article>
 
-  <article class="case"><h2>病理解剖で全身の血栓、肺動脈血栓性塞栓――凝固系データがなく、他の増悪因子も否定できないとしてγ</h2><p class="case-meta">64歳女性・症例 No.1737</p>
+  <article class="case"><h2>病理解剖で全身の血栓、肺動脈血栓性塞栓、報告医「関連あり、他要因の可能性無し」――凝固系データがなく、他の増悪因子も否定できないとしてγ</h2><p class="case-meta">64歳女性・症例 No.1737</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>64歳女性／1回目</span><span>2021-06-29接種</span><span>2021-07-02死亡</span><span><b>症状：</b>肺・腎動脈血栓症、呼吸不全</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
     <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p275.png" data-full="src/vaxxcausal/pages/001161432-p275.png" data-box="2.5,14,95,18.5" data-page-label="元PDF 275ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1737-medical.png" alt="症例No.1737の報告内容"></a></section>
     <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p275.png" data-full="src/vaxxcausal/pages/001161432-p275.png" data-box="2.5,14,95,18.5" data-page-label="元PDF 275ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1737-eval.png" alt="症例No.1737の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（275/456ページ）</a></p></article>
 
-  <article class="case"><h2>行政解剖で心筋炎を伴う急性循環不全――発症が数日後なのは疑問で、別の事象の可能性もあるとしてγ</h2><p class="case-meta">19歳男性・症例 No.1762</p>
+  <article class="case"><h2>行政解剖で心筋炎を伴う急性循環不全、報告医「関連あり、他要因の可能性無し」――発症が数日後なのは疑問で、別の事象の可能性もあるとしてγ</h2><p class="case-meta">19歳男性・症例 No.1762</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>19歳男性／3回目</span><span>2022-07-29接種</span><span>2022-08-01死亡</span><span><b>症状：</b>心筋炎、急性循環不全</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
     <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p280.png" data-full="src/vaxxcausal/pages/001161432-p280.png" data-box="2.5,26,95,14" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1762-medical.png" alt="症例No.1762の報告内容"></a></section>
     <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p280.png" data-full="src/vaxxcausal/pages/001161432-p280.png" data-box="0,0,0,0" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1762-eval.png" alt="症例No.1762の専門家判定理由"></a></section>
