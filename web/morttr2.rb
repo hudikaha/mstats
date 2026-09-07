@@ -2669,11 +2669,13 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
          else
            annual_by_dataset.fetch(dataset).select { |row| row[:loc] == loc && row[:dcode] == cause }
          end
-  calculation_inputs << {
-    series: series_key, label: label, period: selected_period, rows: rows,
-    metadata: { loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
-                dcode: cause, sex: selected_sex, ages: age.join('~') }
-  }
+  unless rows.empty?
+    calculation_inputs << {
+      series: series_key, label: label, period: selected_period, rows: rows,
+      metadata: { loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
+                  dcode: cause, sex: selected_sex, ages: age.join('~') }
+    }
+  end
   build_scenarios(rows, series_key, label,
                   use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1').map do |row|
     row.merge(loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
@@ -3503,6 +3505,8 @@ puts <<~HTML
         }
         syncMetric();
         syncCauseVisibility();
+        showLoading();
+        event.target.form.requestSubmit();
       }));
       restoreLocations();
       syncAgeSlider();

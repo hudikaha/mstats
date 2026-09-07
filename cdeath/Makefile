@@ -802,6 +802,7 @@ morttr-calc-check:
 	@node --check "$(ROOT)/../web/morttr-calc.js"
 	@node --check "$(ROOT)/test/morttr-calc-test.js"
 	@node --check "$(ROOT)/test/morttr-browser-calc-test.js"
+	@ruby -c "$(ROOT)/test/morttr-cache-test.rb"
 	@node "$(ROOT)/test/morttr-calc-test.js"
 
 reset-mstats-index:
