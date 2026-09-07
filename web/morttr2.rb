@@ -1184,6 +1184,26 @@ def weekly_reference_years(target_year, baseline)
   end
 end
 
+# 日本語: 選択基準に必要な年と評価年がそろい、週次予測を表示し得る系列があるかを軽量判定する。
+# English: Cheaply detect whether any weekly series has the reference and evaluation years needed for predictions.
+def weekly_prediction_candidate?(rows, baselines)
+  rows.group_by { |row| row[:series] }.any? do |_series, series_rows|
+    years = series_rows.filter_map do |row|
+      next if Array(row[:model_strata]).empty? || row[:date].nil?
+
+      Date.iso8601(row[:date].to_s).cwyear
+    end.uniq
+    baselines.any? do |baseline|
+      fixed_end = { 'fixed_2015_2019' => 2019, 'fixed_2016_2020' => 2020 }[baseline]
+      if fixed_end
+        ((fixed_end - 4)..fixed_end).all? { |year| years.include?(year) } && years.any? { |year| year > fixed_end }
+      else
+        years.any? { |year| ((year - 5)..(year - 1)).all? { |reference| years.include?(reference) } }
+      end
+    end
+  end
+end
+
 def circular_week_distance(left, right)
   [(left - right).abs, 52 - (left - right).abs, 53 - (left - right).abs].min
 end
@@ -3821,6 +3841,14 @@ else
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
   selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
   default_model = selected_chart_model
+  prediction_display_available = if selected_period == 'weekly'
+                                   weekly_prediction_candidate?(weekly_calculation_inputs, weekly_baselines)
+                                 else
+                                   chart_data.any? do |row|
+                                     row[:train_to] == default_cutoff && row[:model] == default_model &&
+                                       !row[:expected].nil? && !row[:pi_lower].nil? && !row[:pi_upper].nil?
+                                   end
+                                 end
   dispersion_labels = available_specs.to_h do |key, _age, cause, _label|
     short_label = if mode == 'country'
                     location_names(key).fetch($l)
@@ -3947,9 +3975,9 @@ else
       </label>
     </p>
     <p id="morttr-calculation-status" role="status" style="text-align:center">#{
-      calculation_engine == 'js' ?
-        ($l == :ja ? '観測値描画中(推測値等は観測値の後に表示されます)……' : 'Rendering observations (predictions and intervals will appear afterward)…') :
-        ($l == :ja ? '描画中……' : 'Rendering…')
+      calculation_engine == 'js' || !prediction_display_available ?
+        ($l == :ja ? '観測値描画中……' : 'Rendering observations…') :
+        ($l == :ja ? '観測値と予測区間などを描画中……' : 'Rendering observations and prediction intervals…')
     }</p>
     <div id="mortyear-vis"></div>
     <script src="morttr-calc.js"></script>
@@ -3957,6 +3985,7 @@ else
       const rubyValues = #{JSON.generate(chart_data)};
       const calculationInputs = #{JSON.generate(calculation_inputs)};
       const calculationEngine = #{JSON.generate(calculation_engine)};
+      const predictionDisplayAvailable = #{prediction_display_available ? 'true' : 'false'};
       const verifyBrowserCalculation = #{calculation_request == 'js' ? 'true' : 'false'};
       // 日本語: browser計算時は予測値を初期Vega dataへ渡さず、観測線を最初のframeで描く。
       // English: For browser calculation, omit predictions from initial Vega data so observations paint first.
@@ -4134,11 +4163,10 @@ else
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         window.mortyearView = result.view;
-        if (calculationEngine === "js" && window.morttrCalc) {
+        if (calculationEngine === "js" && predictionDisplayAvailable && window.morttrCalc) {
           const status = calculationStatus;
-          status.style.display = "";
-          status.textContent = #{JSON.generate($l == :ja ? 'ブラウザで予測区間を計算しています…' : 'Calculating prediction intervals in the browser…')};
-          const calculateInBrowser = () => {
+          status.textContent = #{JSON.generate($l == :ja ? '予測区間などを計算しています…' : 'Calculating prediction intervals…')};
+          const calculateInBrowser = async () => {
             try {
               window.morttrCalculationPhase = "calculating";
               const primaryWeekly = #{selected_period == 'weekly' ? 'true' : 'false'};
@@ -4174,17 +4202,18 @@ else
               if (!jsValues.length || (verifyBrowserCalculation && mismatches)) throw new Error(`Ruby/JS mismatch: ${mismatches}, max=${maximumDifference}`);
               if (primaryWeekly) {
                 weeklyValues = jsValues;
-                result.view.change("morttr_weekly_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
+                await result.view.change("morttr_weekly_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
               } else {
                 values = jsValues;
-                result.view.change("morttr_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
+                await result.view.change("morttr_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
               }
               window.morttrCalculationPhase = "complete";
-              status.textContent = #{JSON.generate($l == :ja ? 'ブラウザ計算へ切り替えました。' : 'Switched to browser calculation.')};
+              status.textContent = "";
+              status.style.display = "none";
             } catch (error) {
               console.warn(error);
               window.morttrCalculationPhase = "error";
-              status.textContent = #{JSON.generate($l == :ja ? 'ブラウザ計算を検証できなかったため、Ruby計算結果を表示しています。' : 'Browser calculation could not be verified; showing Ruby results.')};
+              status.textContent = #{JSON.generate($l == :ja ? '予測区間を計算できませんでした。' : 'Prediction intervals could not be calculated.')};
             }
           };
           // 日本語: Vegaの初期描画を二frame確定してから、予測値計算をidle taskへ渡す。

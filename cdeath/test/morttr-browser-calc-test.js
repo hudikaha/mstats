@@ -65,14 +65,15 @@ async function evaluate(socket, expression) {
       }))()`);
       if (state.phase && phases.at(-1) !== state.phase) phases.push(state.phase);
       if (state.text && texts.at(-1) !== state.text) texts.push(state.text);
-      if (state.text.includes("切り替えました") || state.text.includes("Switched to browser") || state.text.includes("Ruby計算結果")) break;
+      if (state.phase === "complete" && state.rendered && !state.statusVisible) break;
+      if (state.phase === "error") break;
       if (state.phase === "cached" && state.rendered && !state.statusVisible) break;
       await delay(50);
     }
     state.phases = phases;
     state.texts = texts;
     console.log(JSON.stringify(state));
-    const browserComplete = state.text.includes("切り替えました") || state.text.includes("Switched to browser");
+    const browserComplete = state.phase === "complete" && !state.statusVisible;
     const cacheComplete = state.phase === "cached" && !state.statusVisible;
     if (!state.rendered || (!browserComplete && !cacheComplete)) process.exitCode = 1;
     if (state.comparison && state.comparison.mismatches) process.exitCode = 1;
