@@ -102,78 +102,78 @@ __MENU__
   </div>
 
   <article class="case">
-    <h2>「患者は心筋炎で急死したと考えられる」</h2>
+    <h2>剖検で心筋炎、報告医「関連あり」――専門家評価γ</h2>
     <p class="case-meta">55歳女性・4回目接種2日後に死亡（一覧 No.22710）</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>55歳女性／4回目</span><span>2022-11-20接種</span><span>2022-11-22死亡</span><span><b>症状：</b>突然死、心肺停止、心筋炎、腹痛、嘔吐、倦怠感</span><span><b>転帰：</b>死亡</span></section>
     <div class="record-grid">
-      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「患者は心筋炎で急死したと考えられる」<a class="evidence-link" href="src/vaxxcausal/pages/001039711-p1647.png" data-full="src/vaxxcausal/pages/001039711-p1647.png" data-box="45,34,49,49" data-page-label="元PDF 1647ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no15-medical.png" alt="報告医が関連あり、他要因なしと評価し、剖検で心筋炎所見を認めた原文"></a></section>
-      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>ブライトン分類1。「剖検上は心筋炎で矛盾しない」。</p><a class="evidence-link" href="src/vaxxcausal/pages/001125548-p38.png" data-full="src/vaxxcausal/pages/001125548-p38.png" data-box="7,6,86,6" data-page-label="元PDF 38ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no15-eval.png" alt="症例No.22710の専門家評価理由"></a></section>
+      <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001039711-p1647.png" data-full="src/vaxxcausal/pages/001039711-p1647.png" data-box="45,34,49,49" data-page-label="元PDF 1647ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no15-medical.png" alt="報告医が関連あり、他要因なしと評価し、剖検で心筋炎所見を認めた原文"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001125548-p38.png" data-full="src/vaxxcausal/pages/001125548-p38.png" data-box="7,6,86,6" data-page-label="元PDF 38ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no15-eval.png" alt="症例No.22710の専門家評価理由"></a></section>
     </div>
     <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001039711.pdf" target="_blank" rel="noopener">元PDF（1647/1844ページ）</a>・<a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001125548.pdf" target="_blank" rel="noopener">専門家評価の元PDF（38/43ページ）</a></p>
   </article>
 
   <article class="case">
-    <h2>「血栓症による心室細動と考える」</h2>
+    <h2>剖検で微小梗塞、「血栓症による心室細動」――専門家評価γ</h2>
     <p class="case-meta">73歳女性・2回目接種後に死亡（症例 No.1790）</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>73歳女性／2回目</span><span>2021-08-06接種</span><span>2021-09-07死亡</span><span><b>症状：</b>心室細動、血栓症、血小板減少症、腎不全、多臓器不全等</span><span><b>転帰：</b>死亡</span></section>
     <div class="record-grid">
-      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「剖検の結果、微小梗塞が認められた。血栓症による心室細動と考える」<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p285.png" data-full="src/vaxxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1790-row.png?v=3" alt="剖検で微小梗塞を認め、報告医が関連ありとした症例No.1790"></a></section>
-      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>微小血栓症を確認しブライトン分類1。DICを除く鑑別情報が不足し「否定も肯定もできません」。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p285.png" data-full="src/vaxxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1790-eval.png?v=3" alt="症例No.1790の専門家評価理由"></a></section>
+      <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p285.png" data-full="src/vaxxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1790-row.png?v=3" alt="剖検で微小梗塞を認め、報告医が関連ありとした症例No.1790"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p285.png" data-full="src/vaxxcausal/pages/001161432-p285.png" data-box="2.5,45,95,15.5" data-page-label="元PDF 285ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1790-eval.png?v=3" alt="症例No.1790の専門家評価理由"></a></section>
     </div>
     <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（285/456ページ）</a>の同じ行を、左右に分けて掲載。</p>
   </article>
 
   <article class="case">
-    <h2>「ワクチン接種により下肢に血栓が発現」</h2>
+    <h2>下肢血栓が肺動脈に詰まり急死と報告――専門家評価γ</h2>
     <p class="case-meta">40歳女性・2回目接種後に死亡（症例 No.1808／一覧 No.22258）</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>40歳女性／2回目</span><span>2021-09-13接種</span><span>2022-02-27死亡</span><span><b>症状：</b>下肢腫脹・疼痛、肺動脈血栓塞栓症、突然死</span><span><b>転帰：</b>死亡</span></section>
     <div class="record-grid">
-      <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「ワクチン接種により下肢に血栓が発現し、血栓が肺にとび、肺動脈につまり急死」<a class="evidence-link" href="src/vaxxcausal/pages/001125524-p808.png" data-full="src/vaxxcausal/pages/001125524-p808.png" data-box="34,25,62,73" data-page-label="元PDF 808ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1808-medical.png?v=4" alt="報告医がワクチンによる血栓と判断し、肺動脈に血栓所見を認めた原文"></a></section>
-      <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>肺動脈血栓は認めるが、接種から3か月以上経過し、臨床経過や血栓症リスクの情報が十分でない。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p289.png" data-full="src/vaxxcausal/pages/001161432-p289.png" data-box="2.5,73.5,95,17" data-page-label="元PDF 289ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1808-eval.png?v=4" alt="症例No.1808の専門家評価理由"></a></section>
+      <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001125524-p808.png" data-full="src/vaxxcausal/pages/001125524-p808.png" data-box="34,25,62,73" data-page-label="元PDF 808ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1808-medical.png?v=4" alt="報告医がワクチンによる血栓と判断し、肺動脈に血栓所見を認めた原文"></a></section>
+      <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p289.png" data-full="src/vaxxcausal/pages/001161432-p289.png" data-box="2.5,73.5,95,17" data-page-label="元PDF 289ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1808-eval.png?v=4" alt="症例No.1808の専門家評価理由"></a></section>
     </div>
     <p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001125524.pdf" target="_blank" rel="noopener">元PDF（808/2363ページ）</a>・<a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">専門家評価の元PDF（289/456ページ）</a></p>
   </article>
 
-  <article class="case"><h2>「右冠動脈内に新しい血栓」</h2><p class="case-meta">80歳女性・症例 No.185</p>
+  <article class="case"><h2>解剖で右冠動脈に新しい血栓――専門家評価γ</h2><p class="case-meta">80歳女性・症例 No.185</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>80歳女性／1回目</span><span>2021-06-01接種</span><span>2021-06-03死亡</span><span><b>症状：</b>右冠動脈の心筋梗塞、完全閉塞</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
-    <section class="record-cell doctor-cell"><h3>報告医所見・解剖</h3><b>関連あり／他要因なし</b><br>解剖で右冠動脈内に新しい血栓を確認。<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p31.png" data-full="src/vaxxcausal/pages/001161432-p31.png" data-box="2.5,52.8,95,15.7" data-page-label="元PDF 31ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no185-medical.png" alt="症例No.185の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>因果関係は否定できないが不明。心筋梗塞のリスク因子にも留意が必要。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p31.png" data-full="src/vaxxcausal/pages/001161432-p31.png" data-box="2.5,52.8,95,15.7" data-page-label="元PDF 31ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no185-eval.png" alt="症例No.185の専門家判定理由"></a></section>
+    <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p31.png" data-full="src/vaxxcausal/pages/001161432-p31.png" data-box="2.5,52.8,95,15.7" data-page-label="元PDF 31ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no185-medical.png" alt="症例No.185の報告内容"></a></section>
+    <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p31.png" data-full="src/vaxxcausal/pages/001161432-p31.png" data-box="2.5,52.8,95,15.7" data-page-label="元PDF 31ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no185-eval.png" alt="症例No.185の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（31/456ページ）</a></p></article>
 
-  <article class="case"><h2>「薬剤性肺障害の可能性」</h2><p class="case-meta">80歳男性・症例 No.862</p>
+  <article class="case"><h2>薬剤性肺障害の可能性、報告医「関連あり」――専門家評価γ</h2><p class="case-meta">80歳男性・症例 No.862</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>80歳男性／1回目</span><span>2021-07-09接種</span><span>2021-07-23死亡</span><span><b>症状：</b>間質性肺疾患</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
-    <section class="record-cell doctor-cell"><h3>報告医所見・病理解剖</h3><b>関連あり／他要因なし</b><br>死因は「薬剤性肺障害の可能性」。<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p114.png" data-full="src/vaxxcausal/pages/001161432-p114.png" data-box="2.5,55.5,95,9.7" data-page-label="元PDF 114ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no862-medical.png" alt="症例No.862の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>間質性肺炎の可能性は十分あるが詳細と接種との因果関係は不明。剖検所見も必要。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p114.png" data-full="src/vaxxcausal/pages/001161432-p114.png" data-box="2.5,55.5,95,9.7" data-page-label="元PDF 114ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no862-eval.png" alt="症例No.862の専門家判定理由"></a></section>
+    <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p114.png" data-full="src/vaxxcausal/pages/001161432-p114.png" data-box="2.5,55.5,95,9.7" data-page-label="元PDF 114ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no862-medical.png" alt="症例No.862の報告内容"></a></section>
+    <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p114.png" data-full="src/vaxxcausal/pages/001161432-p114.png" data-box="2.5,55.5,95,9.7" data-page-label="元PDF 114ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no862-eval.png" alt="症例No.862の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（114/456ページ）</a></p></article>
 
-  <article class="case"><h2>「急性心筋炎」</h2><p class="case-meta">43歳男性・症例 No.1260</p>
+  <article class="case"><h2>解剖で急性心筋炎・多量の心嚢水――専門家評価γ</h2><p class="case-meta">43歳男性・症例 No.1260</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>43歳男性／2回目</span><span>2021-08-30接種</span><span>2021-09-08死亡</span><span><b>症状：</b>急性心筋炎、心停止、心嚢水</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
-    <section class="record-cell doctor-cell"><h3>報告医所見・解剖</h3><b>関連あり／他要因なし</b><br>解剖で心嚢水を多量に認めた。<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p172.png" data-full="src/vaxxcausal/pages/001161432-p172.png" data-box="2.5,14,95,15" data-page-label="元PDF 172ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1260-medical.png" alt="症例No.1260の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>心膜炎から心タンポナーデの可能性はあるが、接種との因果関係は情報不足。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p172.png" data-full="src/vaxxcausal/pages/001161432-p172.png" data-box="2.5,14,95,15" data-page-label="元PDF 172ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1260-eval.png" alt="症例No.1260の専門家判定理由"></a></section>
+    <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p172.png" data-full="src/vaxxcausal/pages/001161432-p172.png" data-box="2.5,14,95,15" data-page-label="元PDF 172ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1260-medical.png" alt="症例No.1260の報告内容"></a></section>
+    <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p172.png" data-full="src/vaxxcausal/pages/001161432-p172.png" data-box="2.5,14,95,15" data-page-label="元PDF 172ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1260-eval.png" alt="症例No.1260の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（172/456ページ）</a></p></article>
 
-  <article class="case"><h2>「剖検にて心筋炎と診断」</h2><p class="case-meta">36歳男性・症例 No.1332</p>
+  <article class="case"><h2>剖検で急性心筋炎――専門家評価γ</h2><p class="case-meta">36歳男性・症例 No.1332</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>36歳男性／2回目</span><span>2021-08-28接種</span><span>2021-08-31死亡</span><span><b>症状：</b>急性心筋炎、突然死</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
-    <section class="record-cell doctor-cell"><h3>報告医所見・解剖</h3><b>関連あり／他要因なし</b><br>解剖により急性心筋炎と報告。<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p183.png" data-full="src/vaxxcausal/pages/001161432-p183.png" data-box="2.5,53,95,10" data-page-label="元PDF 183ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1332-medical.png" alt="症例No.1332の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>心筋炎の診断は妥当だが、死亡を示す客観所見や原因の情報が不足。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p183.png" data-full="src/vaxxcausal/pages/001161432-p183.png" data-box="2.5,53,95,10" data-page-label="元PDF 183ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1332-eval.png" alt="症例No.1332の専門家判定理由"></a></section>
+    <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p183.png" data-full="src/vaxxcausal/pages/001161432-p183.png" data-box="2.5,53,95,10" data-page-label="元PDF 183ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1332-medical.png" alt="症例No.1332の報告内容"></a></section>
+    <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p183.png" data-full="src/vaxxcausal/pages/001161432-p183.png" data-box="2.5,53,95,10" data-page-label="元PDF 183ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1332-eval.png" alt="症例No.1332の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（183/456ページ）</a></p></article>
 
-  <article class="case"><h2>「多発性肺内動脈血栓性塞栓による呼吸不全」</h2><p class="case-meta">64歳女性・症例 No.1737</p>
+  <article class="case"><h2>病理解剖で全身の血栓、肺動脈血栓性塞栓――専門家評価γ</h2><p class="case-meta">64歳女性・症例 No.1737</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>64歳女性／1回目</span><span>2021-06-29接種</span><span>2021-07-02死亡</span><span><b>症状：</b>肺・腎動脈血栓症、呼吸不全</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
-    <section class="record-cell doctor-cell"><h3>報告医所見・病理解剖</h3><b>関連あり</b><br>病理解剖で全身の血栓を確認。多発性肺内動脈血栓性塞栓による呼吸不全が死因と診断。<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p275.png" data-full="src/vaxxcausal/pages/001161432-p275.png" data-box="2.5,14,95,18.5" data-page-label="元PDF 275ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1737-medical.png" alt="症例No.1737の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>急性肺動脈内血小板血栓の多発による呼吸不全と考えるが、発現が早く増悪因子も否定できない。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p275.png" data-full="src/vaxxcausal/pages/001161432-p275.png" data-box="2.5,14,95,18.5" data-page-label="元PDF 275ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1737-eval.png" alt="症例No.1737の専門家判定理由"></a></section>
+    <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p275.png" data-full="src/vaxxcausal/pages/001161432-p275.png" data-box="2.5,14,95,18.5" data-page-label="元PDF 275ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1737-medical.png" alt="症例No.1737の報告内容"></a></section>
+    <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p275.png" data-full="src/vaxxcausal/pages/001161432-p275.png" data-box="2.5,14,95,18.5" data-page-label="元PDF 275ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1737-eval.png" alt="症例No.1737の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（275/456ページ）</a></p></article>
 
-  <article class="case"><h2>「行政解剖の結果、心筋炎を伴う急性循環不全」</h2><p class="case-meta">19歳男性・症例 No.1762</p>
+  <article class="case"><h2>行政解剖で心筋炎を伴う急性循環不全――専門家評価γ</h2><p class="case-meta">19歳男性・症例 No.1762</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>19歳男性／3回目</span><span>2022-07-29接種</span><span>2022-08-01死亡</span><span><b>症状：</b>心筋炎、急性循環不全</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
-    <section class="record-cell doctor-cell"><h3>報告医所見・行政解剖</h3><b>関連あり／他要因なし</b><br>行政解剖で心筋炎を伴う急性循環不全と判断。<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p280.png" data-full="src/vaxxcausal/pages/001161432-p280.png" data-box="2.5,26,95,14" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1762-medical.png" alt="症例No.1762の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>パルボウイルスB19を検出。心筋の情報は不明。</p><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p280.png" data-full="src/vaxxcausal/pages/001161432-p280.png" data-box="0,0,0,0" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1762-eval.png" alt="症例No.1762の専門家判定理由"></a></section>
+    <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p280.png" data-full="src/vaxxcausal/pages/001161432-p280.png" data-box="2.5,26,95,14" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1762-medical.png" alt="症例No.1762の報告内容"></a></section>
+    <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p280.png" data-full="src/vaxxcausal/pages/001161432-p280.png" data-box="0,0,0,0" data-page-label="元PDF 280ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no1762-eval.png" alt="症例No.1762の専門家判定理由"></a></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（280/456ページ）</a></p></article>
 
-  <article class="case"><h2>「時間経過よりコミナティが死亡原因」</h2><p class="case-meta">70歳男性・2価ワクチン症例 No.101</p>
+  <article class="case"><h2>時間経過からワクチンが死亡原因と報告――専門家評価γ</h2><p class="case-meta">70歳男性・2価ワクチン症例 No.101</p>
     <section class="record-cell basic-cell"><h3>基本情報・症状・転帰</h3><span>70歳男性／6回目</span><span>2023-05-27接種</span><span>2023-05-28死亡</span><span><b>症状：</b>心筋梗塞、心タンポナーデ、塞栓症</span><span><b>転帰：</b>死亡</span></section><div class="record-grid">
-    <section class="record-cell doctor-cell"><h3>報告医所見・剖検</h3><b>関連あり／他要因なし</b><br>「時間経過よりコミナティが死亡原因になったものと考える」。<a class="evidence-link" href="src/vaxxcausal/pages/001161432-p329.png" data-full="src/vaxxcausal/pages/001161432-p329.png" data-box="2.5,47,95,9" data-page-label="元PDF 329ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no101-medical.png" alt="2価ワクチン症例No.101の報告内容"></a></section>
-    <section class="record-cell expert-cell"><h3>専門家判定・理由</h3><span class="verdict">γ</span><p>コメントなし。</p></section>
+    <section class="record-cell doctor-cell"><h3>報告医所見</h3><a class="evidence-link" href="src/vaxxcausal/pages/001161432-p329.png" data-full="src/vaxxcausal/pages/001161432-p329.png" data-box="2.5,47,95,9" data-page-label="元PDF 329ページと切抜き範囲"><img class="source-image" src="src/vaxxcausal/no101-medical.png" alt="2価ワクチン症例No.101の報告内容"></a></section>
+    <section class="record-cell expert-cell"><h3>専門家判定 <span class="verdict">γ</span></h3><p>コメントなし。</p></section>
   </div><p class="source-note"><a class="source-link" href="https://www.mhlw.go.jp/content/10601000/001161432.pdf" target="_blank" rel="noopener">元PDF（329/456ページ）</a></p></article>
 
   <div class="takeaway">
@@ -288,4 +288,4 @@ __MENU__
 HTMLDOC
 
 rendered_html = html.sub('__MENU__', menu_out.string)
-puts rendered_html.gsub(%r{(src/vaxxcausal/(?:no|alpha)[^"?]+\.png)(?:\?v=\d+)?}, '\1?v=7')
+puts rendered_html.gsub(%r{(src/vaxxcausal/(?:no|alpha)[^"?]+\.png)(?:\?v=\d+)?}, '\1?v=8')

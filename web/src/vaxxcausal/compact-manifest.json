@@ -1,0 +1,881 @@
+{
+  "no185-medical.png": {
+    "source_page": "pages/001161432-p31.png",
+    "source_box": [
+      495,
+      944,
+      831,
+      83
+    ],
+    "raw_sha256": "8a918c31e8e2be1fdf787e96165213c8c60ab3c4070a1f31e79ecd12e86564d6",
+    "compact_sha256": "e642ba1d00c87e54d452a473f6d2fe5e2bc44219dbf892fafed1fe7aa979bc45",
+    "raw_width": 831,
+    "compact_width": 627,
+    "height": 83,
+    "cells": [
+      {
+        "source": [
+          0,
+          248
+        ],
+        "kept_body": [
+          2,
+          246
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          248,
+          417
+        ],
+        "kept_body": [
+          250,
+          415
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          417,
+          586
+        ],
+        "kept_body": [
+          419,
+          469
+        ],
+        "removed_blank": [
+          [
+            469,
+            584
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          586,
+          673
+        ],
+        "kept_body": [
+          588,
+          671
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          673,
+          752
+        ],
+        "kept_body": [
+          675,
+          720
+        ],
+        "removed_blank": [
+          [
+            720,
+            750
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          752,
+          831
+        ],
+        "kept_body": [
+          754,
+          770
+        ],
+        "removed_blank": [
+          [
+            770,
+            829
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  },
+  "no862-medical.png": {
+    "source_page": "pages/001161432-p114.png",
+    "source_box": [
+      495,
+      966,
+      831,
+      32
+    ],
+    "raw_sha256": "1226cd244104e967109d32c72f135439e19a6dc9599d17438784c0672ad6abe1",
+    "compact_sha256": "f8a0b75fd0802b7f1b3798cd56ad134ef0de7d1dc8aa8a9e5da70ec21e40b6ad",
+    "raw_width": 831,
+    "compact_width": 393,
+    "height": 32,
+    "cells": [
+      {
+        "source": [
+          0,
+          248
+        ],
+        "kept_body": [
+          2,
+          42
+        ],
+        "removed_blank": [
+          [
+            42,
+            246
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          248,
+          417
+        ],
+        "kept_body": [
+          250,
+          365
+        ],
+        "removed_blank": [
+          [
+            365,
+            415
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          417,
+          586
+        ],
+        "kept_body": [
+          419,
+          490
+        ],
+        "removed_blank": [
+          [
+            490,
+            584
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          586,
+          673
+        ],
+        "kept_body": [
+          588,
+          670
+        ],
+        "removed_blank": [
+          [
+            670,
+            671
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          673,
+          752
+        ],
+        "kept_body": [
+          675,
+          720
+        ],
+        "removed_blank": [
+          [
+            720,
+            750
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          752,
+          831
+        ],
+        "kept_body": [
+          754,
+          770
+        ],
+        "removed_blank": [
+          [
+            770,
+            829
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  },
+  "no1260-medical.png": {
+    "source_page": "pages/001161432-p172.png",
+    "source_box": [
+      495,
+      300,
+      831,
+      148
+    ],
+    "raw_sha256": "1dc3435a676237a2dda1e3bbc041bd72a265272d84132c42dfa733dd670e685f",
+    "compact_sha256": "60d813fd1b8b68aec6819ac12ff7b77b60b5ab92b0fd70e6cd8ce93c2e250b80",
+    "raw_width": 831,
+    "compact_width": 510,
+    "height": 148,
+    "cells": [
+      {
+        "source": [
+          0,
+          248
+        ],
+        "kept_body": [
+          2,
+          246
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          248,
+          417
+        ],
+        "kept_body": [
+          250,
+          310
+        ],
+        "removed_blank": [
+          [
+            310,
+            415
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          417,
+          586
+        ],
+        "kept_body": [
+          419,
+          457
+        ],
+        "removed_blank": [
+          [
+            457,
+            584
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          586,
+          673
+        ],
+        "kept_body": [
+          588,
+          671
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          673,
+          752
+        ],
+        "kept_body": [
+          675,
+          720
+        ],
+        "removed_blank": [
+          [
+            720,
+            750
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          752,
+          831
+        ],
+        "kept_body": [
+          754,
+          770
+        ],
+        "removed_blank": [
+          [
+            770,
+            829
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  },
+  "no1332-medical.png": {
+    "source_page": "pages/001161432-p183.png",
+    "source_box": [
+      495,
+      889,
+      831,
+      96
+    ],
+    "raw_sha256": "ac85e63b8b1b6653e590211915328e49bf91db42dbfeccd7a092ca55d1f6db1b",
+    "compact_sha256": "0916b51fd5ffc8541ebfaaeda5eafb8125300ed0d67e59288b5c4b2985518001",
+    "raw_width": 831,
+    "compact_width": 453,
+    "height": 96,
+    "cells": [
+      {
+        "source": [
+          0,
+          248
+        ],
+        "kept_body": [
+          2,
+          246
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          248,
+          417
+        ],
+        "kept_body": [
+          250,
+          310
+        ],
+        "removed_blank": [
+          [
+            310,
+            415
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          417,
+          586
+        ],
+        "kept_body": [
+          419,
+          457
+        ],
+        "removed_blank": [
+          [
+            457,
+            584
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          586,
+          673
+        ],
+        "kept_body": [
+          588,
+          614
+        ],
+        "removed_blank": [
+          [
+            614,
+            671
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          673,
+          752
+        ],
+        "kept_body": [
+          675,
+          720
+        ],
+        "removed_blank": [
+          [
+            720,
+            750
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          752,
+          831
+        ],
+        "kept_body": [
+          754,
+          770
+        ],
+        "removed_blank": [
+          [
+            770,
+            829
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  },
+  "no1737-medical.png": {
+    "source_page": "pages/001161432-p275.png",
+    "source_box": [
+      495,
+      288,
+      831,
+      273
+    ],
+    "raw_sha256": "c2c0fae2e2c5d9838f12026532715f66fea685e4e1ef889ce16c5c0529f645b7",
+    "compact_sha256": "2babd814eb59e4b6580c43bdc8e84263948c4585edd84fc6b41c2a059108d490",
+    "raw_width": 831,
+    "compact_width": 664,
+    "height": 273,
+    "cells": [
+      {
+        "source": [
+          0,
+          248
+        ],
+        "kept_body": [
+          2,
+          246
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          248,
+          417
+        ],
+        "kept_body": [
+          250,
+          415
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          417,
+          586
+        ],
+        "kept_body": [
+          419,
+          491
+        ],
+        "removed_blank": [
+          [
+            491,
+            584
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          586,
+          673
+        ],
+        "kept_body": [
+          588,
+          636
+        ],
+        "removed_blank": [
+          [
+            636,
+            671
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          673,
+          752
+        ],
+        "kept_body": [
+          675,
+          720
+        ],
+        "removed_blank": [
+          [
+            720,
+            750
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          752,
+          831
+        ],
+        "kept_body": [
+          754,
+          820
+        ],
+        "removed_blank": [
+          [
+            820,
+            829
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  },
+  "no1762-medical.png": {
+    "source_page": "pages/001161432-p280.png",
+    "source_box": [
+      495,
+      539,
+      831,
+      83
+    ],
+    "raw_sha256": "e5a9fd40c7b723999a50edc538b0928535e8c2d55044dc256ce3c798edd0a08e",
+    "compact_sha256": "a70694e9b86d5c99fb01a3b6bb280ef519366042f2c119955d038f8b33fd1854",
+    "raw_width": 831,
+    "compact_width": 539,
+    "height": 83,
+    "cells": [
+      {
+        "source": [
+          0,
+          248
+        ],
+        "kept_body": [
+          2,
+          246
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          248,
+          417
+        ],
+        "kept_body": [
+          250,
+          374
+        ],
+        "removed_blank": [
+          [
+            374,
+            415
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          417,
+          586
+        ],
+        "kept_body": [
+          419,
+          457
+        ],
+        "removed_blank": [
+          [
+            457,
+            584
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          586,
+          673
+        ],
+        "kept_body": [
+          588,
+          636
+        ],
+        "removed_blank": [
+          [
+            636,
+            671
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          673,
+          752
+        ],
+        "kept_body": [
+          675,
+          720
+        ],
+        "removed_blank": [
+          [
+            720,
+            750
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          752,
+          831
+        ],
+        "kept_body": [
+          754,
+          770
+        ],
+        "removed_blank": [
+          [
+            770,
+            829
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  },
+  "no1790-row.png": {
+    "source_page": "pages/001161432-p285.png",
+    "source_box": [
+      495,
+      735,
+      831,
+      247
+    ],
+    "raw_sha256": "ce6b93bb6712016aafe4c3b8cc665560af9932ac3736aca719aaa2e7349d3a61",
+    "compact_sha256": "bc7987b5f673c0166e71e15889fb0f88c7372665c262929a2337250745da5458",
+    "raw_width": 831,
+    "compact_width": 654,
+    "height": 247,
+    "cells": [
+      {
+        "source": [
+          0,
+          248
+        ],
+        "kept_body": [
+          2,
+          246
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          248,
+          417
+        ],
+        "kept_body": [
+          250,
+          414
+        ],
+        "removed_blank": [
+          [
+            414,
+            415
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          417,
+          586
+        ],
+        "kept_body": [
+          419,
+          552
+        ],
+        "removed_blank": [
+          [
+            552,
+            584
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          586,
+          673
+        ],
+        "kept_body": [
+          588,
+          616
+        ],
+        "removed_blank": [
+          [
+            616,
+            671
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          673,
+          752
+        ],
+        "kept_body": [
+          675,
+          720
+        ],
+        "removed_blank": [
+          [
+            720,
+            750
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          752,
+          831
+        ],
+        "kept_body": [
+          754,
+          770
+        ],
+        "removed_blank": [
+          [
+            770,
+            829
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  },
+  "no101-medical.png": {
+    "source_page": "pages/001161432-p329.png",
+    "source_box": [
+      494,
+      774,
+      832,
+      121
+    ],
+    "raw_sha256": "a0c3d01b12758ad8bcff3ca5b78d4205d3020360b01e18045a41bbd5a943cffb",
+    "compact_sha256": "65bd78de6178305f0940e7ac7b152fe26e156285c999e217b7f906036cb74fb1",
+    "raw_width": 832,
+    "compact_width": 722,
+    "height": 121,
+    "cells": [
+      {
+        "source": [
+          0,
+          289
+        ],
+        "kept_body": [
+          2,
+          287
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          289,
+          458
+        ],
+        "kept_body": [
+          291,
+          456
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          458,
+          627
+        ],
+        "kept_body": [
+          460,
+          625
+        ],
+        "removed_blank": [],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          627,
+          714
+        ],
+        "kept_body": [
+          629,
+          655
+        ],
+        "removed_blank": [
+          [
+            655,
+            712
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          714,
+          793
+        ],
+        "kept_body": [
+          716,
+          759
+        ],
+        "removed_blank": [
+          [
+            759,
+            791
+          ]
+        ],
+        "removed_dark_pixels": 0
+      },
+      {
+        "source": [
+          793,
+          832
+        ],
+        "kept_body": [
+          795,
+          809
+        ],
+        "removed_blank": [
+          [
+            809,
+            830
+          ]
+        ],
+        "removed_dark_pixels": 0
+      }
+    ]
+  }
+}
