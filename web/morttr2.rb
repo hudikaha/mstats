@@ -2732,6 +2732,10 @@ if selected_period == 'weekly' && selected_metric == 'crude_rate'
 end
 covid_overlay_available = overlay_values.any? { |row| row[:overlay] == 'covid' }
 vaxx_overlay_available = overlay_values.any? { |row| row[:overlay] == 'vaxx' }
+# 日本語: 指標変更後にURLへ残った利用不能な重畳指定で、Y軸signalだけを有効にしない。
+# English: Do not let an unavailable overlay left in the URL enable only its Y-axis signal.
+covid_overlay &&= covid_overlay_available
+vaxx_overlay &&= vaxx_overlay_available
 
 # 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次crude rateで補完する。
 # English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly crude rate.
@@ -3969,6 +3973,11 @@ else
       const overlayValues = #{JSON.generate(overlay_values)};
       const detailSeries = #{JSON.generate(detail_series)};
       const mortyearVis = document.getElementById("mortyear-vis");
+      const calculationStatus = document.getElementById("morttr-calculation-status");
+      calculationStatus.style.display = "";
+      calculationStatus.textContent = calculationEngine === "js" ?
+        #{JSON.generate($l == :ja ? '観測値描画中（予測値等は観測値の後に表示されます）……' : 'Rendering observations (predictions and intervals will appear afterward)…')} :
+        #{JSON.generate($l == :ja ? '描画中……' : 'Rendering…')};
       // 日本語: 両Y軸のextentを確保し、狭い画面でもplot本体を320px以上残す。
       // English: Reserve both Y-axis extents and retain at least 320px for the plot.
       const requestedPanelWidth = width => Math.max(320, width - 168);
@@ -4126,7 +4135,7 @@ else
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         window.mortyearView = result.view;
         if (calculationEngine === "js" && window.morttrCalc) {
-          const status = document.getElementById("morttr-calculation-status");
+          const status = calculationStatus;
           status.style.display = "";
           status.textContent = #{JSON.generate($l == :ja ? 'ブラウザで予測区間を計算しています…' : 'Calculating prediction intervals in the browser…')};
           const calculateInBrowser = () => {
@@ -4186,6 +4195,8 @@ else
               else calculateInBrowser();
             }, 250);
           }));
+        } else {
+          calculationStatus.style.display = "none";
         }
         let resizeTimer;
         window.addEventListener("resize", () => {
@@ -4285,6 +4296,10 @@ else
           covidOverlay.addEventListener("change", syncCovidOverlay);
           window.addEventListener("pageshow", syncCovidOverlay);
           syncCovidOverlay();
+        } else if (new URL(window.location.href).searchParams.has("covid_overlay")) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("covid_overlay");
+          history.replaceState(null, "", url);
         }
         if (vaxxOverlay) {
           const syncVaxxOverlay = () => {
@@ -4297,6 +4312,10 @@ else
           vaxxOverlay.addEventListener("change", syncVaxxOverlay);
           window.addEventListener("pageshow", syncVaxxOverlay);
           syncVaxxOverlay();
+        } else if (new URL(window.location.href).searchParams.has("vaxx_overlay")) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("vaxx_overlay");
+          history.replaceState(null, "", url);
         }
         simulationInterval.addEventListener("change", () => {
           const value = simulationInterval.checked ? "auto" : "analytic";

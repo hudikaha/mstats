@@ -54,23 +54,51 @@ async function evaluate(socket, expression) {
       socket.addEventListener("error", reject, {once:true});
     });
     let state;
-    const phases = [];
+    const phases = [], texts = [];
     while (Date.now() < deadline) {
       state = await evaluate(socket, `(() => ({
         text:document.getElementById("morttr-calculation-status")?.textContent || "",
         comparison:window.morttrCalculationComparison || null,
         phase:window.morttrCalculationPhase || null,
+        statusVisible:document.getElementById("morttr-calculation-status") ? getComputedStyle(document.getElementById("morttr-calculation-status")).display !== "none" : false,
         rendered:!!document.querySelector("#mortyear-vis canvas, #mortyear-vis svg")
       }))()`);
       if (state.phase && phases.at(-1) !== state.phase) phases.push(state.phase);
+      if (state.text && texts.at(-1) !== state.text) texts.push(state.text);
       if (state.text.includes("切り替えました") || state.text.includes("Switched to browser") || state.text.includes("Ruby計算結果")) break;
+      if (state.phase === "cached" && state.rendered && !state.statusVisible) break;
       await delay(50);
     }
     state.phases = phases;
+    state.texts = texts;
     console.log(JSON.stringify(state));
-    if (!state.rendered || !(state.text.includes("切り替えました") || state.text.includes("Switched to browser"))) process.exitCode = 1;
+    const browserComplete = state.text.includes("切り替えました") || state.text.includes("Switched to browser");
+    const cacheComplete = state.phase === "cached" && !state.statusVisible;
+    if (!state.rendered || (!browserComplete && !cacheComplete)) process.exitCode = 1;
     if (state.comparison && state.comparison.mismatches) process.exitCode = 1;
-    if (!phases.includes("observations") || phases.at(-1) !== "complete") process.exitCode = 1;
+    if (browserComplete && (!phases.includes("observations") || phases.at(-1) !== "complete")) process.exitCode = 1;
+    const zeroAxis = await evaluate(socket, `(() => {
+      const checkbox = document.getElementById("zero-base-checkbox");
+      const covid = document.getElementById("covid-overlay-checkbox");
+      if (!checkbox || covid) return {tested:false};
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event("change", {bubbles:true}));
+      return {tested:true, enabled:window.mortyearView.signal("zero_base")};
+    })()`);
+    if (zeroAxis.tested) {
+      await delay(100);
+      const disabled = await evaluate(socket, `(() => {
+        const checkbox = document.getElementById("zero-base-checkbox");
+        checkbox.checked = false;
+        checkbox.dispatchEvent(new Event("change", {bubbles:true}));
+        return window.mortyearView.signal("zero_base");
+      })()`);
+      await delay(100);
+      zeroAxis.disabled = disabled;
+      zeroAxis.covidParameter = await evaluate(socket, `new URL(location.href).searchParams.get("covid_overlay")`);
+      if (zeroAxis.enabled !== true || zeroAxis.disabled !== false || zeroAxis.covidParameter !== null) process.exitCode = 1;
+    }
+    console.log(JSON.stringify({zeroAxis}));
     socket.close();
   } finally {
     chrome.kill("SIGTERM");
