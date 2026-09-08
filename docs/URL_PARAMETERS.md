@@ -22,15 +22,29 @@ been implemented in Ruby. The mapping from current URLs is listed under
 
 | Parameter | Values | Default | Applicability and meaning |
 |---|---|---|---|
-| `l` | `ja`, `en` | Browser language | Display language |
-| `mode` | `country`, `series` | `country` | Compare countries/regions or compare series |
-| `period` | `calendar`, `flu27`, `flu36`, `weekly` | `calendar` | Calendar year, either influenza year, or weekly |
-| `metric` | `deaths`, `std`, `crude`, `asr`, `birth` | Annual: `asr`; weekly: `deaths` | Death count, standard-population-equivalent deaths, crude rate, age-standardized rate, or birth-based mortality rate |
+| `l` | `ja` | Browser language | Japanese display |
+| `l` | `en` | Browser language | English display |
+| `mode` | `country` | `country` | Compare multiple countries or regions under one common condition |
+| `mode` | `series` | `country` | Compare multiple ages, causes, weekly algorithms, or other series for one country or region |
+| `period` | `calendar` | `calendar` | Calendar years from January 1 through December 31 |
+| `period` | `flu27` | `calendar` | Influenza years from week 27 through week 26 of the next year |
+| `period` | `flu36` | `calendar` | Influenza years from week 36 through week 35 of the next year |
+| `period` | `weekly` | `calendar` | Weekly observations, excess/deficit trends, and cumulative values |
+| `metric` | `deaths` | Annual: `asr`; weekly: `deaths` | Observed death count |
+| `metric` | `std` | Same as above | Death count converted to the selected standard population |
+| `metric` | `crude` | Same as above | Crude mortality rate |
+| `metric` | `asr` | Same as above | Age-standardized mortality rate |
+| `metric` | `birth` | Same as above | Infant, perinatal, or similar mortality rate using births as the denominator |
 | `ages` | `all`, `0`, age bands or ranges | `all` | Age selection in the format below |
-| `sex` | `male`, `female` | Both sexes (omitted) | Where sex-specific series exist; ignored for `birth` |
+| `sex` | `both` | `both` | Both sexes; may be omitted from a canonical URL |
+| `sex` | `male` | `both` | Male, where a sex-specific series exists |
+| `sex` | `female` | `both` | Female, where a sex-specific series exists |
 | `c` | Region codes joined with `~` | View-specific locations | Country or region selection |
 | `dcodes` | Cause or case codes joined with `~` | All causes | Views that allow cause or case series |
 | `inc` | `1` | Disabled (omitted) | Include cancer-incidence series |
+
+`metric=birth` is not separated by sex and treats any supplied `sex` value as
+`both`.
 
 ### Number of selections by `mode`
 
@@ -90,8 +104,10 @@ views use their source bands, for example `ages=00-14~15-64`.
 |---|---|---|---|
 | `from` | `YYYY` | Annual: 2000; weekly: 2015 | First year displayed on the X axis |
 | `fit` | `YYYY` | Calendar: 2019; influenza year: 2018 | Last training year for annual and influenza-year prediction models |
-| `family` | `quasi`, `poisson` | `quasi` | Distribution and dispersion model for annual and influenza-year views |
-| `interval` | `approx`, `sim` | `sim` | Prediction-interval calculation. Poisson supports approximation or simulation; quasi-Poisson is effectively `approx` |
+| `family` | `quasi` | `quasi` | Quasi-Poisson; estimate overdispersion from observations and reflect it in prediction intervals |
+| `family` | `poisson` | `quasi` | Poisson; assume that the mean and variance are equal |
+| `interval` | `approx` | `sim` | Analytic approximation; used for quasi-Poisson intervals |
+| `interval` | `sim` | `sim` | Simulation interval; available with Poisson |
 
 `family` identifies the probability and dispersion assumption, while `interval`
 identifies how the interval is calculated. Weekly Farrington-style and
@@ -101,7 +117,9 @@ EuroMOMO-style calculations are selected separately with `algo`.
 
 | Parameter | Values | Default | Applicability and meaning |
 |---|---|---|---|
-| `algo` | `mean`, `farrington`, `euromomo` | `farrington` | Expected-value and prediction-interval algorithm when `period=weekly` |
+| `algo` | `mean` | `farrington` | Mean and range from the corresponding week in each reference year selected by `ref` |
+| `algo` | `farrington` | `farrington` | Farrington-style expected value and prediction interval |
+| `algo` | `euromomo` | `farrington` | EuroMOMO-style expected value and prediction interval |
 | `ref` | `YYYY-YYYY`, `prevN` | `2015-2019` | Fixed reference years or the preceding N years when `period=weekly` |
 | `cum` | `YYYY` | `2021` | First year included in cumulative weekly excess or deficit mortality |
 | `deficit` | `1` | Disabled (omitted) | Include negative differences in weekly trends and cumulative values |

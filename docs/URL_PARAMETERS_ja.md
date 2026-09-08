@@ -21,15 +21,28 @@
 
 | parameter | 値 | 既定値 | 適用条件・意味 |
 |---|---|---|---|
-| `l` | `ja`, `en` | browser言語 | 表示言語 |
-| `mode` | `country`, `series` | `country` | 国・地域比較、または系列比較 |
-| `period` | `calendar`, `flu27`, `flu36`, `weekly` | `calendar` | 暦年、二種類のinfluenza年、週次 |
-| `metric` | `deaths`, `std`, `crude`, `asr`, `birth` | 年次は`asr`、週次は`deaths` | 実死亡数、標準人口換算死亡数、粗死亡率、年齢調整死亡率、出生関連死亡率 |
+| `l` | `ja` | browser言語 | 日本語表示 |
+| `l` | `en` | browser言語 | 英語表示 |
+| `mode` | `country` | `country` | 複数の国・地域を一つの共通条件で比較 |
+| `mode` | `series` | `country` | 一つの国・地域について複数の年齢、死因、週次手法などを比較 |
+| `period` | `calendar` | `calendar` | 1月1日から12月31日までの暦年 |
+| `period` | `flu27` | `calendar` | 第27週から翌年第26週までのinfluenza年 |
+| `period` | `flu36` | `calendar` | 第36週から翌年第35週までのinfluenza年 |
+| `period` | `weekly` | `calendar` | 週次の観測値、超過・過少死亡推移、累積を表示 |
+| `metric` | `deaths` | 年次は`asr`、週次は`deaths` | 実死亡数 |
+| `metric` | `std` | 同左 | 選択した標準人口へ換算した死亡数 |
+| `metric` | `crude` | 同左 | 粗死亡率 |
+| `metric` | `asr` | 同左 | 年齢調整死亡率 |
+| `metric` | `birth` | 同左 | 出生数を分母とする乳児・周産期などの死亡率 |
 | `ages` | `all`, `0`, 年齢階級・範囲 | `all` | 年齢選択。後述の形式を使う |
-| `sex` | `male`, `female` | 男女計（省略） | 男女別系列がある場合。`birth`では無視 |
+| `sex` | `both` | `both` | 男女計。正規URLでは省略可 |
+| `sex` | `male` | `both` | 男性。男女別系列がある場合 |
+| `sex` | `female` | `both` | 女性。男女別系列がある場合 |
 | `c` | 地域codeを`~`で連結 | 表示種別ごとの既定地域 | 国・地域選択 |
 | `dcodes` | 死因・症例codeを`~`で連結 | 全死因 | 死因または症例系列を選べる表示 |
 | `inc` | `1` | 無効（省略） | 癌罹患系列を含める場合 |
+
+`metric=birth`では男女別にせず、`sex`が指定されても`both`として扱います。
 
 ### `mode`による選択数
 
@@ -86,8 +99,10 @@ ages=80-100plus
 |---|---|---|---|
 | `from` | `YYYY` | 年次2000、週次2015 | X軸の表示開始年 |
 | `fit` | `YYYY` | 暦年2019、influenza年2018 | 年次・influenza年の予測モデルに使う学習終了年 |
-| `family` | `quasi`, `poisson` | `quasi` | 年次・influenza年の分布・分散モデル |
-| `interval` | `approx`, `sim` | `sim` | 予測区間の計算法。Poissonでは近似またはsimulation。準Poissonは実質的に`approx` |
+| `family` | `quasi` | `quasi` | 準Poisson。観測dataの過分散を推定して予測区間へ反映 |
+| `family` | `poisson` | `quasi` | Poisson。平均と分散が等しいと仮定 |
+| `interval` | `approx` | `sim` | 解析的な近似による予測区間。準Poissonではこの方式を使用 |
+| `interval` | `sim` | `sim` | simulationによる予測区間。Poissonで使用可能 |
 
 `family`は確率分布・分散の仮定、`interval`は区間を求める計算法を表します。
 週次のFarrington型やEuroMOMO型は、この二つとは別に`algo`で指定します。
@@ -96,7 +111,9 @@ ages=80-100plus
 
 | parameter | 値 | 既定値 | 適用条件・意味 |
 |---|---|---|---|
-| `algo` | `mean`, `farrington`, `euromomo` | `farrington` | `period=weekly`の期待値・予測区間algorithm |
+| `algo` | `mean` | `farrington` | `ref`で指定した各基準年の同じ週を使う平均・範囲 |
+| `algo` | `farrington` | `farrington` | Farrington型の期待値・予測区間 |
+| `algo` | `euromomo` | `farrington` | EuroMOMO型の期待値・予測区間 |
 | `ref` | `YYYY-YYYY`, `prevN` | `2015-2019` | `period=weekly`の基準期間。固定年範囲、または各年の直前N年 |
 | `cum` | `YYYY` | `2021` | `period=weekly`の累積超過・過少死亡の開始年 |
 | `deficit` | `1` | 無効（省略） | 負の差を週次推移と累積へ含める |
