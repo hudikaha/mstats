@@ -1,11 +1,11 @@
-# Proposed public URL parameters for morttr.rb
+# Public URL parameters for morttr.rb
 
 English | [日本語](URL_PARAMETERS_ja.md)
 
-This document proposes the public URL format used to share and reproduce the
-same graph in `morttr.rb`. The short canonical names described here have not yet
-been implemented in Ruby. The mapping from current URLs is listed under
-“Migration from legacy URLs” at the end.
+This document defines the public URL format used to share and reproduce the
+same graph in `morttr.rb`. The short canonical names are implemented in both
+`morttr.rb` and the trial page, `morttr2.rb`; legacy URLs remain readable. The
+mapping is listed under “Migration from legacy URLs” at the end.
 
 ## General rules
 

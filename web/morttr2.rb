@@ -244,6 +244,30 @@ end.parse!(ARGV)
 $mortyear_cache_dir = opts[:cache_dir]
 
 cgi = CGI.new
+# 日本語: 公開URLの正規名を優先し、未指定時だけ旧名を読む。
+# English: Prefer canonical public URL names and read legacy names only when canonical names are absent.
+url_value = lambda do |canonical, legacy = nil|
+  if cgi.params.key?(canonical)
+    cgi[canonical]
+  elsif legacy && cgi.params.key?(legacy)
+    cgi[legacy]
+  else
+    ''
+  end
+end
+url_values = lambda do |canonical, legacy = nil|
+  values = if cgi.params.key?(canonical)
+             cgi.params.fetch(canonical, [])
+           elsif legacy && cgi.params.key?(legacy)
+             cgi.params.fetch(legacy, [])
+           else
+             []
+           end
+  values.flat_map { |value| value.split(/[~,]/) }
+end
+url_enabled = lambda do |canonical, legacy = nil|
+  %w[1 true yes on].include?(url_value.call(canonical, legacy).downcase)
+end
 requested_language = cgi['l']
 $l = if requested_language.match?(/^(en|english)/i) ||
         (requested_language.empty? && ENV['HTTP_ACCEPT_LANGUAGE'].to_s !~ /^ja/i)
@@ -298,27 +322,36 @@ selected_ages = age_values.flat_map { |value| value.split(/[~,]/) }.flat_map do 
 end.flatten.select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
-selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : (selected_period == 'weekly' ? 'deaths' : 'asr')
+metric_aliases = { 'std' => 'std_deaths', 'crude' => 'crude_rate', 'birth' => 'birth_rate' }
+requested_metric = metric_aliases.fetch(cgi['metric'], cgi['metric'])
+selected_metric = METRICS.key?(requested_metric) ? requested_metric : (selected_period == 'weekly' ? 'deaths' : 'asr')
 selected_metric = 'deaths' if selected_dataset != 'vital' && !%w[deaths crude_rate asr].include?(selected_metric)
 selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric == 'asr'
 selected_sex = 'both' if selected_metric == 'birth_rate'
-interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
-include_deficit = %w[1 true yes on].include?(cgi['include_deficit'].downcase)
-zero_base = %w[1 true yes on].include?(cgi['zero_base'].downcase)
-covid_overlay = %w[1 true yes on].include?(cgi['covid_overlay'].downcase)
-vaxx_overlay = %w[1 true yes on].include?(cgi['vaxx_overlay'].downcase)
-selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
-weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.split(/[~,]/) } &
-                 %w[five_year farrington euromomo]
-weekly_baselines = cgi.params.fetch('weekly_baseline', []).flat_map { |value| value.split(/[~,]/) }.
-                   map { |value| value == 'fixed' ? 'fixed_2015_2019' : value } &
-                   %w[fixed_2015_2019 fixed_2016_2020 rolling]
+interval_mode = %w[approx analytic].include?(cgi['interval']) ? 'analytic' : 'auto'
+include_deficit = url_enabled.call('deficit', 'include_deficit')
+zero_base = url_enabled.call('zero', 'zero_base')
+covid_overlay = url_enabled.call('covid', 'covid_overlay')
+vaxx_overlay = url_enabled.call('vaxx', 'vaxx_overlay')
+family_value = url_value.call('family', 'chart_model')
+selected_chart_model = { 'quasi' => 'quasi_poisson', 'quasi_poisson' => 'quasi_poisson',
+                         'poisson' => 'poisson' }.fetch(family_value, 'quasi_poisson')
+method_aliases = { 'mean' => 'five_year', 'five_year' => 'five_year',
+                   'farrington' => 'farrington', 'euromomo' => 'euromomo' }
+weekly_methods = url_values.call('algo', 'weekly_method').filter_map { |value| method_aliases[value] }.uniq
+baseline_aliases = { '2015-2019' => 'fixed_2015_2019', 'fixed' => 'fixed_2015_2019',
+                     'fixed_2015_2019' => 'fixed_2015_2019',
+                     '2016-2020' => 'fixed_2016_2020', 'fixed_2016_2020' => 'fixed_2016_2020',
+                     'prev5' => 'rolling', 'rolling' => 'rolling' }
+weekly_baselines = url_values.call('ref', 'weekly_baseline').filter_map { |value| baseline_aliases[value] }.uniq
 weekly_methods = ['farrington'] if weekly_methods.empty?
 weekly_baselines = ['fixed_2015_2019'] if weekly_baselines.empty?
 weekly_methods = [weekly_methods.first] if mode == 'country'
 weekly_baselines = [weekly_baselines.first] if mode == 'country'
 weekly_method = weekly_methods.first
 weekly_baseline = weekly_baselines.first
+requested_cumulative_start = cgi['cum'].to_i
+weekly_cumulative_start = requested_cumulative_start.between?(1950, Date.today.year) ? requested_cumulative_start : 2021
 $mortyear_period = selected_period
 $mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
 # 日本語: 暦年の英国とSTMF週次の英国地域を期間切替時に相互変換する。
@@ -347,14 +380,14 @@ requested_causes = requested_dcodes.flat_map { |value| value.split(/[~,]/) }.
                      %w[all 00000].include?(normalized) ? 'allcause' :
                        (normalized == 'perinatal' ? 'perm' : normalized)
                    end.uniq
-include_incidence = %w[1 true yes on].include?(cgi['include_incidence'].downcase) ||
+include_incidence = url_enabled.call('inc', 'include_incidence') ||
                     selected_dataset == 'cancer-incidence'
 if selected_dataset != 'vital' && selected_sex == 'both'
   requested_site_codes = requested_causes.empty? ? ['c53'] : requested_causes
   selected_sex = 'female' if (requested_site_codes - %w[c53-c55 c53 c54 c56]).empty?
   selected_sex = 'male' if requested_site_codes == ['c61']
 end
-requested_start_year = cgi['start_year'].to_i
+requested_start_year = url_value.call('from', 'start_year').to_i
 period_start_year = selected_period == 'calendar' ? 2000 : (selected_period == 'weekly' ? 2015 : 1999)
 default_start_year = requested_start_year.between?(1950, 2020) ? requested_start_year : period_start_year
 
@@ -2826,7 +2859,7 @@ unless requested_start_year.between?(1950, 2020)
 end
 
 cutoffs = chart_data.map { |row| row[:train_to] }.uniq.sort
-requested_cutoff = cgi['train_to'].to_i
+requested_cutoff = url_value.call('fit', 'train_to').to_i
 preferred_cutoff = selected_period == 'calendar' ? 2019 : 2018
 default_cutoff = if cutoffs.include?(requested_cutoff)
                    requested_cutoff
@@ -2941,8 +2974,8 @@ puts <<~HTML
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
     #{calculation_request == 'auto' ? '' : %(<input type="hidden" name="calc" value="#{calculation_request}">)}
-    <input id="train-to-hidden" type="hidden" name="train_to" value="#{default_cutoff}">
-    <input id="start-year-hidden" type="hidden" name="start_year" value="#{default_start_year}">
+    <input id="train-to-hidden" type="hidden" name="fit" value="#{default_cutoff}">
+    <input id="start-year-hidden" type="hidden" name="from" value="#{default_start_year}">
     <p>
       <button class="language-button" type="button" data-language="ja">日本語</button>
       <button class="language-button" type="button" data-language="en">English</button>
@@ -2959,13 +2992,13 @@ puts <<~HTML
       <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次（超過・過少死亡）' : 'Weekly (excess/deficit mortality)' }</label>
     </fieldset>
     <fieldset id="weekly-method-fieldset" style="#{selected_period == 'weekly' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '週次基準線' : 'Weekly baseline' }</legend>
-      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="five_year" #{checked(weekly_methods.include?('five_year'))}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
-      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="farrington" #{checked(weekly_methods.include?('farrington'))}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
-      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="euromomo" #{checked(weekly_methods.include?('euromomo'))}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="algo" value="mean" #{checked(weekly_methods.include?('five_year'))}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="algo" value="farrington" #{checked(weekly_methods.include?('farrington'))}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="algo" value="euromomo" #{checked(weekly_methods.include?('euromomo'))}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
       &nbsp;
-      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2015_2019" #{checked(weekly_baselines.include?('fixed_2015_2019'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
-      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2016_2020" #{checked(weekly_baselines.include?('fixed_2016_2020'))}>#{ $l == :ja ? '基準期間2016–2020' : 'Baseline period 2016–2020' }</label>
-      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="rolling" #{checked(weekly_baselines.include?('rolling'))}>#{ $l == :ja ? '直前5年移動基準' : 'Previous-five-year rolling baseline' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="ref" value="2015-2019" #{checked(weekly_baselines.include?('fixed_2015_2019'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="ref" value="2016-2020" #{checked(weekly_baselines.include?('fixed_2016_2020'))}>#{ $l == :ja ? '基準期間2016–2020' : 'Baseline period 2016–2020' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="ref" value="prev5" #{checked(weekly_baselines.include?('rolling'))}>#{ $l == :ja ? '直前5年移動基準' : 'Previous-five-year rolling baseline' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
@@ -3124,7 +3157,7 @@ render_cancer_group = lambda do |dataset_key, heading|
   puts %(</div></details>)
 end
 if selected_period == 'calendar'
-  puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="include_incidence" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
+  puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="inc" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
   render_cancer_group.call('cancer-death', $l == :ja ? '癌部位' : 'Cancer sites')
 end
 puts <<~HTML
@@ -3183,7 +3216,7 @@ puts <<~HTML
         const causes = params.getAll('dcodes');
         params.delete('dcodes');
         if (causes.length) params.set('dcodes', causes.join('~'));
-        ['weekly_method', 'weekly_baseline'].forEach(name => {
+        ['algo', 'ref'].forEach(name => {
           const values = params.getAll(name);
           params.delete(name);
           if (values.length) params.set(name, values.join('~'));
@@ -3206,11 +3239,33 @@ puts <<~HTML
         // 日本語: form外にあるグラフ表示controlも読込み後のURLへ引き継ぐ。
         // English: Preserve graph display controls outside the form in the submitted URL.
         const currentParams = new URL(window.location.href).searchParams;
-        ['zero_base', 'include_deficit', 'covid_overlay', 'vaxx_overlay', 'chart_model', 'interval'].forEach(name => {
-          const value = currentParams.get(name);
+        const metricAliases = {std_deaths: 'std', crude_rate: 'crude', birth_rate: 'birth'};
+        if (metricAliases[params.get('metric')]) params.set('metric', metricAliases[params.get('metric')]);
+        const graphAliases = {zero:'zero_base', deficit:'include_deficit', covid:'covid_overlay',
+          vaxx:'vaxx_overlay', family:'chart_model'};
+        ['zero', 'deficit', 'covid', 'vaxx', 'family', 'interval', 'cum'].forEach(name => {
+          let value = currentParams.get(name);
+          if (value === null && graphAliases[name]) value = currentParams.get(graphAliases[name]);
+          if (name === 'family' && value === 'quasi_poisson') value = 'quasi';
+          if (name === 'interval' && value === 'analytic') value = 'approx';
+          if (name === 'interval' && value === 'auto') value = 'sim';
           if (value === null) params.delete(name);
           else params.set(name, value);
         });
+        if (period === 'weekly') {
+          params.delete('family');
+          params.delete('interval');
+          const canonicalMetric = params.get('metric');
+          const canonicalAges = params.get('ages');
+          const canonicalSex = params.get('sex');
+          if (!['deaths', 'crude'].includes(canonicalMetric) || canonicalAges !== 'all' || canonicalSex) {
+            params.delete('covid');
+          }
+        } else {
+          ['algo', 'ref', 'cum', 'deficit', 'covid', 'vaxx'].forEach(name => params.delete(name));
+        }
+        ['start_year', 'train_to', 'weekly_method', 'weekly_baseline', 'include_deficit',
+          'zero_base', 'covid_overlay', 'vaxx_overlay', 'chart_model', 'include_incidence'].forEach(name => params.delete(name));
         showLoading();
         window.location.assign(`${window.location.pathname}?${params.toString().replace(/%7E/gi, '~')}`);
       });
@@ -3239,14 +3294,14 @@ puts <<~HTML
           setInputMode(locations, 'checkbox', 'c');
           setInputMode(causes, 'radio', 'dcodes');
           setInputMode(seasonAges, 'radio', 'age');
-          setInputMode(weeklyMethods, 'radio', 'weekly_method');
-          setInputMode(weeklyBaselines, 'radio', 'weekly_baseline');
+          setInputMode(weeklyMethods, 'radio', 'algo');
+          setInputMode(weeklyBaselines, 'radio', 'ref');
         } else {
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'dcodes');
           setInputMode(seasonAges, 'checkbox', 'age');
-          setInputMode(weeklyMethods, 'checkbox', 'weekly_method');
-          setInputMode(weeklyBaselines, 'checkbox', 'weekly_baseline');
+          setInputMode(weeklyMethods, 'checkbox', 'algo');
+          setInputMode(weeklyBaselines, 'checkbox', 'ref');
         }
         document.querySelectorAll('.location-region-toggle').forEach(toggle => {
           toggle.style.display = selected === 'country' ? '' : 'none';
@@ -3869,7 +3924,6 @@ else
                     'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
                   end
   weekly_excess_enabled = selected_period == 'weekly'
-  weekly_cumulative_start = weekly_baselines.include?('fixed_2016_2020') ? 2021 : 2020
   weekly_excess_title = if $l == :ja
                           selected_metric == 'deaths' ? '超過死亡数' : '超過死亡率'
                         else
@@ -4317,7 +4371,8 @@ else
           startOutput.value = periodYearLabel(value);
           document.getElementById("start-year-hidden").value = value;
           const url = new URL(window.location.href);
-          url.searchParams.set("start_year", value);
+          url.searchParams.set("from", value);
+          url.searchParams.delete("start_year");
           history.replaceState(null, "", url);
           result.view.signal("display_start", value).signal("display_start_date", displayStartDate(value)).runAsync();
         });
@@ -4335,7 +4390,8 @@ else
           result.view.signal("model", model).runAsync();
           if (updateUrl) {
             const url = new URL(window.location.href);
-            url.searchParams.set("chart_model", model);
+            url.searchParams.set("family", model === "quasi_poisson" ? "quasi" : "poisson");
+            url.searchParams.delete("chart_model");
             history.replaceState(null, "", url);
           }
           simulationControl.style.display = model === "poisson" ? "" : "none";
@@ -4346,8 +4402,9 @@ else
         const syncZeroBase = () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
           const url = new URL(window.location.href);
-          if (zeroBase.checked) url.searchParams.set("zero_base", "1");
-          else url.searchParams.delete("zero_base");
+          if (zeroBase.checked) url.searchParams.set("zero", "1");
+          else url.searchParams.delete("zero");
+          url.searchParams.delete("zero_base");
           history.replaceState(null, "", url);
         };
         zeroBase.addEventListener("change", syncZeroBase);
@@ -4357,8 +4414,9 @@ else
           const syncDeficit = () => {
             result.view.signal("include_deficit", deficit.checked).runAsync();
             const url = new URL(window.location.href);
-            if (deficit.checked) url.searchParams.set("include_deficit", "1");
-            else url.searchParams.delete("include_deficit");
+            if (deficit.checked) url.searchParams.set("deficit", "1");
+            else url.searchParams.delete("deficit");
+            url.searchParams.delete("include_deficit");
             history.replaceState(null, "", url);
           };
           deficit.addEventListener("change", syncDeficit);
@@ -4369,15 +4427,17 @@ else
           const syncCovidOverlay = () => {
             result.view.signal("show_covid_overlay", covidOverlay.checked).runAsync();
             const url = new URL(window.location.href);
-            if (covidOverlay.checked) url.searchParams.set("covid_overlay", "1");
-            else url.searchParams.delete("covid_overlay");
+            if (covidOverlay.checked) url.searchParams.set("covid", "1");
+            else url.searchParams.delete("covid");
+            url.searchParams.delete("covid_overlay");
             history.replaceState(null, "", url);
           };
           covidOverlay.addEventListener("change", syncCovidOverlay);
           window.addEventListener("pageshow", syncCovidOverlay);
           syncCovidOverlay();
-        } else if (new URL(window.location.href).searchParams.has("covid_overlay")) {
+        } else if (["covid", "covid_overlay"].some(name => new URL(window.location.href).searchParams.has(name))) {
           const url = new URL(window.location.href);
+          url.searchParams.delete("covid");
           url.searchParams.delete("covid_overlay");
           history.replaceState(null, "", url);
         }
@@ -4385,15 +4445,17 @@ else
           const syncVaxxOverlay = () => {
             result.view.signal("show_vaxx_overlay", vaxxOverlay.checked).runAsync();
             const url = new URL(window.location.href);
-            if (vaxxOverlay.checked) url.searchParams.set("vaxx_overlay", "1");
-            else url.searchParams.delete("vaxx_overlay");
+            if (vaxxOverlay.checked) url.searchParams.set("vaxx", "1");
+            else url.searchParams.delete("vaxx");
+            url.searchParams.delete("vaxx_overlay");
             history.replaceState(null, "", url);
           };
           vaxxOverlay.addEventListener("change", syncVaxxOverlay);
           window.addEventListener("pageshow", syncVaxxOverlay);
           syncVaxxOverlay();
-        } else if (new URL(window.location.href).searchParams.has("vaxx_overlay")) {
+        } else if (["vaxx", "vaxx_overlay"].some(name => new URL(window.location.href).searchParams.has(name))) {
           const url = new URL(window.location.href);
+          url.searchParams.delete("vaxx");
           url.searchParams.delete("vaxx_overlay");
           history.replaceState(null, "", url);
         }
@@ -4402,7 +4464,7 @@ else
           result.view.signal("interval_mode", value).runAsync();
           if (simulationInterval.checked) ensurePoissonSimulation(result.view.signal("train_to"));
           const url = new URL(window.location.href);
-          url.searchParams.set("interval", value);
+          url.searchParams.set("interval", simulationInterval.checked ? "sim" : "approx");
           history.replaceState(null, "", url);
         });
         if (weeklyView) {
@@ -4417,7 +4479,8 @@ else
         }
         result.view.addSignalListener("train_to", (_name, value) => {
           const url = new URL(window.location.href);
-          url.searchParams.set("train_to", value);
+          url.searchParams.set("fit", value);
+          url.searchParams.delete("train_to");
           history.replaceState(null, "", url);
           document.getElementById("train-to-hidden").value = value;
         });

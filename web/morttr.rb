@@ -244,6 +244,30 @@ end.parse!(ARGV)
 $mortyear_cache_dir = opts[:cache_dir]
 
 cgi = CGI.new
+# 日本語: 公開URLの正規名を優先し、未指定時だけ旧名を読む。
+# English: Prefer canonical public URL names and read legacy names only when canonical names are absent.
+url_value = lambda do |canonical, legacy = nil|
+  if cgi.params.key?(canonical)
+    cgi[canonical]
+  elsif legacy && cgi.params.key?(legacy)
+    cgi[legacy]
+  else
+    ''
+  end
+end
+url_values = lambda do |canonical, legacy = nil|
+  values = if cgi.params.key?(canonical)
+             cgi.params.fetch(canonical, [])
+           elsif legacy && cgi.params.key?(legacy)
+             cgi.params.fetch(legacy, [])
+           else
+             []
+           end
+  values.flat_map { |value| value.split(/[~,]/) }
+end
+url_enabled = lambda do |canonical, legacy = nil|
+  %w[1 true yes on].include?(url_value.call(canonical, legacy).downcase)
+end
 requested_language = cgi['l']
 $l = if requested_language.match?(/^(en|english)/i) ||
         (requested_language.empty? && ENV['HTTP_ACCEPT_LANGUAGE'].to_s !~ /^ja/i)
@@ -252,6 +276,8 @@ $l = if requested_language.match?(/^(en|english)/i) ||
        :ja
      end
 mode = cgi['mode'] == 'series' ? 'series' : 'country'
+calculation_request = %w[ruby js].include?(cgi['calc']) ? cgi['calc'] : 'auto'
+$mortyear_cache_miss = false
 # 日本語: 公開URLではdatasetを選ばせず、人口動態死亡と癌統計を同じ画面で扱う。
 # English: Do not expose a dataset URL parameter; combine vital and cancer series on one screen.
 selected_dataset = 'vital'
@@ -296,27 +322,36 @@ selected_ages = age_values.flat_map { |value| value.split(/[~,]/) }.flat_map do 
 end.flatten.select { |age| AGES.key?(age) || STMF_AGES.include?(age) }.uniq
 selected_ages = ['age_all'] if selected_ages.empty?
 selected_sex = %w[both male female].include?(cgi['sex']) ? cgi['sex'] : 'both'
-selected_metric = METRICS.key?(cgi['metric']) ? cgi['metric'] : (selected_period == 'weekly' ? 'deaths' : 'asr')
+metric_aliases = { 'std' => 'std_deaths', 'crude' => 'crude_rate', 'birth' => 'birth_rate' }
+requested_metric = metric_aliases.fetch(cgi['metric'], cgi['metric'])
+selected_metric = METRICS.key?(requested_metric) ? requested_metric : (selected_period == 'weekly' ? 'deaths' : 'asr')
 selected_metric = 'deaths' if selected_dataset != 'vital' && !%w[deaths crude_rate asr].include?(selected_metric)
 selected_ages = ['age_all'] if selected_dataset != 'vital' && selected_metric == 'asr'
 selected_sex = 'both' if selected_metric == 'birth_rate'
-interval_mode = cgi['interval'] == 'analytic' ? 'analytic' : 'auto'
-include_deficit = %w[1 true yes on].include?(cgi['include_deficit'].downcase)
-zero_base = %w[1 true yes on].include?(cgi['zero_base'].downcase)
-covid_overlay = %w[1 true yes on].include?(cgi['covid_overlay'].downcase)
-vaxx_overlay = %w[1 true yes on].include?(cgi['vaxx_overlay'].downcase)
-selected_chart_model = %w[quasi_poisson poisson].include?(cgi['chart_model']) ? cgi['chart_model'] : 'quasi_poisson'
-weekly_methods = cgi.params.fetch('weekly_method', []).flat_map { |value| value.split(/[~,]/) } &
-                 %w[five_year farrington euromomo]
-weekly_baselines = cgi.params.fetch('weekly_baseline', []).flat_map { |value| value.split(/[~,]/) }.
-                   map { |value| value == 'fixed' ? 'fixed_2015_2019' : value } &
-                   %w[fixed_2015_2019 fixed_2016_2020 rolling]
+interval_mode = %w[approx analytic].include?(cgi['interval']) ? 'analytic' : 'auto'
+include_deficit = url_enabled.call('deficit', 'include_deficit')
+zero_base = url_enabled.call('zero', 'zero_base')
+covid_overlay = url_enabled.call('covid', 'covid_overlay')
+vaxx_overlay = url_enabled.call('vaxx', 'vaxx_overlay')
+family_value = url_value.call('family', 'chart_model')
+selected_chart_model = { 'quasi' => 'quasi_poisson', 'quasi_poisson' => 'quasi_poisson',
+                         'poisson' => 'poisson' }.fetch(family_value, 'quasi_poisson')
+method_aliases = { 'mean' => 'five_year', 'five_year' => 'five_year',
+                   'farrington' => 'farrington', 'euromomo' => 'euromomo' }
+weekly_methods = url_values.call('algo', 'weekly_method').filter_map { |value| method_aliases[value] }.uniq
+baseline_aliases = { '2015-2019' => 'fixed_2015_2019', 'fixed' => 'fixed_2015_2019',
+                     'fixed_2015_2019' => 'fixed_2015_2019',
+                     '2016-2020' => 'fixed_2016_2020', 'fixed_2016_2020' => 'fixed_2016_2020',
+                     'prev5' => 'rolling', 'rolling' => 'rolling' }
+weekly_baselines = url_values.call('ref', 'weekly_baseline').filter_map { |value| baseline_aliases[value] }.uniq
 weekly_methods = ['farrington'] if weekly_methods.empty?
 weekly_baselines = ['fixed_2015_2019'] if weekly_baselines.empty?
 weekly_methods = [weekly_methods.first] if mode == 'country'
 weekly_baselines = [weekly_baselines.first] if mode == 'country'
 weekly_method = weekly_methods.first
 weekly_baseline = weekly_baselines.first
+requested_cumulative_start = cgi['cum'].to_i
+weekly_cumulative_start = requested_cumulative_start.between?(1950, Date.today.year) ? requested_cumulative_start : 2021
 $mortyear_period = selected_period
 $mortyear_training_start = selected_period == 'calendar' ? 2000 : 1999
 # 日本語: 暦年の英国とSTMF週次の英国地域を期間切替時に相互変換する。
@@ -345,14 +380,14 @@ requested_causes = requested_dcodes.flat_map { |value| value.split(/[~,]/) }.
                      %w[all 00000].include?(normalized) ? 'allcause' :
                        (normalized == 'perinatal' ? 'perm' : normalized)
                    end.uniq
-include_incidence = %w[1 true yes on].include?(cgi['include_incidence'].downcase) ||
+include_incidence = url_enabled.call('inc', 'include_incidence') ||
                     selected_dataset == 'cancer-incidence'
 if selected_dataset != 'vital' && selected_sex == 'both'
   requested_site_codes = requested_causes.empty? ? ['c53'] : requested_causes
   selected_sex = 'female' if (requested_site_codes - %w[c53-c55 c53 c54 c56]).empty?
   selected_sex = 'male' if requested_site_codes == ['c61']
 end
-requested_start_year = cgi['start_year'].to_i
+requested_start_year = url_value.call('from', 'start_year').to_i
 period_start_year = selected_period == 'calendar' ? 2000 : (selected_period == 'weekly' ? 2015 : 1999)
 default_start_year = requested_start_year.between?(1950, 2020) ? requested_start_year : period_start_year
 
@@ -866,8 +901,14 @@ def cached_scenarios(rows, calculator_type, analytic_calculator)
 
   queue_path = cache_file(digest, queue: true)
   queued = cache_entry(queue_path, key)
-  return [queued[:analytic], []] if queued
+  if queued
+    # 日本語: queueはRuby近似値を持っていても未完成cacheなので、browser計算経路を継続する。
+    # English: A queued entry remains incomplete even with Ruby approximations; keep using the browser path.
+    $mortyear_cache_miss = true
+    return [queued[:analytic], []]
+  end
 
+  $mortyear_cache_miss = true
   analytic = analytic_calculator.call(rows, '', '')
   begin
     write_queue_entry(queue_path, {
@@ -1173,6 +1214,26 @@ def weekly_reference_years(target_year, baseline)
   when 'fixed_2015_2019' then (2015..2019).to_a
   when 'fixed_2016_2020' then (2016..2020).to_a
   else ((target_year - 5)..(target_year - 1)).to_a
+  end
+end
+
+# 日本語: 選択基準に必要な年と評価年がそろい、週次予測を表示し得る系列があるかを軽量判定する。
+# English: Cheaply detect whether any weekly series has the reference and evaluation years needed for predictions.
+def weekly_prediction_candidate?(rows, baselines)
+  rows.group_by { |row| row[:series] }.any? do |_series, series_rows|
+    years = series_rows.filter_map do |row|
+      next if Array(row[:model_strata]).empty? || row[:date].nil?
+
+      Date.iso8601(row[:date].to_s).cwyear
+    end.uniq
+    baselines.any? do |baseline|
+      fixed_end = { 'fixed_2015_2019' => 2019, 'fixed_2016_2020' => 2020 }[baseline]
+      if fixed_end
+        ((fixed_end - 4)..fixed_end).all? { |year| years.include?(year) } && years.any? { |year| year > fixed_end }
+      else
+        years.any? { |year| ((year - 5)..(year - 1)).all? { |reference| years.include?(reference) } }
+      end
+    end
   end
 end
 
@@ -1860,6 +1921,7 @@ def build_scenarios(rows, series_key, label, use_cache:)
   stratified = rows.first&.key?(:strata)
   analytic_calculator = stratified ? method(:compute_stratified_asr_analytic_scenarios) : method(:compute_analytic_scenarios)
   unless use_cache
+    $mortyear_cache_miss = true
     analytic = analytic_calculator.call(rows, series_key, label)
     return scenario_display_rows(analytic, series_key, label, 'analytic', true)
   end
@@ -2657,6 +2719,7 @@ annual_source_fields = %w[id loc category rate dcode algo date year sex src_url 
 annual_records = selected_metric == 'birth_rate' ? annual_records_all : []
 special_rows = birth_rate_rows(annual_records)
 
+calculation_inputs = []
 chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
   loc = mode == 'country' ? series_key : selected_locations.first
   rows = if SPECIAL_CAUSES.key?(cause)
@@ -2664,12 +2727,24 @@ chart_data = series_specs.flat_map do |series_key, age, cause, label, dataset|
          else
            annual_by_dataset.fetch(dataset).select { |row| row[:loc] == loc && row[:dcode] == cause }
          end
+  unless rows.empty?
+    calculation_inputs << {
+      series: series_key, label: label, period: selected_period, rows: rows,
+      metadata: { loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
+                  dcode: cause, sex: selected_sex, ages: age.join('~') }
+    }
+  end
   build_scenarios(rows, series_key, label,
                   use_cache: !opts[:fixture] || ENV['MORTYEAR_CACHE_FIXTURE'] == '1').map do |row|
     row.merge(loc: loc.downcase, category: CANCER_DATASETS.fetch(dataset).fetch(:category),
               dcode: cause, sex: selected_sex, ages: age.join('~'))
   end
 end
+calculation_engine = if calculation_request == 'auto'
+                       selected_period == 'weekly' || $mortyear_cache_miss ? 'js' : 'ruby'
+                     else
+                       calculation_request
+                     end
 
 start_week = selected_period == 'flu27' ? 27 : 36
 chart_data.each do |row|
@@ -2710,6 +2785,10 @@ if selected_period == 'weekly' && selected_metric == 'crude_rate'
 end
 covid_overlay_available = overlay_values.any? { |row| row[:overlay] == 'covid' }
 vaxx_overlay_available = overlay_values.any? { |row| row[:overlay] == 'vaxx' }
+# 日本語: 指標変更後にURLへ残った利用不能な重畳指定で、Y軸signalだけを有効にしない。
+# English: Do not let an unavailable overlay left in the URL enable only its Y-axis signal.
+covid_overlay &&= covid_overlay_available
+vaxx_overlay &&= vaxx_overlay_available
 
 # 日本語: 全年齢・男女計・粗死亡率だけは、STMF開始前をUN月次crude rateで補完する。
 # English: For all-age both-sex crude mortality only, supplement pre-STMF dates with UN monthly crude rate.
@@ -2742,11 +2821,21 @@ else
   end
 end
 weekly_combinations = weekly_methods.product(weekly_baselines)
+weekly_calculation_inputs = weekly_context.map do |row|
+  row.merge(model_strata: Array(row[:model_strata]).map(&:dup))
+end
 if selected_period == 'weekly'
   base_weekly_context = weekly_context
   weekly_context = weekly_combinations.flat_map do |method, baseline|
-    analysis = weekly_baseline_analysis(base_weekly_context, method: method,
-                                        baseline: baseline, metric: selected_metric)
+    # 日本語: 通常経路は観測値を先に返し、基準線と区間をbrowserで補う。明示指定時だけRubyを参照実行する。
+    # English: The normal path returns observations first; only an explicit mode runs Ruby as the reference.
+    analysis = if calculation_request == 'auto'
+                 $mortyear_cache_miss = true
+                 []
+               else
+                 weekly_baseline_analysis(base_weekly_context, method: method,
+                                           baseline: baseline, metric: selected_metric)
+               end
     analysis_by_key = analysis.to_h { |row| [[row[:series], row[:date]], row] }
     base_weekly_context.map do |row|
       result = analysis_by_key[[row[:series], row[:date]]]
@@ -2770,7 +2859,7 @@ unless requested_start_year.between?(1950, 2020)
 end
 
 cutoffs = chart_data.map { |row| row[:train_to] }.uniq.sort
-requested_cutoff = cgi['train_to'].to_i
+requested_cutoff = url_value.call('fit', 'train_to').to_i
 preferred_cutoff = selected_period == 'calendar' ? 2019 : 2018
 default_cutoff = if cutoffs.include?(requested_cutoff)
                    requested_cutoff
@@ -2884,8 +2973,9 @@ puts <<~HTML
   </style>
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
-    <input id="train-to-hidden" type="hidden" name="train_to" value="#{default_cutoff}">
-    <input id="start-year-hidden" type="hidden" name="start_year" value="#{default_start_year}">
+    #{calculation_request == 'auto' ? '' : %(<input type="hidden" name="calc" value="#{calculation_request}">)}
+    <input id="train-to-hidden" type="hidden" name="fit" value="#{default_cutoff}">
+    <input id="start-year-hidden" type="hidden" name="from" value="#{default_start_year}">
     <p>
       <button class="language-button" type="button" data-language="ja">日本語</button>
       <button class="language-button" type="button" data-language="en">English</button>
@@ -2902,13 +2992,13 @@ puts <<~HTML
       <label><input class="period-option" type="radio" name="period" value="weekly" #{checked(selected_period == 'weekly')}>#{ $l == :ja ? '週次（超過・過少死亡）' : 'Weekly (excess/deficit mortality)' }</label>
     </fieldset>
     <fieldset id="weekly-method-fieldset" style="#{selected_period == 'weekly' ? '' : 'display:none'}"><legend>#{ $l == :ja ? '週次基準線' : 'Weekly baseline' }</legend>
-      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="five_year" #{checked(weekly_methods.include?('five_year'))}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
-      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="farrington" #{checked(weekly_methods.include?('farrington'))}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
-      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_method" value="euromomo" #{checked(weekly_methods.include?('euromomo'))}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="algo" value="mean" #{checked(weekly_methods.include?('five_year'))}>#{ $l == :ja ? '5年平均' : 'Five-year average' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="algo" value="farrington" #{checked(weekly_methods.include?('farrington'))}>Farrington#{ $l == :ja ? '型' : '-style' }</label>
+      <label><input class="weekly-method-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="algo" value="euromomo" #{checked(weekly_methods.include?('euromomo'))}>EuroMOMO#{ $l == :ja ? '型' : '-style' }</label>
       &nbsp;
-      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2015_2019" #{checked(weekly_baselines.include?('fixed_2015_2019'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
-      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="fixed_2016_2020" #{checked(weekly_baselines.include?('fixed_2016_2020'))}>#{ $l == :ja ? '基準期間2016–2020' : 'Baseline period 2016–2020' }</label>
-      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="weekly_baseline" value="rolling" #{checked(weekly_baselines.include?('rolling'))}>#{ $l == :ja ? '直前5年移動基準' : 'Previous-five-year rolling baseline' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="ref" value="2015-2019" #{checked(weekly_baselines.include?('fixed_2015_2019'))}>#{ $l == :ja ? '基準期間2015–2019' : 'Baseline period 2015–2019' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="ref" value="2016-2020" #{checked(weekly_baselines.include?('fixed_2016_2020'))}>#{ $l == :ja ? '基準期間2016–2020' : 'Baseline period 2016–2020' }</label>
+      <label><input class="weekly-baseline-option" type="#{mode == 'series' ? 'checkbox' : 'radio'}" name="ref" value="prev5" #{checked(weekly_baselines.include?('rolling'))}>#{ $l == :ja ? '直前5年移動基準' : 'Previous-five-year rolling baseline' }</label>
     </fieldset><br>
     <fieldset><legend>#{ $l == :ja ? '指標' : 'Measure' }</legend>
 HTML
@@ -3067,7 +3157,7 @@ render_cancer_group = lambda do |dataset_key, heading|
   puts %(</div></details>)
 end
 if selected_period == 'calendar'
-  puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="include_incidence" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
+  puts %(<div class="cause-source-heading"><strong>#{CGI.escapeHTML($l == :ja ? '国立がん研究センター：癌死亡' : 'National Cancer Center Japan: Cancer mortality')}</strong> <label><input id="include-incidence" type="checkbox" name="inc" value="1" #{checked(include_incidence)}>#{CGI.escapeHTML($l == :ja ? '罹患も表示' : 'Also show incidence')}</label></div>)
   render_cancer_group.call('cancer-death', $l == :ja ? '癌部位' : 'Cancer sites')
 end
 puts <<~HTML
@@ -3126,7 +3216,7 @@ puts <<~HTML
         const causes = params.getAll('dcodes');
         params.delete('dcodes');
         if (causes.length) params.set('dcodes', causes.join('~'));
-        ['weekly_method', 'weekly_baseline'].forEach(name => {
+        ['algo', 'ref'].forEach(name => {
           const values = params.getAll(name);
           params.delete(name);
           if (values.length) params.set(name, values.join('~'));
@@ -3149,11 +3239,33 @@ puts <<~HTML
         // 日本語: form外にあるグラフ表示controlも読込み後のURLへ引き継ぐ。
         // English: Preserve graph display controls outside the form in the submitted URL.
         const currentParams = new URL(window.location.href).searchParams;
-        ['zero_base', 'include_deficit', 'covid_overlay', 'vaxx_overlay', 'chart_model', 'interval'].forEach(name => {
-          const value = currentParams.get(name);
+        const metricAliases = {std_deaths: 'std', crude_rate: 'crude', birth_rate: 'birth'};
+        if (metricAliases[params.get('metric')]) params.set('metric', metricAliases[params.get('metric')]);
+        const graphAliases = {zero:'zero_base', deficit:'include_deficit', covid:'covid_overlay',
+          vaxx:'vaxx_overlay', family:'chart_model'};
+        ['zero', 'deficit', 'covid', 'vaxx', 'family', 'interval', 'cum'].forEach(name => {
+          let value = currentParams.get(name);
+          if (value === null && graphAliases[name]) value = currentParams.get(graphAliases[name]);
+          if (name === 'family' && value === 'quasi_poisson') value = 'quasi';
+          if (name === 'interval' && value === 'analytic') value = 'approx';
+          if (name === 'interval' && value === 'auto') value = 'sim';
           if (value === null) params.delete(name);
           else params.set(name, value);
         });
+        if (period === 'weekly') {
+          params.delete('family');
+          params.delete('interval');
+          const canonicalMetric = params.get('metric');
+          const canonicalAges = params.get('ages');
+          const canonicalSex = params.get('sex');
+          if (!['deaths', 'crude'].includes(canonicalMetric) || canonicalAges !== 'all' || canonicalSex) {
+            params.delete('covid');
+          }
+        } else {
+          ['algo', 'ref', 'cum', 'deficit', 'covid', 'vaxx'].forEach(name => params.delete(name));
+        }
+        ['start_year', 'train_to', 'weekly_method', 'weekly_baseline', 'include_deficit',
+          'zero_base', 'covid_overlay', 'vaxx_overlay', 'chart_model', 'include_incidence'].forEach(name => params.delete(name));
         showLoading();
         window.location.assign(`${window.location.pathname}?${params.toString().replace(/%7E/gi, '~')}`);
       });
@@ -3182,14 +3294,14 @@ puts <<~HTML
           setInputMode(locations, 'checkbox', 'c');
           setInputMode(causes, 'radio', 'dcodes');
           setInputMode(seasonAges, 'radio', 'age');
-          setInputMode(weeklyMethods, 'radio', 'weekly_method');
-          setInputMode(weeklyBaselines, 'radio', 'weekly_baseline');
+          setInputMode(weeklyMethods, 'radio', 'algo');
+          setInputMode(weeklyBaselines, 'radio', 'ref');
         } else {
           setInputMode(locations, 'radio', 'c');
           setInputMode(causes, 'checkbox', 'dcodes');
           setInputMode(seasonAges, 'checkbox', 'age');
-          setInputMode(weeklyMethods, 'checkbox', 'weekly_method');
-          setInputMode(weeklyBaselines, 'checkbox', 'weekly_baseline');
+          setInputMode(weeklyMethods, 'checkbox', 'algo');
+          setInputMode(weeklyBaselines, 'checkbox', 'ref');
         }
         document.querySelectorAll('.location-region-toggle').forEach(toggle => {
           toggle.style.display = selected === 'country' ? '' : 'none';
@@ -3477,6 +3589,8 @@ puts <<~HTML
         }
         syncMetric();
         syncCauseVisibility();
+        showLoading();
+        event.target.form.requestSubmit();
       }));
       restoreLocations();
       syncAgeSlider();
@@ -3782,6 +3896,14 @@ else
   standard_age_indexes = selected_ages.filter_map { |age| STANDARD_AGES.index(age) }.sort
   selected_80_plus = standard_age_indexes == (STANDARD_AGES.index('age_80_84')...STANDARD_AGES.length).to_a
   default_model = selected_chart_model
+  prediction_display_available = if selected_period == 'weekly'
+                                   weekly_prediction_candidate?(weekly_calculation_inputs, weekly_baselines)
+                                 else
+                                   chart_data.any? do |row|
+                                     row[:train_to] == default_cutoff && row[:model] == default_model &&
+                                       !row[:expected].nil? && !row[:pi_lower].nil? && !row[:pi_upper].nil?
+                                   end
+                                 end
   dispersion_labels = available_specs.to_h do |key, _age, cause, _label|
     short_label = if mode == 'country'
                     location_names(key).fetch($l)
@@ -3797,12 +3919,11 @@ else
                       'Weekly baselines use only STMF-derived weekly values, never the historical monthly supplement. The five-year average is accompanied by the same-week minimum-to-maximum band; Farrington-style uses ±3 weeks; EuroMOMO-style uses W16–25 and W37–44 as baseline weeks.'
                     end
                   elsif $l == :ja
-                    '準ポアソンは、観測された過分散を反映した近似95%予測区間です。ポアソンでは、計算済みなら10,000回シミュレーションによる区間へ切り替えられます（青：準ポアソン、緑：ポアソン近似、黄：シミュレーション）。'
+                    '準ポアソンは、観測された過分散を反映した近似95%予測区間です。ポアソンでは、10,000回シミュレーションによる区間へ切り替えられます（青：準ポアソン、緑：ポアソン近似、黄：シミュレーション）。'
                   else
-                    'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
+                    'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
                   end
   weekly_excess_enabled = selected_period == 'weekly'
-  weekly_cumulative_start = weekly_baselines.include?('fixed_2016_2020') ? 2021 : 2020
   weekly_excess_title = if $l == :ja
                           selected_metric == 'deaths' ? '超過死亡数' : '超過死亡率'
                         else
@@ -3904,16 +4025,42 @@ else
       <!-- <output id="dispersion-output"></output> -->
       &nbsp;
       <label id="simulation-interval-control" style="display:none"><input id="simulation-interval-checkbox" type="checkbox" #{'checked' unless interval_mode == 'analytic'}>
-        #{ $l == :ja ? 'シミュレーション区間を表示（未計算時は近似区間。1分以上待って再読込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and resubmit)' }
+        #{ $l == :ja ? 'シミュレーション区間を表示' : 'Show simulated interval' }
       </label>
     </p>
+    <p id="morttr-calculation-status" role="status" style="text-align:center">#{
+      calculation_engine == 'js' || !prediction_display_available ?
+        ($l == :ja ? '観測値描画中……' : 'Rendering observations…') :
+        ($l == :ja ? '観測値と予測区間などを描画中……' : 'Rendering observations and prediction intervals…')
+    }</p>
     <div id="mortyear-vis"></div>
+    <script src="morttr-calc.js"></script>
     <script>
-      const values = #{JSON.generate(chart_data)};
-      const weeklyValues = #{JSON.generate(weekly_context)};
+      const rubyValues = #{JSON.generate(chart_data)};
+      const calculationInputs = #{JSON.generate(calculation_inputs)};
+      const calculationEngine = #{JSON.generate(calculation_engine)};
+      const predictionDisplayAvailable = #{prediction_display_available ? 'true' : 'false'};
+      const verifyBrowserCalculation = #{calculation_request == 'js' ? 'true' : 'false'};
+      // 日本語: browser計算時は予測値を初期Vega dataへ渡さず、観測線を最初のframeで描く。
+      // English: For browser calculation, omit predictions from initial Vega data so observations paint first.
+      const observationOnlyValues = rows => rows.map(row => ({
+        ...row,
+        expected: null,
+        pi_lower: null,
+        pi_upper: null,
+        pi99_lower: null,
+        pi99_upper: null,
+        outside_pi: false
+      }));
+      let values = calculationEngine === "js" ? observationOnlyValues(rubyValues) : rubyValues;
+      window.morttrCalculationPhase = calculationEngine === "js" ? "observations" : "cached";
+      let weeklyValues = #{JSON.generate(weekly_context)};
+      const weeklyCalculationInputs = #{JSON.generate(weekly_calculation_inputs)};
+      const weeklyCalculationCombinations = #{JSON.generate(weekly_combinations)};
       const overlayValues = #{JSON.generate(overlay_values)};
       const detailSeries = #{JSON.generate(detail_series)};
       const mortyearVis = document.getElementById("mortyear-vis");
+      const calculationStatus = document.getElementById("morttr-calculation-status");
       // 日本語: 両Y軸のextentを確保し、狭い画面でもplot本体を320px以上残す。
       // English: Reserve both Y-axis extents and retain at least 320px for the plot.
       const requestedPanelWidth = width => Math.max(320, width - 168);
@@ -3985,10 +4132,10 @@ else
           {transform: predictionTransforms, mark: {type: "area", opacity: 0.55, clip: true}, encoding: {color: {field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#c7dff0","#cde8cf","#eadfc2"]}, legend:null}, y: {field: "pi_lower", type: "quantitative", title: #{JSON.generate(y_axis_title)}, scale: {zero: {expr: "zero_base || show_covid_overlay"}}}, y2: {field: "pi_upper"}}},
           {transform: predictionTransforms, mark: {type: "line", strokeDash: [6,4], strokeWidth: 2, clip: true}, encoding: {color:{field:"interval_style", type:"nominal", scale:{domain:["quasi_poisson","poisson","simulation"], range:["#246a9e","#287a3d","#88733b"]}, legend:null}, y: {field: "expected", type: "quantitative"}}},
           {transform: [...annualTransforms, {filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark: {type: "line", color: "#111", strokeWidth: 2.6, point: {filled:true,size:55}, clip: true}, encoding: {y: {field: "observed", type: "quantitative"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#174a73", strokeDash:[7,4], strokeWidth:2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"expected",type:"quantitative"}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#111", strokeWidth:2.2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
-          {data:{values:weeklyValues}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.observed)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"point", opacity:0, size:260, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:weeklyTooltip}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"area", color:"#5b8db8", opacity:0.24, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"lower",type:"quantitative"}, y2:{field:"upper"}}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.expected)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#174a73", strokeDash:[7,4], strokeWidth:2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"expected",type:"quantitative"}}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"line", color:"#111", strokeWidth:2.2, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative",title:#{JSON.generate(y_axis_title)}}}},
+          {data:{name:"morttr_weekly_values"}, transform:[{filter:`datum.series == '${key}'`},{filter:"view_mode == 'weekly'"},{filter:"isValid(datum.observed)"},{filter:"toDate(datum.date) >= toDate(display_start_date) && toDate(datum.date) <= now()"}], mark:{type:"point", opacity:0, size:260, clip:true}, encoding:{x:{field:"date",type:"temporal"}, y:{field:"observed",type:"quantitative"}, tooltip:weeklyTooltip}},
           {transform:[...predictionTransforms,{filter:"datum.outside_pi"},{filter:"view_mode == 'annual' || indexof(detail_series, datum.series) < 0"}], mark:{type:"point", color:"#111", filled:false, size:100, strokeWidth:2, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}}},
           {transform:annualTransforms, mark:{type:"point", opacity:0, size:320, clip:true}, encoding:{y:{field:"observed",type:"quantitative"}, tooltip:annualTooltip}},
           {data:{values:[{plot_date:displayStartDate(#{$mortyear_training_start})}]}, transform:[{filter:"!primary_weekly"}], mark:{type:"rule", color:"#555", strokeDash:[3,3], clip:true}, encoding:{x:{field:"plot_date",type:"temporal"}}},
@@ -4001,7 +4148,7 @@ else
       const excessPanelSpec = (key, cumulative) => ({
         title:{text:{expr:cumulative ? "include_deficit ? deficit_cumulative_title : excess_cumulative_title" : "include_deficit ? deficit_trend_title : excess_trend_title"},anchor:"start",fontSize:15},
         width:initialPlotWidth,height:115,
-        data:{values:weeklyValues},
+        data:{name:"morttr_weekly_values"},
         transform:[
           {filter:`datum.series == '${key}'`},
           {filter:"isValid(datum.excess_upper)"},
@@ -4036,7 +4183,8 @@ else
       });
       const spec = {
         $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-        data: {values},
+        data: {name:"morttr_values", values},
+        datasets: {morttr_weekly_values:weeklyValues},
         params: [
           {name:"display_start", value:displayStartDefault},
           {name:"display_start_date", value:displayStartDate(displayStartDefault)},
@@ -4069,6 +4217,117 @@ else
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         window.mortyearView = result.view;
+        let browserAnalyticReady = calculationEngine !== "js";
+        const simulatedCutoffs = new Set(calculationEngine === "js" ? [] :
+          values.filter(row => row.interval_method === "simulation").map(row => Number(row.train_to)));
+        const pendingSimulationCutoffs = new Set();
+        let simulationWorker = null;
+        const ensurePoissonSimulation = cutoff => {
+          const selectedCutoff = Number(cutoff);
+          if (!browserAnalyticReady || simulatedCutoffs.has(selectedCutoff) || !calculationInputs.length) return;
+          simulationWorker ||= new Worker("morttr-sim-worker.js");
+          simulatedCutoffs.add(selectedCutoff);
+          pendingSimulationCutoffs.add(selectedCutoff);
+          calculationStatus.style.display = "";
+          calculationStatus.textContent = #{JSON.generate($l == :ja ? 'シミュレーション区間を計算しています…' : 'Calculating simulated intervals…')};
+          window.morttrCalculationPhase = "simulating";
+          simulationWorker.onmessage = async event => {
+            if (event.data.error) {
+              simulatedCutoffs.delete(Number(event.data.cutoff));
+              pendingSimulationCutoffs.delete(Number(event.data.cutoff));
+              calculationStatus.textContent = #{JSON.generate($l == :ja ? 'シミュレーション区間を計算できませんでした。' : 'Simulated intervals could not be calculated.')};
+              window.morttrCalculationPhase = "error";
+              return;
+            }
+            const completedCutoff = Number(event.data.cutoff);
+            pendingSimulationCutoffs.delete(completedCutoff);
+            values = values.map(row => row.model === "poisson" && row.interval_method === "analytic" &&
+              Number(row.train_to) === completedCutoff ? {...row, auto_selected:false} : row).
+              filter(row => !(row.interval_method === "simulation" && Number(row.train_to) === completedCutoff)).
+              concat(event.data.values);
+            await result.view.change("morttr_values", vega.changeset().remove(() => true).insert(values)).runAsync();
+            if (pendingSimulationCutoffs.size === 0) {
+              calculationStatus.textContent = "";
+              calculationStatus.style.display = "none";
+              window.morttrCalculationPhase = "complete";
+            }
+          };
+          simulationWorker.postMessage({inputs:calculationInputs, options:{
+            cutoff:selectedCutoff, simulations:#{POISSON_SIMULATIONS}, trainingStart:#{$mortyear_training_start},
+            simulationLabel:#{JSON.generate($l == :ja ? 'シミュレーション' : 'Simulation')}
+          }});
+        };
+        window.morttrEnsurePoissonSimulation = ensurePoissonSimulation;
+        if (calculationEngine === "js" && predictionDisplayAvailable && window.morttrCalc) {
+          const status = calculationStatus;
+          status.textContent = #{JSON.generate($l == :ja ? '予測区間などを計算しています…' : 'Calculating prediction intervals…')};
+          const calculateInBrowser = async () => {
+            try {
+              window.morttrCalculationPhase = "calculating";
+              const primaryWeekly = #{selected_period == 'weekly' ? 'true' : 'false'};
+              window.morttrCalc.missingLabel = #{JSON.generate($l == :ja ? '欠測' : 'Missing')};
+              const jsValues = primaryWeekly ?
+                window.morttrCalc.calculateWeekly(weeklyCalculationInputs, weeklyCalculationCombinations, #{JSON.generate(selected_metric)}) :
+                window.morttrCalc.calculateAnnual(calculationInputs, {
+                  trainingStart: #{$mortyear_training_start},
+                  quasiLabel: #{JSON.generate($l == :ja ? '準ポアソン近似' : 'Quasi-Poisson approximation')},
+                  poissonLabel: #{JSON.generate($l == :ja ? 'ポアソン近似' : 'Poisson approximation')}
+                });
+              const numericFields = primaryWeekly ?
+                ["observed", "expected", "lower", "upper", "lower99", "upper99", "excess", "outside_deviation", "excess_lower", "excess_upper"] :
+                ["observed", "expected", "pi_lower", "pi_upper", "pi99_lower", "pi99_upper", "dispersion"];
+              const keyFor = primaryWeekly ? row => [row.series, row.date].join("|") :
+                row => [row.series, row.model, row.train_to, row.year, row.interval_method].join("|");
+              const referenceValues = primaryWeekly ? weeklyValues : rubyValues.filter(row => row.interval_method === "analytic");
+              const rubyByKey = new Map(referenceValues.map(row => [keyFor(row), row]));
+              let compared = 0, mismatches = 0, maximumDifference = 0;
+              if (verifyBrowserCalculation) jsValues.forEach(row => {
+                const reference = rubyByKey.get(keyFor(row));
+                if (!reference) { mismatches += 1; return; }
+                compared += 1;
+                numericFields.forEach(field => {
+                  if (row[field] == null && reference[field] == null) return;
+                  const difference = Math.abs(Number(row[field]) - Number(reference[field]));
+                  maximumDifference = Math.max(maximumDifference, difference);
+                  const scale = Math.max(1, Math.abs(Number(reference[field])));
+                  if (!Number.isFinite(difference) || difference > 1e-7 * scale) mismatches += 1;
+                });
+              });
+              window.morttrCalculationComparison = {compared, mismatches, maximumDifference};
+              if (!jsValues.length || (verifyBrowserCalculation && mismatches)) throw new Error(`Ruby/JS mismatch: ${mismatches}, max=${maximumDifference}`);
+              if (primaryWeekly) {
+                weeklyValues = jsValues;
+                await result.view.change("morttr_weekly_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
+              } else {
+                values = jsValues;
+                await result.view.change("morttr_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
+              }
+              browserAnalyticReady = true;
+              window.morttrCalculationPhase = "complete";
+              const simulationRequested = !primaryWeekly && document.querySelector(".model-option:checked")?.value === "poisson" &&
+                document.getElementById("simulation-interval-checkbox")?.checked;
+              if (simulationRequested) ensurePoissonSimulation(result.view.signal("train_to"));
+              else {
+                status.textContent = "";
+                status.style.display = "none";
+              }
+            } catch (error) {
+              console.warn(error);
+              window.morttrCalculationPhase = "error";
+              status.textContent = #{JSON.generate($l == :ja ? '予測区間を計算できませんでした。' : 'Prediction intervals could not be calculated.')};
+            }
+          };
+          // 日本語: Vegaの初期描画を二frame確定してから、予測値計算をidle taskへ渡す。
+          // English: Let Vega paint observations for two frames before scheduling prediction work as an idle task.
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            setTimeout(() => {
+              if (window.requestIdleCallback) requestIdleCallback(calculateInBrowser, {timeout:500});
+              else calculateInBrowser();
+            }, 250);
+          }));
+        } else {
+          calculationStatus.style.display = "none";
+        }
         let resizeTimer;
         window.addEventListener("resize", () => {
           clearTimeout(resizeTimer);
@@ -4112,7 +4371,8 @@ else
           startOutput.value = periodYearLabel(value);
           document.getElementById("start-year-hidden").value = value;
           const url = new URL(window.location.href);
-          url.searchParams.set("start_year", value);
+          url.searchParams.set("from", value);
+          url.searchParams.delete("start_year");
           history.replaceState(null, "", url);
           result.view.signal("display_start", value).signal("display_start_date", displayStartDate(value)).runAsync();
         });
@@ -4121,24 +4381,30 @@ else
           output.value = periodYearLabel(value);
           // updateDispersion(value); // 推定φは現在非表示。Estimated phi is currently hidden.
           result.view.signal("train_to", value).runAsync();
+          if (document.querySelector(".model-option:checked")?.value === "poisson" && simulationInterval.checked) {
+            ensurePoissonSimulation(value);
+          }
         });
         function syncModelControls(updateUrl = false) {
           const model = document.querySelector(".model-option:checked").value;
           result.view.signal("model", model).runAsync();
           if (updateUrl) {
             const url = new URL(window.location.href);
-            url.searchParams.set("chart_model", model);
+            url.searchParams.set("family", model === "quasi_poisson" ? "quasi" : "poisson");
+            url.searchParams.delete("chart_model");
             history.replaceState(null, "", url);
           }
           simulationControl.style.display = model === "poisson" ? "" : "none";
+          if (model === "poisson" && simulationInterval.checked) ensurePoissonSimulation(result.view.signal("train_to"));
         }
         modelOptions.forEach(input => input.addEventListener("change", () => syncModelControls(true)));
         syncModelControls();
         const syncZeroBase = () => {
           result.view.signal("zero_base", zeroBase.checked).runAsync();
           const url = new URL(window.location.href);
-          if (zeroBase.checked) url.searchParams.set("zero_base", "1");
-          else url.searchParams.delete("zero_base");
+          if (zeroBase.checked) url.searchParams.set("zero", "1");
+          else url.searchParams.delete("zero");
+          url.searchParams.delete("zero_base");
           history.replaceState(null, "", url);
         };
         zeroBase.addEventListener("change", syncZeroBase);
@@ -4148,8 +4414,9 @@ else
           const syncDeficit = () => {
             result.view.signal("include_deficit", deficit.checked).runAsync();
             const url = new URL(window.location.href);
-            if (deficit.checked) url.searchParams.set("include_deficit", "1");
-            else url.searchParams.delete("include_deficit");
+            if (deficit.checked) url.searchParams.set("deficit", "1");
+            else url.searchParams.delete("deficit");
+            url.searchParams.delete("include_deficit");
             history.replaceState(null, "", url);
           };
           deficit.addEventListener("change", syncDeficit);
@@ -4160,31 +4427,44 @@ else
           const syncCovidOverlay = () => {
             result.view.signal("show_covid_overlay", covidOverlay.checked).runAsync();
             const url = new URL(window.location.href);
-            if (covidOverlay.checked) url.searchParams.set("covid_overlay", "1");
-            else url.searchParams.delete("covid_overlay");
+            if (covidOverlay.checked) url.searchParams.set("covid", "1");
+            else url.searchParams.delete("covid");
+            url.searchParams.delete("covid_overlay");
             history.replaceState(null, "", url);
           };
           covidOverlay.addEventListener("change", syncCovidOverlay);
           window.addEventListener("pageshow", syncCovidOverlay);
           syncCovidOverlay();
+        } else if (["covid", "covid_overlay"].some(name => new URL(window.location.href).searchParams.has(name))) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("covid");
+          url.searchParams.delete("covid_overlay");
+          history.replaceState(null, "", url);
         }
         if (vaxxOverlay) {
           const syncVaxxOverlay = () => {
             result.view.signal("show_vaxx_overlay", vaxxOverlay.checked).runAsync();
             const url = new URL(window.location.href);
-            if (vaxxOverlay.checked) url.searchParams.set("vaxx_overlay", "1");
-            else url.searchParams.delete("vaxx_overlay");
+            if (vaxxOverlay.checked) url.searchParams.set("vaxx", "1");
+            else url.searchParams.delete("vaxx");
+            url.searchParams.delete("vaxx_overlay");
             history.replaceState(null, "", url);
           };
           vaxxOverlay.addEventListener("change", syncVaxxOverlay);
           window.addEventListener("pageshow", syncVaxxOverlay);
           syncVaxxOverlay();
+        } else if (["vaxx", "vaxx_overlay"].some(name => new URL(window.location.href).searchParams.has(name))) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("vaxx");
+          url.searchParams.delete("vaxx_overlay");
+          history.replaceState(null, "", url);
         }
         simulationInterval.addEventListener("change", () => {
           const value = simulationInterval.checked ? "auto" : "analytic";
           result.view.signal("interval_mode", value).runAsync();
+          if (simulationInterval.checked) ensurePoissonSimulation(result.view.signal("train_to"));
           const url = new URL(window.location.href);
-          url.searchParams.set("interval", value);
+          url.searchParams.set("interval", simulationInterval.checked ? "sim" : "approx");
           history.replaceState(null, "", url);
         });
         if (weeklyView) {
@@ -4199,7 +4479,8 @@ else
         }
         result.view.addSignalListener("train_to", (_name, value) => {
           const url = new URL(window.location.href);
-          url.searchParams.set("train_to", value);
+          url.searchParams.set("fit", value);
+          url.searchParams.delete("train_to");
           history.replaceState(null, "", url);
           document.getElementById("train-to-hidden").value = value;
         });
