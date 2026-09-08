@@ -93,10 +93,8 @@ views use their source bands, for example `ages=00-14~15-64`.
 |---|---|---|---|
 | `from` | `YYYY` | Annual: 2000; weekly: 2015 | First year displayed on the X axis |
 | `fit` | `YYYY` | Calendar: 2019; influenza year: 2018 | Last training year for annual and influenza-year prediction models |
-| `family` | `quasi` | `quasi` | Quasi-Poisson; estimate overdispersion from observations and reflect it in prediction intervals |
-| `family` | `poisson` | `quasi` | Poisson; assume that the mean and variance are equal |
-| `interval` | `approx` | `sim` | Analytic approximation; used for quasi-Poisson intervals |
-| `interval` | `sim` | `sim` | Simulation interval; available with Poisson |
+| `family` | `quasi`, `poisson` | `quasi` | `quasi` is quasi-Poisson and reflects observed overdispersion; `poisson` assumes equal mean and variance |
+| `interval` | `approx`, `sim` | `sim` | `approx` is an analytic approximation used with quasi-Poisson; `sim` is simulation and is available with Poisson |
 
 `family` identifies the probability and dispersion assumption, while `interval`
 identifies how the interval is calculated. Weekly Farrington-style and
@@ -106,9 +104,7 @@ EuroMOMO-style calculations are selected separately with `algo`.
 
 | Parameter | Values | Default | Applicability and meaning |
 |---|---|---|---|
-| `algo` | `mean` | `farrington` | Mean and range from the corresponding week in each reference year selected by `ref` |
-| `algo` | `farrington` | `farrington` | Farrington-style expected value and prediction interval |
-| `algo` | `euromomo` | `farrington` | EuroMOMO-style expected value and prediction interval |
+| `algo` | `mean`, `farrington`, `euromomo` | `farrington` | `mean` uses the corresponding weeks in the reference years for a mean and range; `farrington` and `euromomo` select Farrington-style and EuroMOMO-style expected values and prediction intervals |
 | `ref` | `YYYY-YYYY`, `prevN` | `2015-2019` | Fixed reference years or the preceding N years when `period=weekly` |
 | `cum` | `YYYY` | `2021` | First year included in cumulative weekly excess or deficit mortality |
 | `deficit` | `1` | Disabled (omitted) | Include negative differences in weekly trends and cumulative values |
@@ -168,21 +164,13 @@ the right.
 | `include_incidence=1` | `inc=1` |
 | `start_year=YYYY` | `from=YYYY` |
 | `train_to=YYYY` | `fit=YYYY` |
-| `chart_model=quasi_poisson` | `family=quasi` |
-| `chart_model=poisson` | `family=poisson` |
-| `interval=analytic` | `interval=approx` |
-| `interval=auto` | `interval=sim` |
-| `weekly_method=five_year` | `algo=mean` |
-| `weekly_method=farrington` | `algo=farrington` |
-| `weekly_method=euromomo` | `algo=euromomo` |
-| `weekly_baseline=fixed_2015_2019` or `fixed` | `ref=2015-2019` |
-| `weekly_baseline=fixed_2016_2020` | `ref=2016-2020` |
-| `weekly_baseline=rolling` | `ref=prev5` |
+| `chart_model=quasi_poisson|poisson` | `family=quasi|poisson` |
+| `interval=analytic|auto` | `interval=approx|sim` |
+| `weekly_method=five_year|farrington|euromomo` | `algo=mean|farrington|euromomo` |
+| `weekly_baseline=fixed_2015_2019|fixed_2016_2020|rolling` (`fixed` means 2015–2019) | `ref=2015-2019|2016-2020|prev5` |
 | `include_deficit=1` | `deficit=1` |
 | `zero_base=1` | `zero=1` |
 | `covid_overlay=1` | `covid=1` |
 | `vaxx_overlay=1` | `vaxx=1` |
-| `metric=crude_rate` | `metric=crude` |
-| `metric=std_deaths` | `metric=std` |
-| `metric=birth_rate` | `metric=birth` |
+| `metric=crude_rate|std_deaths|birth_rate` | `metric=crude|std|birth` |
 | `sex=both` | Omit `sex` |

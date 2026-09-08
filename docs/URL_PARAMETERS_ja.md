@@ -88,10 +88,8 @@ ages=80-100plus
 |---|---|---|---|
 | `from` | `YYYY` | 年次2000、週次2015 | X軸の表示開始年 |
 | `fit` | `YYYY` | 暦年2019、influenza年2018 | 年次・influenza年の予測モデルに使う学習終了年 |
-| `family` | `quasi` | `quasi` | 準Poisson。観測dataの過分散を推定して予測区間へ反映 |
-| `family` | `poisson` | `quasi` | Poisson。平均と分散が等しいと仮定 |
-| `interval` | `approx` | `sim` | 解析的な近似による予測区間。準Poissonではこの方式を使用 |
-| `interval` | `sim` | `sim` | simulationによる予測区間。Poissonで使用可能 |
+| `family` | `quasi`, `poisson` | `quasi` | `quasi`は観測dataの過分散を反映する準Poisson、`poisson`は平均と分散が等しいと仮定するPoisson |
+| `interval` | `approx`, `sim` | `sim` | `approx`は解析的な近似で準Poissonに使用。`sim`はsimulationでPoissonに使用可能 |
 
 `family`は確率分布・分散の仮定、`interval`は区間を求める計算法を表します。
 週次のFarrington型やEuroMOMO型は、この二つとは別に`algo`で指定します。
@@ -100,9 +98,7 @@ ages=80-100plus
 
 | parameter | 値 | 既定値 | 適用条件・意味 |
 |---|---|---|---|
-| `algo` | `mean` | `farrington` | `ref`で指定した各基準年の同じ週を使う平均・範囲 |
-| `algo` | `farrington` | `farrington` | Farrington型の期待値・予測区間 |
-| `algo` | `euromomo` | `farrington` | EuroMOMO型の期待値・予測区間 |
+| `algo` | `mean`, `farrington`, `euromomo` | `farrington` | `mean`は各基準年の同じ週を使う平均・範囲、`farrington`はFarrington型、`euromomo`はEuroMOMO型の期待値・予測区間 |
 | `ref` | `YYYY-YYYY`, `prevN` | `2015-2019` | `period=weekly`の基準期間。固定年範囲、または各年の直前N年 |
 | `cum` | `YYYY` | `2021` | `period=weekly`の累積超過・過少死亡の開始年 |
 | `deficit` | `1` | 無効（省略） | 負の差を週次推移と累積へ含める |
@@ -158,21 +154,13 @@ morttr.rb?l=ja&period=weekly&metric=asr&c=jpn~swe~gbr&ref=prev5&vaxx=1
 | `include_incidence=1` | `inc=1` |
 | `start_year=YYYY` | `from=YYYY` |
 | `train_to=YYYY` | `fit=YYYY` |
-| `chart_model=quasi_poisson` | `family=quasi` |
-| `chart_model=poisson` | `family=poisson` |
-| `interval=analytic` | `interval=approx` |
-| `interval=auto` | `interval=sim` |
-| `weekly_method=five_year` | `algo=mean` |
-| `weekly_method=farrington` | `algo=farrington` |
-| `weekly_method=euromomo` | `algo=euromomo` |
-| `weekly_baseline=fixed_2015_2019`または`fixed` | `ref=2015-2019` |
-| `weekly_baseline=fixed_2016_2020` | `ref=2016-2020` |
-| `weekly_baseline=rolling` | `ref=prev5` |
+| `chart_model=quasi_poisson|poisson` | `family=quasi|poisson` |
+| `interval=analytic|auto` | `interval=approx|sim` |
+| `weekly_method=five_year|farrington|euromomo` | `algo=mean|farrington|euromomo` |
+| `weekly_baseline=fixed_2015_2019|fixed_2016_2020|rolling`（`fixed`は2015–2019） | `ref=2015-2019|2016-2020|prev5` |
 | `include_deficit=1` | `deficit=1` |
 | `zero_base=1` | `zero=1` |
 | `covid_overlay=1` | `covid=1` |
 | `vaxx_overlay=1` | `vaxx=1` |
-| `metric=crude_rate` | `metric=crude` |
-| `metric=std_deaths` | `metric=std` |
-| `metric=birth_rate` | `metric=birth` |
+| `metric=crude_rate|std_deaths|birth_rate` | `metric=crude|std|birth` |
 | `sex=both` | `sex`を省略 |
