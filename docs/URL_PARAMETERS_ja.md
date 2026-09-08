@@ -21,23 +21,12 @@
 
 | parameter | 値 | 既定値 | 適用条件・意味 |
 |---|---|---|---|
-| `l` | `ja` | browser言語 | 日本語表示 |
-| `l` | `en` | browser言語 | 英語表示 |
-| `mode` | `country` | `country` | 複数の国・地域を一つの共通条件で比較 |
-| `mode` | `series` | `country` | 一つの国・地域について複数の年齢、死因、週次手法などを比較 |
-| `period` | `calendar` | `calendar` | 1月1日から12月31日までの暦年 |
-| `period` | `flu27` | `calendar` | 第27週から翌年第26週までのinfluenza年 |
-| `period` | `flu36` | `calendar` | 第36週から翌年第35週までのinfluenza年 |
-| `period` | `weekly` | `calendar` | 週次の観測値、超過・過少死亡推移、累積を表示 |
-| `metric` | `deaths` | 年次は`asr`、週次は`deaths` | 実死亡数 |
-| `metric` | `std` | 同左 | 選択した標準人口へ換算した死亡数 |
-| `metric` | `crude` | 同左 | 粗死亡率 |
-| `metric` | `asr` | 同左 | 年齢調整死亡率 |
-| `metric` | `birth` | 同左 | 出生数を分母とする乳児・周産期などの死亡率 |
+| `l` | `ja`, `en` | browser言語 | `ja`は日本語、`en`は英語 |
+| `mode` | `country`, `series` | `country` | `country`は複数の国・地域を一つの共通条件で比較。`series`は一つの国・地域について複数の年齢、死因、週次手法などを比較 |
+| `period` | `calendar`, `flu27`, `flu36`, `weekly` | `calendar` | `calendar`は暦年、`flu27`は第27週開始、`flu36`は第36週開始のinfluenza年、`weekly`は週次の観測値・超過／過少死亡推移・累積 |
+| `metric` | `deaths`, `std`, `crude`, `asr`, `birth` | 年次は`asr`、週次は`deaths` | `deaths`は実死亡数、`std`は標準人口換算死亡数、`crude`は粗死亡率、`asr`は年齢調整死亡率、`birth`は出生数を分母とする死亡率 |
 | `ages` | `all`, `0`, 年齢階級・範囲 | `all` | 年齢選択。後述の形式を使う |
-| `sex` | `both` | `both` | 男女計。正規URLでは省略可 |
-| `sex` | `male` | `both` | 男性。男女別系列がある場合 |
-| `sex` | `female` | `both` | 女性。男女別系列がある場合 |
+| `sex` | `both`, `male`, `female` | `both` | 男女計、男性、女性。`both`は正規URLでは省略可 |
 | `c` | 地域codeを`~`で連結 | 表示種別ごとの既定地域 | 国・地域選択 |
 | `dcodes` | 死因・症例codeを`~`で連結 | 全死因 | 死因または症例系列を選べる表示 |
 | `inc` | `1` | 無効（省略） | 癌罹患系列を含める場合 |

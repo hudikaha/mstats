@@ -22,23 +22,12 @@ been implemented in Ruby. The mapping from current URLs is listed under
 
 | Parameter | Values | Default | Applicability and meaning |
 |---|---|---|---|
-| `l` | `ja` | Browser language | Japanese display |
-| `l` | `en` | Browser language | English display |
-| `mode` | `country` | `country` | Compare multiple countries or regions under one common condition |
-| `mode` | `series` | `country` | Compare multiple ages, causes, weekly algorithms, or other series for one country or region |
-| `period` | `calendar` | `calendar` | Calendar years from January 1 through December 31 |
-| `period` | `flu27` | `calendar` | Influenza years from week 27 through week 26 of the next year |
-| `period` | `flu36` | `calendar` | Influenza years from week 36 through week 35 of the next year |
-| `period` | `weekly` | `calendar` | Weekly observations, excess/deficit trends, and cumulative values |
-| `metric` | `deaths` | Annual: `asr`; weekly: `deaths` | Observed death count |
-| `metric` | `std` | Same as above | Death count converted to the selected standard population |
-| `metric` | `crude` | Same as above | Crude mortality rate |
-| `metric` | `asr` | Same as above | Age-standardized mortality rate |
-| `metric` | `birth` | Same as above | Infant, perinatal, or similar mortality rate using births as the denominator |
+| `l` | `ja`, `en` | Browser language | `ja` selects Japanese and `en` selects English |
+| `mode` | `country`, `series` | `country` | `country` compares multiple countries or regions under one shared condition; `series` compares multiple ages, causes, weekly algorithms, or other series for one country or region |
+| `period` | `calendar`, `flu27`, `flu36`, `weekly` | `calendar` | `calendar` is a calendar year; `flu27` and `flu36` are influenza years starting at week 27 or 36; `weekly` shows weekly observations, excess/deficit trends, and cumulative values |
+| `metric` | `deaths`, `std`, `crude`, `asr`, `birth` | Annual: `asr`; weekly: `deaths` | `deaths` is observed deaths, `std` is deaths converted to the standard population, `crude` is the crude rate, `asr` is the age-standardized rate, and `birth` uses births as the denominator |
 | `ages` | `all`, `0`, age bands or ranges | `all` | Age selection in the format below |
-| `sex` | `both` | `both` | Both sexes; may be omitted from a canonical URL |
-| `sex` | `male` | `both` | Male, where a sex-specific series exists |
-| `sex` | `female` | `both` | Female, where a sex-specific series exists |
+| `sex` | `both`, `male`, `female` | `both` | Both sexes, male, or female; `both` may be omitted from a canonical URL |
 | `c` | Region codes joined with `~` | View-specific locations | Country or region selection |
 | `dcodes` | Cause or case codes joined with `~` | All causes | Views that allow cause or case series |
 | `inc` | `1` | Disabled (omitted) | Include cancer-incidence series |
