@@ -1,6 +1,8 @@
-/* morttr browser-side analytic calculator. Keep results schema-compatible with morttr.rb. */
+/* morttr browser-side calculator. Keep results schema-compatible with morttr.rb. */
 (() => {
   "use strict";
+
+  const root = typeof window === "undefined" ? globalThis : window;
 
   const Z95 = 1.959963984540054;
   const Z99 = 2.5758293035489004;
@@ -107,18 +109,18 @@
     pi99_lower:model === "quasi_poisson" ? predictionValue.lower99 : null,
     pi99_upper:model === "quasi_poisson" ? predictionValue.upper99 : null,
     outside_pi:Number(row.observed) < predictionValue.lower || Number(row.observed) > predictionValue.upper,
-    period:Number(row.year) >= window.morttrCalc.trainingStart && Number(row.year) <= cutoff ? "training" :
-      Number(row.year) < window.morttrCalc.trainingStart ? "historical" : "prediction",
+    period:Number(row.year) >= root.morttrCalc.trainingStart && Number(row.year) <= cutoff ? "training" :
+      Number(row.year) < root.morttrCalc.trainingStart ? "historical" : "prediction",
     dispersion:fit.dispersion == null ? null : Number(fit.dispersion.toFixed(4)),
     deaths:Number(Number(row.deaths).toFixed(2)), population:Math.round(Number(row.population)),
     src_url:row.src_url, interval_method:"analytic",
     interval_style:model === "quasi_poisson" ? "quasi_poisson" : "poisson",
-    interval_label:model === "quasi_poisson" ? window.morttrCalc.quasiLabel : window.morttrCalc.poissonLabel,
+    interval_label:model === "quasi_poisson" ? root.morttrCalc.quasiLabel : root.morttrCalc.poissonLabel,
     auto_selected:true
   });
 
-  const scalarScenarios = (rows, series, label) => cutoffs(rows, window.morttrCalc.trainingStart).flatMap(cutoff => {
-    const training = rows.filter(row => Number(row.year) >= window.morttrCalc.trainingStart && Number(row.year) <= cutoff);
+  const scalarScenarios = (rows, series, label) => cutoffs(rows, root.morttrCalc.trainingStart).flatMap(cutoff => {
+    const training = rows.filter(row => Number(row.year) >= root.morttrCalc.trainingStart && Number(row.year) <= cutoff);
     const fit = poissonFit(training);
     return ["poisson", "quasi_poisson"].flatMap(model => {
       const varianceScale = model === "quasi_poisson" ? Math.max(Number(fit.dispersion || 0), 1) : 1;
@@ -129,8 +131,8 @@
 
   const stratifiedScenarios = (rows, series, label) => {
     const ages = [...new Set(rows.flatMap(row => row.strata.map(item => item.age)))];
-    return cutoffs(rows, window.morttrCalc.trainingStart).flatMap(cutoff => {
-      const training = rows.filter(row => Number(row.year) >= window.morttrCalc.trainingStart && Number(row.year) <= cutoff);
+    return cutoffs(rows, root.morttrCalc.trainingStart).flatMap(cutoff => {
+      const training = rows.filter(row => Number(row.year) >= root.morttrCalc.trainingStart && Number(row.year) <= cutoff);
       if (!ages.every(age => training.filter(row => row.strata.some(item => item.age === age)).length >= MIN_TRAINING_YEARS)) return [];
       const fits = Object.fromEntries(ages.map(age => [age, poissonFit(training.map(row => {
         const item = row.strata.find(stratum => stratum.age === age);
@@ -159,11 +161,122 @@
     });
   };
 
-  window.morttrCalc = {
+  const stringSeed = value => {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  };
+
+  const randomGenerator = seed => {
+    let state = seed || 0x6d2b79f5;
+    return () => {
+      state += 0x6d2b79f5;
+      let value = state;
+      value = Math.imul(value ^ value >>> 15, value | 1);
+      value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+      return ((value ^ value >>> 14) >>> 0) / 4294967296;
+    };
+  };
+
+  const logGamma = value => {
+    const coefficients = [0.9999999999998099, 676.5203681218851, -1259.1392167224028,
+      771.3234287776531, -176.6150291621406, 12.507343278686905,
+      -0.13857109526572012, 9.984369578019572e-6, 1.5056327351493116e-7];
+    if (value < 0.5) return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * value)) - logGamma(1 - value);
+    const shifted = value - 1;
+    let sum = coefficients[0];
+    for (let index = 1; index < coefficients.length; index += 1) sum += coefficients[index] / (shifted + index);
+    const base = shifted + 7.5;
+    return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(base) - base + Math.log(sum);
+  };
+
+  const poissonRandom = (random, lambda) => {
+    if (lambda < 30) {
+      const limit = Math.exp(-lambda);
+      let product = 1, count = 0;
+      do { count += 1; product *= random(); } while (product > limit);
+      return count - 1;
+    }
+    const rootValue = Math.sqrt(lambda), logLambda = Math.log(lambda);
+    const b = 0.931 + 2.53 * rootValue, a = -0.059 + 0.02483 * b;
+    const inverseAlpha = 1.1239 + 1.1328 / (b - 3.4), vr = 0.9277 - 3.6224 / (b - 2);
+    for (;;) {
+      const u = random() - 0.5, v = random(), us = 0.5 - Math.abs(u);
+      const count = Math.floor((2 * a / us + b) * u + lambda + 0.43);
+      if (us >= 0.07 && v <= vr) return count;
+      if (count < 0 || (us < 0.013 && v > us)) continue;
+      if (Math.log(v * inverseAlpha / (a / (us * us) + b)) <=
+          -lambda + count * logLambda - logGamma(count + 1)) return count;
+    }
+  };
+
+  const coefficientDraws = (fit, count, random) => {
+    if (fit.zero) return Array.from({length:count}, () => [...fit.beta]);
+    const l00 = Math.sqrt(Math.max(Number(fit.covariance[0][0]), 0));
+    const l10 = l00 ? Number(fit.covariance[1][0]) / l00 : 0;
+    const l11 = Math.sqrt(Math.max(Number(fit.covariance[1][1]) - l10 * l10, 0));
+    return Array.from({length:count}, () => {
+      const radius = Math.sqrt(-2 * Math.log(Math.max(random(), Number.MIN_VALUE)));
+      const angle = 2 * Math.PI * random(), z0 = radius * Math.cos(angle), z1 = radius * Math.sin(angle);
+      return [fit.beta[0] + l00 * z0, fit.beta[1] + l10 * z0 + l11 * z1];
+    });
+  };
+
+  const simulationDisplayRow = (row, analytic, lower, upper, input) => ({
+    ...analytic, ...input.metadata,
+    pi_lower:lower, pi_upper:upper, pi99_lower:null, pi99_upper:null,
+    outside_pi:Number(row.observed) < lower || Number(row.observed) > upper,
+    dispersion:null, interval_method:"simulation", interval_style:"simulation",
+    interval_label:root.morttrCalc.simulationLabel, auto_selected:true,
+    plot_date:input.period === "calendar" ? `${row.year}-01-01` : `${Number(row.year) + 1}-01-01`
+  });
+
+  const simulateInput = (input, cutoff, count) => {
+    const rows = input.rows, training = rows.filter(row => Number(row.year) >= root.morttrCalc.trainingStart && Number(row.year) <= cutoff);
+    if (training.length < MIN_TRAINING_YEARS) return [];
+    const analytic = (rows[0]?.strata ? stratifiedScenarios(rows, input.series, input.label) : scalarScenarios(rows, input.series, input.label)).
+      filter(row => row.model === "poisson" && row.train_to === cutoff);
+    const analyticByYear = new Map(analytic.map(row => [Number(row.year), row]));
+    const random = randomGenerator(stringSeed(`${JSON.stringify(rows)}:${rows[0]?.strata ? "asr:" : ""}${cutoff}:${count}`));
+    if (!rows[0]?.strata) {
+      const fit = poissonFit(training), draws = coefficientDraws(fit, count, random);
+      return rows.map(row => {
+        const x = Number(row.year) - fit.center, population = Number(row.population), scale = Number(row.unit_scale || 100000);
+        const values = draws.map(beta => poissonRandom(random, Math.exp(beta[0] + beta[1] * x) * population) / population * scale).sort((a,b) => a-b);
+        return simulationDisplayRow(row, analyticByYear.get(Number(row.year)), values[Math.floor(count * 0.025)],
+          values[Math.floor(count * 0.975) - 1], input);
+      });
+    }
+    const ages = [...new Set(rows.flatMap(row => row.strata.map(item => item.age)))];
+    const fits = Object.fromEntries(ages.map(age => [age, poissonFit(training.map(row => {
+      const item = row.strata.find(stratum => stratum.age === age);
+      return {year:row.year, deaths:item.deaths, population:item.population};
+    }))]));
+    const draws = Object.fromEntries(ages.map(age => [age, coefficientDraws(fits[age], count, random)]));
+    return rows.map(row => {
+      const values = Array(count).fill(0);
+      row.strata.forEach(stratum => {
+        const fit = fits[stratum.age], x = Number(row.year) - fit.center;
+        draws[stratum.age].forEach((beta, index) => {
+          const mu = Math.exp(beta[0] + beta[1] * x) * Number(stratum.population);
+          values[index] += Number(stratum.weight) * poissonRandom(random, mu) / Number(stratum.population) * 100000;
+        });
+      });
+      values.sort((a,b) => a-b);
+      return simulationDisplayRow(row, analyticByYear.get(Number(row.year)), values[Math.floor(count * 0.025)],
+        values[Math.floor(count * 0.975) - 1], input);
+    });
+  };
+
+  root.morttrCalc = {
     trainingStart:2000,
     quasiLabel:"Quasi-Poisson approximation",
     poissonLabel:"Poisson approximation",
     missingLabel:"Missing",
+    simulationLabel:"Simulation",
     calculateAnnual(inputs, options = {}) {
       this.trainingStart = Number(options.trainingStart || 2000);
       this.quasiLabel = options.quasiLabel || this.quasiLabel;
@@ -174,6 +287,13 @@
         plot_date:input.period === "calendar" ? `${row.year}-01-01` : `${row.year + 1}-01-01`,
         season:row.season || (input.period === "calendar" ? null : `${row.year}/${String((row.year + 1) % 100).padStart(2, "0")}`)
       })));
+    },
+
+    calculateAnnualSimulation(inputs, options = {}) {
+      this.trainingStart = Number(options.trainingStart || this.trainingStart || 2000);
+      this.simulationLabel = options.simulationLabel || this.simulationLabel;
+      const cutoff = Number(options.cutoff), count = Number(options.simulations || 10000);
+      return inputs.flatMap(input => simulateInput(input, cutoff, count));
     },
 
     calculateWeekly(rows, combinations, metric) {
@@ -330,7 +450,7 @@
             const gapDate = new Date(`${row.date}T00:00:00Z`);
             gapDate.setUTCDate(gapDate.getUTCDate() + 1);
             withGaps.push({...row, date:gapDate.toISOString().slice(0,10), observed:null,
-              detail_period:window.morttrCalc.missingLabel});
+              detail_period:root.morttrCalc.missingLabel});
           }
         });
       });

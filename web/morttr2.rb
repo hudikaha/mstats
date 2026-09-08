@@ -3864,9 +3864,9 @@ else
                       'Weekly baselines use only STMF-derived weekly values, never the historical monthly supplement. The five-year average is accompanied by the same-week minimum-to-maximum band; Farrington-style uses ±3 weeks; EuroMOMO-style uses W16–25 and W37–44 as baseline weeks.'
                     end
                   elsif $l == :ja
-                    '準ポアソンは、観測された過分散を反映した近似95%予測区間です。ポアソンでは、計算済みなら10,000回シミュレーションによる区間へ切り替えられます（青：準ポアソン、緑：ポアソン近似、黄：シミュレーション）。'
+                    '準ポアソンは、観測された過分散を反映した近似95%予測区間です。ポアソンでは、10,000回シミュレーションによる区間へ切り替えられます（青：準ポアソン、緑：ポアソン近似、黄：シミュレーション）。'
                   else
-                    'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected when available (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
+                    'Quasi-Poisson shows an approximate 95% prediction interval reflecting observed overdispersion. With Poisson, a 10,000-run simulated interval can be selected (blue: Quasi-Poisson; green: Poisson approximation; yellow: simulation).'
                   end
   weekly_excess_enabled = selected_period == 'weekly'
   weekly_cumulative_start = weekly_baselines.include?('fixed_2016_2020') ? 2021 : 2020
@@ -3971,7 +3971,7 @@ else
       <!-- <output id="dispersion-output"></output> -->
       &nbsp;
       <label id="simulation-interval-control" style="display:none"><input id="simulation-interval-checkbox" type="checkbox" #{'checked' unless interval_mode == 'analytic'}>
-        #{ $l == :ja ? 'シミュレーション区間を表示（未計算時は近似区間。1分以上待って再読込み）' : 'Show simulated interval (if unavailable, the approximate interval is shown; wait at least one minute and resubmit)' }
+        #{ $l == :ja ? 'シミュレーション区間を表示' : 'Show simulated interval' }
       </label>
     </p>
     <p id="morttr-calculation-status" role="status" style="text-align:center">#{
@@ -4163,6 +4163,47 @@ else
       };
       vegaEmbed("#mortyear-vis", spec, {mode:"vega-lite", actions:false}).then(result => {
         window.mortyearView = result.view;
+        let browserAnalyticReady = calculationEngine !== "js";
+        const simulatedCutoffs = new Set(calculationEngine === "js" ? [] :
+          values.filter(row => row.interval_method === "simulation").map(row => Number(row.train_to)));
+        const pendingSimulationCutoffs = new Set();
+        let simulationWorker = null;
+        const ensurePoissonSimulation = cutoff => {
+          const selectedCutoff = Number(cutoff);
+          if (!browserAnalyticReady || simulatedCutoffs.has(selectedCutoff) || !calculationInputs.length) return;
+          simulationWorker ||= new Worker("morttr-sim-worker.js");
+          simulatedCutoffs.add(selectedCutoff);
+          pendingSimulationCutoffs.add(selectedCutoff);
+          calculationStatus.style.display = "";
+          calculationStatus.textContent = #{JSON.generate($l == :ja ? 'シミュレーション区間を計算しています…' : 'Calculating simulated intervals…')};
+          window.morttrCalculationPhase = "simulating";
+          simulationWorker.onmessage = async event => {
+            if (event.data.error) {
+              simulatedCutoffs.delete(Number(event.data.cutoff));
+              pendingSimulationCutoffs.delete(Number(event.data.cutoff));
+              calculationStatus.textContent = #{JSON.generate($l == :ja ? 'シミュレーション区間を計算できませんでした。' : 'Simulated intervals could not be calculated.')};
+              window.morttrCalculationPhase = "error";
+              return;
+            }
+            const completedCutoff = Number(event.data.cutoff);
+            pendingSimulationCutoffs.delete(completedCutoff);
+            values = values.map(row => row.model === "poisson" && row.interval_method === "analytic" &&
+              Number(row.train_to) === completedCutoff ? {...row, auto_selected:false} : row).
+              filter(row => !(row.interval_method === "simulation" && Number(row.train_to) === completedCutoff)).
+              concat(event.data.values);
+            await result.view.change("morttr_values", vega.changeset().remove(() => true).insert(values)).runAsync();
+            if (pendingSimulationCutoffs.size === 0) {
+              calculationStatus.textContent = "";
+              calculationStatus.style.display = "none";
+              window.morttrCalculationPhase = "complete";
+            }
+          };
+          simulationWorker.postMessage({inputs:calculationInputs, options:{
+            cutoff:selectedCutoff, simulations:#{POISSON_SIMULATIONS}, trainingStart:#{$mortyear_training_start},
+            simulationLabel:#{JSON.generate($l == :ja ? 'シミュレーション' : 'Simulation')}
+          }});
+        };
+        window.morttrEnsurePoissonSimulation = ensurePoissonSimulation;
         if (calculationEngine === "js" && predictionDisplayAvailable && window.morttrCalc) {
           const status = calculationStatus;
           status.textContent = #{JSON.generate($l == :ja ? '予測区間などを計算しています…' : 'Calculating prediction intervals…')};
@@ -4207,9 +4248,15 @@ else
                 values = jsValues;
                 await result.view.change("morttr_values", vega.changeset().remove(() => true).insert(jsValues)).runAsync();
               }
+              browserAnalyticReady = true;
               window.morttrCalculationPhase = "complete";
-              status.textContent = "";
-              status.style.display = "none";
+              const simulationRequested = !primaryWeekly && document.querySelector(".model-option:checked")?.value === "poisson" &&
+                document.getElementById("simulation-interval-checkbox")?.checked;
+              if (simulationRequested) ensurePoissonSimulation(result.view.signal("train_to"));
+              else {
+                status.textContent = "";
+                status.style.display = "none";
+              }
             } catch (error) {
               console.warn(error);
               window.morttrCalculationPhase = "error";
@@ -4279,6 +4326,9 @@ else
           output.value = periodYearLabel(value);
           // updateDispersion(value); // 推定φは現在非表示。Estimated phi is currently hidden.
           result.view.signal("train_to", value).runAsync();
+          if (document.querySelector(".model-option:checked")?.value === "poisson" && simulationInterval.checked) {
+            ensurePoissonSimulation(value);
+          }
         });
         function syncModelControls(updateUrl = false) {
           const model = document.querySelector(".model-option:checked").value;
@@ -4289,6 +4339,7 @@ else
             history.replaceState(null, "", url);
           }
           simulationControl.style.display = model === "poisson" ? "" : "none";
+          if (model === "poisson" && simulationInterval.checked) ensurePoissonSimulation(result.view.signal("train_to"));
         }
         modelOptions.forEach(input => input.addEventListener("change", () => syncModelControls(true)));
         syncModelControls();
@@ -4349,6 +4400,7 @@ else
         simulationInterval.addEventListener("change", () => {
           const value = simulationInterval.checked ? "auto" : "analytic";
           result.view.signal("interval_mode", value).runAsync();
+          if (simulationInterval.checked) ensurePoissonSimulation(result.view.signal("train_to"));
           const url = new URL(window.location.href);
           url.searchParams.set("interval", value);
           history.replaceState(null, "", url);

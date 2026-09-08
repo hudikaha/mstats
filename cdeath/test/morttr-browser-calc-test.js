@@ -78,6 +78,32 @@ async function evaluate(socket, expression) {
     if (!state.rendered || (!browserComplete && !cacheComplete)) process.exitCode = 1;
     if (state.comparison && state.comparison.mismatches) process.exitCode = 1;
     if (browserComplete && (!phases.includes("observations") || phases.at(-1) !== "complete")) process.exitCode = 1;
+    const simulation = await evaluate(socket, `(() => {
+      const requested = document.querySelector(".model-option:checked")?.value === "poisson" &&
+        document.getElementById("simulation-interval-checkbox")?.checked;
+      if (!requested) return {requested:false};
+      const cutoff = Number(window.mortyearView.signal("train_to"));
+      const rows = window.mortyearView.data("morttr_values").filter(row =>
+        row.interval_method === "simulation" && Number(row.train_to) === cutoff);
+      const references = typeof rubyValues === "undefined" ? [] : rubyValues.filter(row =>
+        row.interval_method === "simulation" && Number(row.train_to) === cutoff);
+      const referenceByKey = new Map(references.map(row => [row.series + "|" + row.year, row]));
+      let compared = 0, maximumRelativeDifference = 0;
+      rows.forEach(row => {
+        const reference = referenceByKey.get(row.series + "|" + row.year);
+        if (!reference) return;
+        compared += 1;
+        ["pi_lower", "pi_upper"].forEach(field => {
+          maximumRelativeDifference = Math.max(maximumRelativeDifference,
+            Math.abs(Number(row[field]) - Number(reference[field])) / Math.max(1, Math.abs(Number(reference[field]))));
+        });
+      });
+      return {requested:true, cutoff, rows:rows.length,
+        valid:rows.length > 0 && rows.every(row => row.interval_style === "simulation" && row.pi_lower <= row.pi_upper),
+        compared, maximumRelativeDifference};
+    })()`);
+    if (simulation.requested && (!simulation.valid || (simulation.compared && simulation.maximumRelativeDifference > 0.03))) process.exitCode = 1;
+    console.log(JSON.stringify({simulation}));
     const zeroAxis = await evaluate(socket, `(() => {
       const checkbox = document.getElementById("zero-base-checkbox");
       const covid = document.getElementById("covid-overlay-checkbox");

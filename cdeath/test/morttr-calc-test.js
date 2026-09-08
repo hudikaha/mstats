@@ -24,6 +24,12 @@ annual.filter(row => row.model === "quasi_poisson").forEach(row => {
   if (!(row.pi99_lower <= row.pi_lower && row.pi99_upper >= row.pi_upper)) throw new Error("invalid 99% interval");
 });
 
+const simulated = morttrCalc.calculateAnnualSimulation([{series:"test",label:"Test",period:"calendar",
+  rows:annualRows,metadata:{loc:"test",category:"death",dcode:"allcause",sex:"both",ages:"age_all"}}],
+  {trainingStart:2000, cutoff:2018, simulations:200, simulationLabel:"Simulation"});
+if (simulated.length !== annualRows.length || simulated.some(row => row.interval_method !== "simulation" ||
+  row.model !== "poisson" || !(row.pi_lower <= row.pi_upper))) throw new Error("invalid scalar simulation result");
+
 const weeklyRows = [];
 for (let year = 2015; year <= 2021; year += 1) {
   for (let week = 1; week <= 52; week += 1) {
