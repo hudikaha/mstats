@@ -1,81 +1,172 @@
-# 公開URLパラメーターの規則
+# morttr.rb 公開URLパラメーター仕様案
 
 [English](URL_PARAMETERS.md) | 日本語
 
-グラフpageのURLには、同じグラフを共有・再現できるよう選択状態を保存します。`cod.rb`と
-`morttr.rb`では、複数の死因・年齢について次の形式を標準とします。
+この文書は、`morttr.rb`で同じグラフを共有・再現するための公開URLの整理案です。
+ここで示す短い正規名は、まだRubyへ実装していません。現在のURLとの対応は末尾の
+「旧URLからの移行」にまとめます。
 
 ## 基本規則
 
-- 短縮形式を定義した選択内容は、原則として一つのparameterへ格納します。
-- 連続しない複数値は`~`で区切ります。
-- 連続する年・年齢階級は、両端を含む範囲へ圧縮します。
-- 旧URLの反復parameterは読み込み互換として残しますが、form送信時には標準の短縮形式を生成します。
+- 一つの論理的な選択は一つのparameterへ格納します。
+- 複数値はliteralの`~`で連結します。`%7E`へescapeする必要はありません。
+- 年や年齢階級の範囲は両端を含みます。
+- 真偽値は有効時だけ`=1`を付け、無効時はparameter自体を省略します。
+- 既定値を省略しても同じグラフを再現できる場合、共有URLでは省略できます。
+- 適用できないparameterは無視し、次にURLを生成するときに除去します。
+- 正規名と旧名が同時に指定された場合は正規名を優先します。
+- parameterの依存関係は一つのtreeでは表せないため、各表の「適用条件」で示します。
 
-## 死因・症例
+## 基本選択
 
-一つの`dcodes` parameterを使い、複数codeを`~`で連結します。
+| parameter | 値 | 既定値 | 適用条件・意味 |
+|---|---|---|---|
+| `l` | `ja`, `en` | browser言語 | 表示言語 |
+| `mode` | `country`, `series` | `country` | 国・地域比較、または系列比較 |
+| `period` | `calendar`, `flu27`, `flu36`, `weekly` | `calendar` | 暦年、二種類のinfluenza年、週次 |
+| `metric` | `deaths`, `std`, `crude`, `asr`, `birth` | 年次は`asr`、週次は`deaths` | 実死亡数、標準人口換算死亡数、粗死亡率、年齢調整死亡率、出生関連死亡率 |
+| `ages` | `all`, `0`, 年齢階級・範囲 | `all` | 年齢選択。後述の形式を使う |
+| `sex` | `male`, `female` | 男女計（省略） | 男女別系列がある場合。`birth`では無視 |
+| `c` | 地域codeを`~`で連結 | 表示種別ごとの既定地域 | 国・地域選択 |
+| `dcodes` | 死因・症例codeを`~`で連結 | 全死因 | 死因または症例系列を選べる表示 |
+| `inc` | `1` | 無効（省略） | 癌罹患系列を含める場合 |
 
-```text
-dcodes=infant~perm
-dcodes=04000~05000~06000
-```
+### `mode`による選択数
 
-`morttr.rb`は旧名`death_codes`や反復parameterも読み込めますが、formから送信すると
-`dcodes`一つの上記形式になります。
+`mode`は他のparameterの単純な親ではありません。比較の単位に応じて、同じparameterが
+単一選択または複数選択になります。
 
-## 年齢
+| 選択対象 | `mode=country` | `mode=series` |
+|---|---|---|
+| `c` | 複数の国・地域 | 一つの国・地域 |
+| `ages`, `dcodes` | 共通条件として原則一つ | 複数系列を作成可 |
+| `algo`, `ref` | それぞれ一つ | それぞれ複数可。`~`で連結 |
+
+実際に選べる年齢、死因、指標、地域は、期間とdataの有無にも依存します。したがって、
+この表はparameterをtreeへ固定するものではなく、URL値の個数を定めるものです。
+
+### 期間をまたぐ適用条件
+
+| parameter群 | `calendar` | `flu27`, `flu36` | `weekly` |
+|---|---|---|---|
+| `mode`, `metric`, `ages`, `sex`, `c`, `dcodes` | 使用 | 使用。ただし元dataの選択肢に限定 | 使用。ただし元dataの選択肢に限定 |
+| `from` | 使用 | 使用 | 使用 |
+| `fit`, `family`, `interval` | 使用 | 使用 | 不使用 |
+| `algo`, `ref`, `cum`, `deficit` | 不使用 | 不使用 | 使用 |
+| `covid`, `vaxx` | 不使用 | 不使用 | 条件を満たす場合に使用 |
+| `zero` | 対象グラフがある場合に使用 | 対象グラフがある場合に使用 | 対象グラフがある場合に使用 |
+
+`metric`、`ages`、`sex`、重畳表示の可否は相互に関係します。詳細は各parameterの
+「適用条件」を正本とします。
+
+地域・指標・開始年を指定しない年次表示は、日本・英国・スウェーデン・米国の
+年齢調整死亡率を2000年から表示します。`period=weekly`だけを指定した場合は、
+日本・イングランド・スウェーデン・米国の週次死亡数を2015年から、
+Farrington型・2015–2019年固定基準で表示します。
+
+### 年齢と複数値
 
 単独の5歳階級内ではunderscoreを使い、連続しない階級は`~`で区切ります。
+連続する階級は最初の下限と最後の上限で圧縮します。
 
 ```text
 ages=00_04
 ages=00_04~10_14
+ages=00-09
+ages=00-99
+ages=80-100plus
 ```
 
-連続する階級は、最初の階級の下限と最後の階級の上限で圧縮します。
-
-```text
-ages=00-09       # 00_04と05_09
-ages=00-99       # 00_04から95_99
-ages=80-100plus  # 80_84から100plus
-```
-
-全年齢は`ages=all`、0歳のみは`ages=0`です。インフルエンザ年では、
+全年齢は`ages=all`、0歳のみは`ages=0`です。influenza年では、
 `ages=00-14~15-64`のように元dataの年齢階級を使います。
 
-互換性のため、`morttr.rb`は`age=age_00_04&age=age_05_09`のような旧形式も読み込めます。
-formから送信すると`ages=00-09`になります。
+## 表示期間と予測計算
 
-## 性別
+| parameter | 値 | 既定値 | 適用条件・意味 |
+|---|---|---|---|
+| `from` | `YYYY` | 年次2000、週次2015 | X軸の表示開始年 |
+| `fit` | `YYYY` | 暦年2019、influenza年2018 | 年次・influenza年の予測モデルに使う学習終了年 |
+| `family` | `quasi`, `poisson` | `quasi` | 年次・influenza年の分布・分散モデル |
+| `interval` | `approx`, `sim` | `sim` | 予測区間の計算法。Poissonでは近似またはsimulation。準Poissonは実質的に`approx` |
 
-`morttr.rb`の男女別系列は`sex=male`または`sex=female`で指定します。男女計は既定値のため、
-標準URLでは`sex`を省略します。出生関連死亡率は男女別にせず、`sex`指定があっても男女計として扱います。
+`family`は確率分布・分散の仮定、`interval`は区間を求める計算法を表します。
+週次のFarrington型やEuroMOMO型は、この二つとは別に`algo`で指定します。
 
-## 年
+## 週次の基準と累積
 
-複数年を個別選択できるpageでは、年にも同じ区切り・範囲規則を使います。
+| parameter | 値 | 既定値 | 適用条件・意味 |
+|---|---|---|---|
+| `algo` | `mean`, `farrington`, `euromomo` | `farrington` | `period=weekly`の期待値・予測区間algorithm |
+| `ref` | `YYYY-YYYY`, `prevN` | `2015-2019` | `period=weekly`の基準期間。固定年範囲、または各年の直前N年 |
+| `cum` | `YYYY` | `2021` | `period=weekly`の累積超過・過少死亡の開始年 |
+| `deficit` | `1` | 無効（省略） | 負の差を週次推移と累積へ含める |
+
+`cum`は基準期間を決める`ref`とは独立です。たとえば、2015–2019年を基準にして
+2020年から累積する場合は`ref=2015-2019&cum=2020`とします。省略時は2021年から
+累積します。
+
+`ref=2014-2018`のような任意の固定5年間に加え、将来は`ref=prev3`から
+`ref=prev10`までを受け付ける方針とします。menuは代表的なpresetだけを提示しても
+構いません。`algo=mean`でも平均年数は`ref`が決めるため、algorithm名に`5`を含めません。
+
+## グラフ付近の表示control
+
+| parameter | 値 | 既定値 | 適用条件・意味 |
+|---|---|---|---|
+| `zero` | `1` | 無効（省略） | 対象グラフのY軸を0から表示 |
+| `covid` | `1` | 無効（省略） | 週次、男女計、全年齢かつ`deaths`または`crude`でCOVID-19死亡を重ねる。`asr`では使用不可 |
+| `vaxx` | `1` | 無効（省略） | 週次でdataがある場合にワクチン接種を重ねる。`asr`でも使用可 |
+
+表示条件を切り替えてcontrolが一時的に使えなくなった場合、その選択状態は画面内では
+保持できます。ただし、共有URLを正規化するときは、現在の表示へ適用できないparameterを
+除去します。補助的な週次・月次表示の切替えは、意図的にURLへ保存しません。
+
+## 開発・debug用
+
+`calc=ruby|js`はRuby経路とJavaScript経路を比較するための開発用parameterです。
+一般利用者向けのcontrolにはせず、正規の共有URLには含めません。
+
+## 正規URLの例
+
+指定を明記した週次URL:
 
 ```text
-years=2021-2025
-years=2019~2021-2025
+morttr.rb?l=ja&mode=country&period=weekly&metric=asr&ages=all&c=jpn~swe~gbr&algo=farrington&ref=prev5&cum=2021&vaxx=1
 ```
 
-これらはURL上の表現であり、Elasticsearch document IDの要素とは別です。
+既定値を省略した同等の短縮URL:
 
-## 週次の過少死亡
+```text
+morttr.rb?l=ja&period=weekly&metric=asr&c=jpn~swe~gbr&ref=prev5&vaxx=1
+```
 
-`morttr.rb`の週次表示では、`include_deficit=1`を指定すると、基準線を下回る週の負の差を
-推移と累積の両方へ含めます。このparameterがない場合は負の差を0として、従来の累積超過死亡を
-表示します。
+## 旧URLからの移行
 
-## グラフ表示control
+以下は読み込み互換のために受け付ける旧名・旧値です。form送信や共有URL生成では
+左側を出力せず、右側の正規形式へ変換します。
 
-`morttr.rb`のグラフだけに作用する表示controlは、`zero_base=1`、`covid_overlay=1`、
-`vaxx_overlay=1`でURLへ保存します。モデルは`chart_model=quasi_poisson`または
-`chart_model=poisson`、区間は`interval=auto`または`interval=analytic`です。
-補助的な週次・月次表示の切替えは、意図的にURLへ保存しません。
-
-地域・指標・開始年を指定しない年次表示は、日本・英国・スウェーデン・米国の年齢調整死亡率を
-2000年から表示します。`period=weekly`だけを指定した場合は、日本・イングランド・
-スウェーデン・米国の週次死亡数を2015年から、Farrington型・2015–2019年基準で表示します。
+| 旧指定 | 正規指定 |
+|---|---|
+| `age=age_00_04`などの反復 | `ages=00_04`などを`~`または範囲で統合 |
+| `death_codes`または反復した死因parameter | `dcodes`一つへ`~`で統合 |
+| `include_incidence=1` | `inc=1` |
+| `start_year=YYYY` | `from=YYYY` |
+| `train_to=YYYY` | `fit=YYYY` |
+| `chart_model=quasi_poisson` | `family=quasi` |
+| `chart_model=poisson` | `family=poisson` |
+| `interval=analytic` | `interval=approx` |
+| `interval=auto` | `interval=sim` |
+| `weekly_method=five_year` | `algo=mean` |
+| `weekly_method=farrington` | `algo=farrington` |
+| `weekly_method=euromomo` | `algo=euromomo` |
+| `weekly_baseline=fixed_2015_2019`または`fixed` | `ref=2015-2019` |
+| `weekly_baseline=fixed_2016_2020` | `ref=2016-2020` |
+| `weekly_baseline=rolling` | `ref=prev5` |
+| `include_deficit=1` | `deficit=1` |
+| `zero_base=1` | `zero=1` |
+| `covid_overlay=1` | `covid=1` |
+| `vaxx_overlay=1` | `vaxx=1` |
+| `metric=crude_rate` | `metric=crude` |
+| `metric=std_deaths` | `metric=std` |
+| `metric=birth_rate` | `metric=birth` |
+| `sex=both` | `sex`を省略 |
