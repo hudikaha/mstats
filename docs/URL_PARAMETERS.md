@@ -72,9 +72,9 @@ Farrington-style algorithm and the fixed 2015–2019 reference period.
 
 ### Ages and multiple values
 
-Use an underscore inside a single five-year age-band key and `~` between
-non-contiguous bands. Compress contiguous bands using the first lower bound and
-the last upper bound.
+Use an underscore inside a single five-year age-band key and join multiple
+selected values with `~`. Contiguous bands may instead be compressed into a
+range using the first lower bound and the last upper bound.
 
 ```text
 ages=00_04
