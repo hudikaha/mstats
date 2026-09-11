@@ -131,6 +131,18 @@ retained within the page. Canonicalizing a shared URL removes parameters that
 do not apply to the current view. The optional detailed weekly/monthly view is
 intentionally not persisted in the URL.
 
+## Embedding in an iframe
+
+Use `i=1`, `i=on`, or `i=true` (case-insensitive) to display only the graphs.
+Omitting `i`, or using `i=0`, `i=off`, `i=false`, or any other value, displays the normal page.
+This mode hides the menu, page heading, controls, download buttons, explanatory notes,
+and source sections. The usual URL parameters still select the graph conditions;
+rendering/calculation status and errors remain visible.
+
+```text
+morttr.rb?i=1&period=weekly&c=jpn
+```
+
 ## Development and debugging
 
 `calc=ruby|js` selects the Ruby or JavaScript path for comparison during

@@ -176,3 +176,12 @@ GUI非掲載の`death__excess`は検査対象外とする。
 
 正式名は`ruby cdeath/bin/test-web.rb --formal`および
 `node cdeath/bin/test-web-dom.js --formal`で、同じ検査定義を使う。
+
+## iframe表示のローカル回帰検査
+
+remote debuggingを有効にしたChrome（既定port 9224）を使用する。
+`make -C cdeath morttr-iframe-check`で正式版を検査し、開発版には
+`MORTTR="$PWD/web/morttr2.rb"`を指定する。portは`CHROME_PORT`で変更できる。
+合成した年次・週次dataを実際のiframe内で描画し、`i=1/on/true`（大文字も含む）と
+無効値での操作欄・menuの表示、loadingの消去、通常表示との系列一致を確認する。
+この検査は本番dataを取得・変更しない。

@@ -798,6 +798,11 @@ morttr-check:
 	@node "$(ROOT)/bin/test-web-dom.js" --ids MY01,MY31,MY32,MY33
 	@node "$(ROOT)/bin/test-web-actions.js" --ids MY31
 
+.PHONY: morttr-iframe-check
+morttr-iframe-check:
+	@ruby -c "$(MORTTR)"
+	@node "$(ROOT)/test/morttr-iframe-test.js" "$(MORTTR)"
+
 morttr-calc-check:
 	@node --check "$(ROOT)/../web/morttr-calc.js"
 	@node --check "$(ROOT)/../web/morttr-sim-worker.js"

@@ -275,6 +275,9 @@ $l = if requested_language.match?(/^(en|english)/i) ||
      else
        :ja
      end
+# 日本語: iframeではグラフだけを表示する。操作状態は描画処理と共有する。
+# English: Show only graphs in iframe mode, retaining control state for rendering.
+iframe = %w[1 on true].include?(cgi['i'].downcase)
 mode = cgi['mode'] == 'series' ? 'series' : 'country'
 calculation_request = %w[ruby js].include?(cgi['calc']) ? cgi['calc'] : 'auto'
 $mortyear_cache_miss = false
@@ -2929,7 +2932,7 @@ title = if selected_dataset == 'cancer-incidence'
         else
           $l == :ja ? '各国・各地域の死亡数・死亡率と予測区間' : 'Deaths, mortality rates, and prediction intervals by country and area'
         end
-print_header(title: title, iframe: false)
+print_header(title: title, iframe: iframe)
 
 def checked(condition)
   condition ? 'checked' : ''
@@ -2971,8 +2974,10 @@ puts <<~HTML
     #train-to-slider { width:50px; }
     .mortyear-loading { min-height:12em; display:flex; align-items:center; justify-content:center; font-size:1.2em; font-weight:bold; }
   </style>
+  <div#{iframe ? ' hidden' : ''}>
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
+    #{iframe ? %(<input type="hidden" name="i" value="1">) : ''}
     #{calculation_request == 'auto' ? '' : %(<input type="hidden" name="calc" value="#{calculation_request}">)}
     <input id="train-to-hidden" type="hidden" name="fit" value="#{default_cutoff}">
     <input id="start-year-hidden" type="hidden" name="from" value="#{default_start_year}">
@@ -3603,6 +3608,7 @@ puts <<~HTML
     }());
   </script>
 HTML
+puts '</div>'
 
 if chart_data.empty?
   message = $l == :ja ? '学習に使える完全な暦年が4年以上そろう系列がありません。条件を変更してください。' : 'No series has at least four complete calendar years for training. Change the selection.'
@@ -3974,6 +3980,7 @@ else
                      end
   end
   puts <<~HTML
+    <div#{iframe ? ' hidden' : ''}>
     <p id="mortyear-controls" style="text-align:left">
       <label>#{ $l == :ja ? '表示開始年' : 'Display from' }
         <input id="start-year-slider" type="range" min="1950" max="2020" step="1" value="#{default_start_year}">
@@ -4028,6 +4035,7 @@ else
         #{ $l == :ja ? 'シミュレーション区間を表示' : 'Show simulated interval' }
       </label>
     </p>
+    </div>
     <p id="morttr-calculation-status" role="status" style="text-align:center">#{
       calculation_engine == 'js' || !prediction_display_available ?
         ($l == :ja ? '観測値描画中……' : 'Rendering observations…') :
@@ -4486,6 +4494,7 @@ else
         });
       }).catch(console.warn);
     </script>
+    <div#{iframe ? ' hidden' : ''}>
     <p class="mortyear-downloads" style="text-align:center">
       <button id="mortyear-download-csv" type="button">#{ $l == :ja ? 'CSVをダウンロード' : 'Download CSV' }</button>
       <button id="mortyear-download-json" type="button">JSON</button>
@@ -4650,12 +4659,12 @@ else
       <ul>#{source_items}</ul>
       #{method_notes}
     </section>
+    </div>
   HTML
 end
 
+puts "</div></div>" unless iframe
 puts <<~HTML
-  </div>
-  </div>
   </body>
   </html>
 HTML
