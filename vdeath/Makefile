@@ -43,3 +43,18 @@ upload: check
 	@cd "$(LIB_DIR)" && \
 	 $(RSYNC) $(RSYNC_FLAGS) $(LIB_FILES) "$(SERVER):$(SERVER_WEB_DIR)/lib/"
 	@ssh "$(SERVER)" 'cd "$(SERVER_WEB_DIR)" && ruby -c kcor.rb && ruby -c vdeath.rb && ruby -c vdeathmiss.rb && ruby -c afterdose.rb && ruby -c lib/missing_history.rb'
+
+# 検証版だけを検査・配備する。正式版の配備targetには含めない。
+# Check/deploy only the trial page; keep it out of the formal upload target.
+.PHONY: vdeath2-check vdeath2-upload vdeath2-dom-check
+vdeath2-check:
+	@ruby -c "$(WEB_DIR)/vdeath2.rb"
+	@ruby -c "$(ROOT)/test/test_vdeath2.rb"
+	@ruby "$(ROOT)/test/test_vdeath2.rb"
+
+vdeath2-upload: vdeath2-check
+	@scp "$(WEB_DIR)/vdeath2.rb" "$(SERVER):$(SERVER_WEB_DIR)/vdeath2.rb.new"
+	@ssh "$(SERVER)" 'cd "$(SERVER_WEB_DIR)" && ruby -c vdeath2.rb.new && chmod 755 vdeath2.rb.new && mv vdeath2.rb.new vdeath2.rb'
+
+vdeath2-dom-check:
+	@node "$(ROOT)/test/test_vdeath2_dom.js"

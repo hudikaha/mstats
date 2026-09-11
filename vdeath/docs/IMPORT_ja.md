@@ -82,3 +82,22 @@ make publish-cumd # 検査済みCUMD-WKをxz圧縮して公開directoryへ転送
 [`vdeath.rb`](https://medicalfacts.info/vdeath.rb)のデフォルト表示は、公開用に匿名化する前の非公開日単位CSVから計算した、より精度の高い系列です。ページの`src`オプションで、公開`indiv`の日付を人物・ISO週ごとに週内分散して再解析した匿名化データ系列も表示できます。死亡者のみの`indivdth`も同じ匿名化形式です。両者を比較することで、週単位匿名化による集計差を確認できます。
 
 週次化されたevent日には、seed、地域code、人物ID、ISO週のSHA-256から月曜〜日曜を割り当てる。同じ人物・同じ週の接種、死亡、転入、転出は同じ日になるため、週内で人工的な前後関係を作らない。この再構成により、全eventを日曜日へ集中させたときの4週月・5週月による周期的な差を抑える。
+
+## vdeath2.rbでの日チェコ合算検査
+
+検証版`vdeath2.rb`は日本の自治体とチェコを同時選択できる。`src=org`と`src=anon`は
+日本の取得系列を切り替え、チェコはどちらでも既存の公式個票由来の無接頭辞系列を使う。
+チェコのCSVやElasticsearch recordを複製せず、CGI内で両方の選択に対応する。
+
+「選択地域合算」は選択した地域に実在する期間・年齢・接種回数の区分ごとに死亡数・人日・
+人数を加算し、死亡率とリスク比を再計算する。浜松市にない区分も残す。対象地域の収録期間が
+異なる場合、その区分にdataがある地域だけの合算になる。対応する未接種recordがない区分の
+リスク比は欠測とする。正式版`vdeath.rb`は変更しない。
+
+```sh
+make -C vdeath vdeath2-check       # 合成dataで系列選択・合算値を検査
+make -C vdeath vdeath2-upload      # 検証版だけを配備
+make -C vdeath vdeath2-dom-check   # Chrome remote debugging port 9224で描画・操作検査
+```
+
+ブラウザー検査は`VDEATH2_BASE`で検証先URL、`CHROME_PORT`でdebug portを変更できる。

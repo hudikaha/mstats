@@ -109,3 +109,24 @@ a weekday from Monday through Sunday. Vaccination, death, entry, and exit events
 the same person and week receive the same date, avoiding an artificial within-week
 ordering. This reconstruction reduces the periodic four-week/five-week-month difference
 caused by concentrating every event on Sunday.
+
+## Testing combined Japanese and Czech data in vdeath2.rb
+
+The trial `vdeath2.rb` allows Czechia and Japanese municipalities to be selected together.
+`src=org` and `src=anon` select the Japanese source series; both use the existing
+unprefixed Czech official-record series. The CGI supports both choices without
+duplicating Czech CSVs or Elasticsearch records.
+
+“All selected areas” adds deaths, person-days, and people for each period/age/dose
+group actually present in the selected areas, then recalculates mortality and risk
+ratios. Groups absent from Hamamatsu are retained. When coverage differs, only areas
+with data in that group contribute. A missing unvaccinated reference yields a missing
+risk ratio. The formal `vdeath.rb` remains unchanged.
+
+```sh
+make -C vdeath vdeath2-check       # Verify source selection and sums with synthetic data
+make -C vdeath vdeath2-upload      # Deploy only the trial page
+make -C vdeath vdeath2-dom-check   # Rendering/interaction checks with Chrome debugging on port 9224
+```
+
+Set `VDEATH2_BASE` to change the test URL and `CHROME_PORT` to change the debugging port.
