@@ -145,9 +145,12 @@ morttr.rb?i=1&period=weekly&c=jpn
 
 ## URL-only graph dimensions
 
-`height=200` sets each panel's plotting height to 200 px, excluding titles and axes.
-Use an integer of at least 50. If omitted or invalid, the existing defaults remain:
-260 px for the main panel and 115 px for each weekly excess/cumulative panel.
+`height=200` sets the main panel's plotting height to 200 px, excluding titles and axes.
+Each weekly excess/cumulative panel is half the main panel height (100 px in this example),
+with a minimum of 50 px for every panel. Integer values below 50 are clamped to 50.
+Thus `height=40` gives 50/50/50 px, `height=80` gives 80/50/50 px, and `height=200` gives
+200/100/100 px. If omitted or invalid, the defaults are 200/100/100 px.
+Odd heights retain the half-pixel ratio when the minimum does not apply.
 
 `width=800` or `width=800px` sets the chart container width to 800 px; `width=80%`
 uses 80% of the parent content area's width and follows resizing. Axis margins

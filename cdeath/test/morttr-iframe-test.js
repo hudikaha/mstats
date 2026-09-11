@@ -88,11 +88,11 @@ async function inspect(url, embedded, dimensions = {}) {
     assert.deepEqual(state.panelSizes.map(size => size[1]), state.heights, 'Rendered panel height differs from requested height');
     assert.equal(state.editableDimensions, 0, 'Dimensions must have no editable form controls');
     if (dimensions.height >= 50) {
-      assert(state.heights.every(height => height === dimensions.height), 'Wrong panel height');
+      assert(state.heights.every((height, i) => height === (new URL(url).searchParams.get('period') === 'weekly' && i % 3 !== 0 ? Math.max(50, dimensions.height / 2) : dimensions.height)), 'Wrong panel height ratio');
       assert.equal(state.formDimensions.height, String(dimensions.height));
     } else {
-      assert.equal(state.heights[0], 260);
-      assert(state.heights.slice(1).every(height => height === 115));
+      assert.equal(state.heights[0], 200);
+      assert(state.heights.slice(1).every(height => height === 100));
       assert.equal(state.formDimensions.height, undefined);
     }
     if (dimensions.width) {
@@ -127,8 +127,11 @@ async function inspect(url, embedded, dimensions = {}) {
       for (const [extra, dimensions] of [
         ['&height=50&width=800', {height:50,width:'800px'}],
         ['&height=200&width=80%', {height:200,width:'80%'}],
-        ['&height=400&width=650px', {height:400,width:'650px'}],
-        ['&height=49&width=bad', {}],
+        ['&height=201&width=650px', {height:201,width:'650px'}],
+        ['&height=49&width=bad', {height:50}],
+        ['&height=80', {height:80}],
+        ['&height=0', {height:50}],
+        ['&height=-10', {height:50}],
         ['&height=bad&width=0', {}]
       ]) cases.push({value,extra,dimensions});
     }

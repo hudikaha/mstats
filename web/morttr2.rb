@@ -278,9 +278,9 @@ $l = if requested_language.match?(/^(en|english)/i) ||
 # 日本語: iframeではグラフだけを表示する。操作状態は描画処理と共有する。
 # English: Show only graphs in iframe mode, retaining control state for rendering.
 iframe = %w[1 on true].include?(cgi['i'].downcase)
-# 日本語: 寸法はURL専用。高さは各panelのpx、幅は描画領域のpxまたは親要素に対する%。
-# English: URL-only dimensions: panel height in px and chart-container width in px or percent.
-chart_height = cgi['height'].match?(/\A\d+\z/) && cgi['height'].to_i >= 50 ? cgi['height'].to_i : nil
+# 日本語: 寸法はURL専用。高さは主panelのpx、幅は描画領域のpxまたは親要素に対する%。
+# English: URL-only dimensions: main-panel height in px and chart-container width in px or percent.
+chart_height = cgi['height'].match?(/\A[+-]?\d+\z/) ? [cgi['height'].to_i, 50].max : nil
 chart_width = if cgi['width'].match?(/\A\d+(?:\.\d+)?(?:px|%)?\z/) && cgi['width'].to_f.positive?
                 cgi['width'].match?(/(?:px|%)\z/) ? cgi['width'] : "#{cgi['width']}px"
               end
@@ -4130,7 +4130,7 @@ else
       const predictionTransforms = [...annualTransforms, {filter: "datum.year >= training_start"}];
       const panelSpecs = panels.map(([key, label, panelLoc]) => ({
         title: {text: label, anchor: "start"},
-        width: initialPlotWidth, height: #{chart_height || 260},
+        width: initialPlotWidth, height: #{chart_height || 200},
         transform: [
           {filter: `datum.series == '${key}'`}
         ],
@@ -4163,7 +4163,7 @@ else
       }));
       const excessPanelSpec = (key, cumulative) => ({
         title:{text:{expr:cumulative ? "include_deficit ? deficit_cumulative_title : excess_cumulative_title" : "include_deficit ? deficit_trend_title : excess_trend_title"},anchor:"start",fontSize:15},
-        width:initialPlotWidth,height:#{chart_height || 115},
+        width:initialPlotWidth,height:#{[(chart_height || 200) / 2.0, 50].max},
         data:{name:"morttr_weekly_values"},
         transform:[
           {filter:`datum.series == '${key}'`},
