@@ -278,6 +278,12 @@ $l = if requested_language.match?(/^(en|english)/i) ||
 # 日本語: iframeではグラフだけを表示する。操作状態は描画処理と共有する。
 # English: Show only graphs in iframe mode, retaining control state for rendering.
 iframe = %w[1 on true].include?(cgi['i'].downcase)
+# 日本語: 寸法はURL専用。高さは各panelのpx、幅は描画領域のpxまたは親要素に対する%。
+# English: URL-only dimensions: panel height in px and chart-container width in px or percent.
+chart_height = cgi['height'].match?(/\A\d+\z/) && cgi['height'].to_i >= 50 ? cgi['height'].to_i : nil
+chart_width = if cgi['width'].match?(/\A\d+(?:\.\d+)?(?:px|%)?\z/) && cgi['width'].to_f.positive?
+                cgi['width'].match?(/(?:px|%)\z/) ? cgi['width'] : "#{cgi['width']}px"
+              end
 mode = cgi['mode'] == 'series' ? 'series' : 'country'
 calculation_request = %w[ruby js].include?(cgi['calc']) ? cgi['calc'] : 'auto'
 $mortyear_cache_miss = false
@@ -2978,6 +2984,8 @@ puts <<~HTML
   <form class="mortyear-form" method="get">
     <input type="hidden" name="l" value="#{$l}">
     #{iframe ? %(<input type="hidden" name="i" value="1">) : ''}
+    #{chart_height ? %(<input type="hidden" name="height" value="#{chart_height}">) : ''}
+    #{chart_width ? %(<input type="hidden" name="width" value="#{chart_width}">) : ''}
     #{calculation_request == 'auto' ? '' : %(<input type="hidden" name="calc" value="#{calculation_request}">)}
     <input id="train-to-hidden" type="hidden" name="fit" value="#{default_cutoff}">
     <input id="start-year-hidden" type="hidden" name="from" value="#{default_start_year}">
@@ -4041,7 +4049,7 @@ else
         ($l == :ja ? '観測値描画中……' : 'Rendering observations…') :
         ($l == :ja ? '観測値と予測区間などを描画中……' : 'Rendering observations and prediction intervals…')
     }</p>
-    <div id="mortyear-vis"></div>
+    <div id="mortyear-vis"#{chart_width ? %( style="width:#{chart_width};max-width:none") : ''}></div>
     <script src="morttr-calc.js"></script>
     <script>
       const rubyValues = #{JSON.generate(chart_data)};
@@ -4069,10 +4077,10 @@ else
       const detailSeries = #{JSON.generate(detail_series)};
       const mortyearVis = document.getElementById("mortyear-vis");
       const calculationStatus = document.getElementById("morttr-calculation-status");
-      // 日本語: 両Y軸のextentを確保し、狭い画面でもplot本体を320px以上残す。
-      // English: Reserve both Y-axis extents and retain at least 320px for the plot.
-      const requestedPanelWidth = width => Math.max(320, width - 168);
-      const initialPlotWidth = requestedPanelWidth(mortyearVis.parentElement.clientWidth);
+      // 日本語: 両Y軸の余白を確保する。幅未指定時だけplot本体を320px以上残す。
+      // English: Reserve both Y-axis extents; keep a 320px minimum plot only without an explicit width.
+      const requestedPanelWidth = width => Math.max(#{chart_width ? 1 : 320}, width - 168);
+      const initialPlotWidth = requestedPanelWidth(mortyearVis.clientWidth);
       const displayStartDefault = #{default_start_year};
       const trainMin = #{cutoffs.min};
       const trainMax = #{cutoffs.max};
@@ -4122,7 +4130,7 @@ else
       const predictionTransforms = [...annualTransforms, {filter: "datum.year >= training_start"}];
       const panelSpecs = panels.map(([key, label, panelLoc]) => ({
         title: {text: label, anchor: "start"},
-        width: initialPlotWidth, height: 260,
+        width: initialPlotWidth, height: #{chart_height || 260},
         transform: [
           {filter: `datum.series == '${key}'`}
         ],
@@ -4155,7 +4163,7 @@ else
       }));
       const excessPanelSpec = (key, cumulative) => ({
         title:{text:{expr:cumulative ? "include_deficit ? deficit_cumulative_title : excess_cumulative_title" : "include_deficit ? deficit_trend_title : excess_trend_title"},anchor:"start",fontSize:15},
-        width:initialPlotWidth,height:115,
+        width:initialPlotWidth,height:#{chart_height || 115},
         data:{name:"morttr_weekly_values"},
         transform:[
           {filter:`datum.series == '${key}'`},
@@ -4340,7 +4348,7 @@ else
         window.addEventListener("resize", () => {
           clearTimeout(resizeTimer);
           resizeTimer = setTimeout(() => {
-            const width = requestedPanelWidth(mortyearVis.parentElement.clientWidth);
+            const width = requestedPanelWidth(mortyearVis.clientWidth);
             if (Math.abs(result.view.width() - width) > 1) result.view.width(width).runAsync();
           }, 300);
         });

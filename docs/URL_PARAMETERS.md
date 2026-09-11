@@ -143,6 +143,24 @@ rendering/calculation status and errors remain visible.
 morttr.rb?i=1&period=weekly&c=jpn
 ```
 
+## URL-only graph dimensions
+
+`height=200` sets each panel's plotting height to 200 px, excluding titles and axes.
+Use an integer of at least 50. If omitted or invalid, the existing defaults remain:
+260 px for the main panel and 115 px for each weekly excess/cumulative panel.
+
+`width=800` or `width=800px` sets the chart container width to 800 px; `width=80%`
+uses 80% of the parent content area's width and follows resizing. Axis margins
+are included in this width. Positive numbers are accepted; omitted or invalid
+values retain the default responsive width. A fixed width can overflow a narrow iframe.
+
+These options work in both normal and iframe views. There are no editable form
+controls for them; valid values are retained as hidden fields on form submission.
+
+```text
+morttr.rb?i=1&period=weekly&c=jpn&height=200&width=80%
+```
+
 ## Development and debugging
 
 `calc=ruby|js` selects the Ruby or JavaScript path for comparison during

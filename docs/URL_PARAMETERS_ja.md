@@ -134,6 +134,23 @@ ages=80-100plus
 morttr.rb?i=1&period=weekly&c=jpn
 ```
 
+## URL専用のグラフ寸法
+
+`height=200`で各panelの描画領域を高さ200pxにします（見出し・軸の余白は別）。
+50以上の整数を指定します。省略・不正値の場合は従来どおり、主panelは260px、
+週次の超過死亡・累積panelは各115pxです。
+
+`width=800`または`width=800px`でグラフ領域全体の幅を800pxにします。
+`width=80%`では親の本文領域の80%となり、リサイズにも追従します。幅には軸の余白を含みます。
+正の数を受け付け、省略・不正値の場合は従来の可変幅です。固定幅は狭いiframeからはみ出す場合があります。
+
+通常表示・iframe表示の両方で使用できます。formに編集可能な入力欄は設けず、
+有効な指定値だけhidden fieldで再送信時にも保持します。
+
+```text
+morttr.rb?i=1&period=weekly&c=jpn&height=200&width=80%
+```
+
 ## 開発・debug用
 
 `calc=ruby|js`はRuby経路とJavaScript経路を比較するための開発用parameterです。
