@@ -1,7 +1,11 @@
 # 公開読取APIと同じ制限を、server-side CGIからloopbackで使用する。
 # Expose the public read-only API restrictions to server-side CGI on loopback.
+# 8080はWordPress等の他serviceと衝突しやすく、9200〜9400はElasticsearch自身のHTTP・transport範囲なので9401を使う。
+# CGI側の既定値は lib/mfacts.rb の PUBLIC_ELASTIC_URL。別番号にする場合は環境変数 MSTATS_ELASTIC_URL で合わせる。
+# Use 9401: 8080 often collides with other services and 9200-9400 are Elasticsearch's own HTTP/transport ranges.
+# The CGI default is PUBLIC_ELASTIC_URL in lib/mfacts.rb; set MSTATS_ELASTIC_URL when another port is used.
 server {
-  listen 127.0.0.1:8080;
+  listen 127.0.0.1:9401;
   server_name localhost;
 
   include /etc/nginx/snippets/medicalfacts-elastic.conf;

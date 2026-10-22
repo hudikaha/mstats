@@ -187,16 +187,32 @@ PUBLIC_ELASTIC_INDEXES = {
     'enmort' => 'enmort'
 }.freeze
 
+# 公開datasetを読むloopback専用Nginx listenerの基底URL。環境変数で上書きできる。
+# 8080はWordPress等と衝突しやすく、9200〜9400はElasticsearch自身の範囲なので9401を既定とする。
+# Base URL of the loopback-only Nginx listener for public datasets; override via environment.
+# 8080 often collides with other services and 9200-9400 belong to Elasticsearch, so 9401 is the default.
+PUBLIC_ELASTIC_URL = ENV.fetch('MSTATS_ELASTIC_URL', 'http://localhost:9401/elastic').sub(%r{/+\z}, '').freeze
+
+# 管理accountで直接読む非公開Elasticsearch HTTP endpoint。移行検査用。
+# Direct Elasticsearch HTTP endpoint read with the admin account; used for migration checks.
+DIRECT_ELASTIC_URL = ENV.fetch('MSTATS_ES_URL', 'http://localhost:9200').sub(%r{/+\z}, '').freeze
+
+# index名から検索URIと公開経路かどうかを返す。公開aliasはloopback proxy、未登録名は9200直接。
+# Resolve the search URI for an index name; public aliases use the loopback proxy, others go to 9200.
+def elastic_search_uri(index)
+    public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
+    uri = if public_index
+              URI.parse("#{PUBLIC_ELASTIC_URL}/#{public_index}/_search")
+          else
+              URI.parse("#{DIRECT_ELASTIC_URL}/#{index}/_search")
+          end
+    [uri, !public_index.nil?]
+end
+
 # Elasticsearchを検索し、Symbolキーの統一レコード配列を返す。
 # Query Elasticsearch and return a canonical array of symbol-keyed records.
 def elastic_search(**opts)
-    requested_index = opts[:index].to_s
-    public_index = PUBLIC_ELASTIC_INDEXES[requested_index]
-    uri = if public_index
-              URI.parse("http://localhost:8080/elastic/#{public_index}/_search")
-          else
-              URI.parse("http://localhost:9200/#{requested_index}/_search")
-          end
+    uri, public_index = elastic_search_uri(opts[:index])
     request = Net::HTTP::Post.new(uri)
     elastic_basic_auth(request) unless public_index
     request.content_type = "application/json"

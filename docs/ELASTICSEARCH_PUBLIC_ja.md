@@ -6,8 +6,11 @@
 Elasticsearch自体の認証は維持し、browserやAPI clientには認証情報を渡しません。
 
 server-side CGIは外部DNSやTLSを経由せず、loopback専用listener
-`http://localhost:8080/elastic/`から同じ読取専用APIを使用します。公開datasetを読むCGIは
-`espass.txt`を使用しません。
+`http://localhost:9401/elastic/`から同じ読取専用APIを使用します。公開datasetを読むCGIは
+`espass.txt`を使用しません。listenerの番号は、8080がWordPressなどと衝突しやすく、
+9200〜9400がElasticsearch自身のHTTP・transport範囲であるため9401としています。
+別の番号にする場合は、CGIの環境変数`MSTATS_ELASTIC_URL`（例:
+`http://localhost:9401/elastic`）をnginx設定と合わせます。
 
 ```text
 公開名  Elasticsearchでの接続先

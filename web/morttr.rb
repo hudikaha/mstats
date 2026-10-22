@@ -428,12 +428,7 @@ def available_location_rates(index:, fixture:)
     return rates
   end
 
-  public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
-  uri = if public_index
-          URI.parse("http://localhost:8080/elastic/#{public_index}/_search")
-        else
-          URI.parse("http://localhost:9200/#{index}/_search")
-        end
+  uri, public_index = elastic_search_uri(index)
   request = Net::HTTP::Post.new(uri)
   request.content_type = 'application/json'
   elastic_basic_auth(request) unless public_index
@@ -480,8 +475,7 @@ def available_annual_catalog(index:, fixture:)
     end
   end
 
-  public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
-  uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
+  uri, public_index = elastic_search_uri(index)
   request = Net::HTTP::Post.new(uri)
   request.content_type = 'application/json'
   elastic_basic_auth(request) unless public_index
@@ -602,8 +596,7 @@ def available_dcodes(index:, fixture:, locations:, metric:)
       locations.include?(row[:loc].to_s.upcase) && row[:yearweek] && row[:rate].to_s == wanted_rate
     end.map { |row| row[:dcode].to_s }.uniq.sort
   end
-  public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
-  uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
+  uri, public_index = elastic_search_uri(index)
   request = Net::HTTP::Post.new(uri)
   request.content_type = 'application/json'
   elastic_basic_auth(request) unless public_index
@@ -632,8 +625,7 @@ def available_annual_dcodes(index:, fixture:, locations:, metric:)
         (!$mortyear_types || $mortyear_types.include?(row[:type].to_s)) && row[:rate].to_s == wanted_rate
     end.map { |row| row[:dcode].to_s }.reject(&:empty?).uniq.sort
   end
-  public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
-  uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
+  uri, public_index = elastic_search_uri(index)
   request = Net::HTTP::Post.new(uri)
   request.content_type = 'application/json'
   elastic_basic_auth(request) unless public_index

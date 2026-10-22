@@ -7,8 +7,12 @@ HTTPS and nginx. Elasticsearch remains authenticated; browsers and API clients
 do not receive Elasticsearch credentials.
 
 Server-side CGI uses the same read-only API through the loopback-only listener
-at `http://localhost:8080/elastic/`, avoiding external DNS and TLS. CGI
-that reads public datasets does not use `espass.txt`.
+at `http://localhost:9401/elastic/`, avoiding external DNS and TLS. CGI
+that reads public datasets does not use `espass.txt`. Port 9401 is used because
+8080 often collides with services such as WordPress and 9200-9400 are
+Elasticsearch's own HTTP and transport ranges. To use another port, set the
+CGI environment variable `MSTATS_ELASTIC_URL` (for example
+`http://localhost:9401/elastic`) to match the nginx configuration.
 
 ```text
 public name  Elasticsearch target
