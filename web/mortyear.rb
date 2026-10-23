@@ -381,7 +381,7 @@ def available_location_rates(index:, fixture:)
 
   public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
   uri = if public_index
-          URI.parse("http://localhost:8080/elastic/#{public_index}/_search")
+          URI.parse("http://localhost:9401/elastic/#{public_index}/_search")
         else
           URI.parse("http://localhost:9200/#{index}/_search")
         end
@@ -432,7 +432,7 @@ def available_annual_catalog(index:, fixture:)
   end
 
   public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
-  uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
+  uri = URI.parse(public_index ? "http://localhost:9401/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
   request = Net::HTTP::Post.new(uri)
   request.content_type = 'application/json'
   elastic_basic_auth(request) unless public_index
@@ -554,7 +554,7 @@ def available_dcodes(index:, fixture:, locations:, metric:)
     end.map { |row| row[:dcode].to_s }.uniq.sort
   end
   public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
-  uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
+  uri = URI.parse(public_index ? "http://localhost:9401/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
   request = Net::HTTP::Post.new(uri)
   request.content_type = 'application/json'
   elastic_basic_auth(request) unless public_index
@@ -584,7 +584,7 @@ def available_annual_dcodes(index:, fixture:, locations:, metric:)
     end.map { |row| row[:dcode].to_s }.reject(&:empty?).uniq.sort
   end
   public_index = PUBLIC_ELASTIC_INDEXES[index.to_s]
-  uri = URI.parse(public_index ? "http://localhost:8080/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
+  uri = URI.parse(public_index ? "http://localhost:9401/elastic/#{public_index}/_search" : "http://localhost:9200/#{index}/_search")
   request = Net::HTTP::Post.new(uri)
   request.content_type = 'application/json'
   elastic_basic_auth(request) unless public_index

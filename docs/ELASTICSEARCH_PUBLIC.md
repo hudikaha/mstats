@@ -75,3 +75,13 @@ administrative account in nginx configuration.
 
 See [Using the Elasticsearch API](ELASTICSEARCH_API.md) for client query
 examples.
+
+## Server migration on 2026-10-24
+
+The medicalfacts.info CGI runtime and Elasticsearch moved to the new server shared
+with ansinkoganei.org. The old server proxies requests during the DNS transition;
+public URLs remain unchanged. Direct connections in `web/vaxx.rb`, the legacy URL
+`web/mortality.rb`, and the cache worker `web/mortyear.rb` now also use port 9401.
+These three files use a fixed port; `MSTATS_ELASTIC_URL` applies to paths using the
+shared helper. This compatibility change only adjusts the migration endpoint and
+does not extend the functionality of unmaintained pages.

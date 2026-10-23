@@ -204,7 +204,7 @@ EOF
 #
 # elasticsearch
 #
-uri = URI.parse("http://localhost:8080/elastic/covid19/_search")
+uri = URI.parse("http://localhost:9401/elastic/covid19/_search")
 request = Net::HTTP::Get.new(uri)
 request.content_type = "application/json"
 request.body = <<EOF

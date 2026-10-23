@@ -69,3 +69,12 @@ account:password
 Elasticsearchのanonymous認証を有効にせず、管理accountをNginx設定へ書いてはいけません。
 
 利用者向けのquery例は[Elasticsearch APIの利用方法](ELASTICSEARCH_API_ja.md)を参照してください。
+
+## 2026-10-24のサーバー移行
+
+`medicalfacts.info`のCGIとElasticsearchはansinkoganei.orgと同じ新サーバーへ移行した。
+旧サーバーはDNS切替中のアクセスを新側へ中継する。公開URLは変更しない。
+`web/vaxx.rb`と、既存URL・cache workerの互換性を保つ`web/mortality.rb`・
+`web/mortyear.rb`の直書き接続先も9401に揃えた。この3fileの直接接続先は固定9401で、
+`MSTATS_ELASTIC_URL`による変更は共通helperを使う経路に適用する。
+公開外の古いpageの機能改修は行わず、移行に必要な接続先の変更に限定した。
